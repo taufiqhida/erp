@@ -237,7 +237,6 @@ class BookingController extends Controller
 
         $validated = $request->validate([
             'status_penjualan'     => 'required|in:booking,pemberkasan,proses_bank,akad,batal',
-            'tanggal_rencana_akad' => 'nullable|date',
             'catatan'              => 'nullable|string',
         ]);
 
@@ -251,12 +250,21 @@ class BookingController extends Controller
             $validated['status_bank'] = 'diajukan';
         }
 
+        if ($validated['status_penjualan'] === 'akad') {
+            abort_unless(
+                $kk->tanggal_rencana_akad,
+                422,
+                'Isi Tanggal Rencana Akad terlebih dahulu sebelum konfirmasi Akad.'
+            );
+        }
+
         $kk->update($validated);
 
-        // Jika akad, update status kavling ke sold
+        // Jika akad, ini hanya konfirmasi bahwa akad terlaksana sesuai Tanggal
+        // Rencana Akad yang sudah diisi sebelumnya — bukan tanggal hari ini.
         if ($validated['status_penjualan'] === 'akad') {
             $kk->kavling->update(['status_jual' => StatusJual::Sold]);
-            $kk->update(['status' => 'completed', 'tanggal_akad' => now()]);
+            $kk->update(['status' => 'completed', 'tanggal_akad' => $kk->tanggal_rencana_akad]);
         }
 
         // Jika batal, update status kavling kembali ke available
@@ -361,6 +369,41 @@ class BookingController extends Controller
         ]);
 
         return back()->with('success', 'Transaksi dikembalikan ke tahap Pemberkasan untuk revisi berkas.');
+    }
+
+    /**
+     * Kembalikan transaksi dari Pemberkasan ke Booking (mis. salah input
+     * berkas dari awal dan perlu diulang dari tahap booking).
+     */
+    public function revertToBooking(KavlingKonsumen $kk): RedirectResponse
+    {
+        $this->authorizeProjectAccess($kk->kavling->project);
+        abort_unless(Auth::user()->can('update status penjualan'), 403);
+        abort_unless($kk->status_penjualan === 'pemberkasan', 422, 'Transaksi tidak sedang di tahap Pemberkasan.');
+
+        $kk->update(['status_penjualan' => 'booking']);
+
+        return back()->with('success', 'Transaksi dikembalikan ke tahap Booking.');
+    }
+
+    /**
+     * Simpan Tanggal Rencana Akad. Tanggal ini yang nanti dipakai sebagai
+     * Tanggal Akad saat staff konfirmasi "Lanjutkan ke Akad" — tahap Akad
+     * hanya konfirmasi bahwa akad benar terlaksana di tanggal yang direncanakan.
+     */
+    public function updateRencanaAkad(Request $request, KavlingKonsumen $kk): RedirectResponse
+    {
+        $this->authorizeProjectAccess($kk->kavling->project);
+        abort_unless(Auth::user()->can('update status penjualan'), 403);
+        abort_unless($kk->status_penjualan === 'rencana_akad', 422, 'Transaksi tidak sedang di tahap Rencana Akad.');
+
+        $validated = $request->validate([
+            'tanggal_rencana_akad' => 'required|date',
+        ]);
+
+        $kk->update($validated);
+
+        return back()->with('success', 'Tanggal Rencana Akad berhasil disimpan.');
     }
 
     /**

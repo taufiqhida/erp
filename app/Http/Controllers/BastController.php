@@ -8,7 +8,6 @@ use App\Models\KavlingKonsumen;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class BastController extends Controller
@@ -16,8 +15,9 @@ class BastController extends Controller
     use AuthorizesProjectAccess;
 
     /**
-     * Simpan/perbarui checklist & data BAST. Kalau checklist lengkap dan
-     * sudah tanda tangan, transaksi otomatis maju ke stage 'bast'.
+     * Simpan/perbarui checklist & data BAST. Transisi transaksi ke stage
+     * 'bast' (Selesai) TIDAK otomatis di sini — itu lewat confirmSelesai()
+     * supaya staff sadar betul saat menandai transaksi selesai penuh.
      */
     public function update(Request $request, KavlingKonsumen $kk): RedirectResponse
     {
@@ -33,26 +33,40 @@ class BastController extends Controller
             'checklist.*'  => 'boolean',
         ]);
 
-        DB::transaction(function () use ($kk, $validated) {
-            $bast = BastRecord::updateOrCreate(
-                ['kavling_konsumen_id' => $kk->id],
-                [
-                    ...$validated,
-                    'created_by' => $kk->bastRecord?->created_by ?? Auth::id(),
-                ]
-            );
-
-            $isComplete = $bast->checklist_complete && $validated['status_ttd'] === 'sudah_ttd';
-
-            if ($isComplete && $kk->status_penjualan !== 'bast') {
-                $kk->update([
-                    'status_penjualan' => 'bast',
-                    'tanggal_bast'     => $validated['tanggal_bast'] ?? now(),
-                ]);
-            }
-        });
+        BastRecord::updateOrCreate(
+            ['kavling_konsumen_id' => $kk->id],
+            [
+                ...$validated,
+                'created_by' => $kk->bastRecord?->created_by ?? Auth::id(),
+            ]
+        );
 
         return back()->with('success', 'Data BAST berhasil disimpan.');
+    }
+
+    /**
+     * Konfirmasi transaksi Selesai. Hanya bisa dilakukan setelah checklist
+     * BAST lengkap dan status tanda tangan = sudah_ttd — ini penanda final
+     * bahwa serah terima unit benar-benar tuntas.
+     */
+    public function confirmSelesai(KavlingKonsumen $kk): RedirectResponse
+    {
+        $this->authorizeProjectAccess($kk->kavling->project);
+        abort_unless(Auth::user()->can('update status penjualan'), 403);
+
+        $bast = $kk->bastRecord;
+        abort_unless(
+            $bast && $bast->checklist_complete && $bast->status_ttd === 'sudah_ttd',
+            422,
+            'Checklist BAST harus lengkap dan sudah tanda tangan sebelum bisa dikonfirmasi Selesai.'
+        );
+
+        $kk->update([
+            'status_penjualan' => 'bast',
+            'tanggal_bast'     => $bast->tanggal_bast ?? now(),
+        ]);
+
+        return back()->with('success', 'Transaksi berhasil dikonfirmasi Selesai.');
     }
 
     public function uploadDokumen(Request $request, KavlingKonsumen $kk): RedirectResponse

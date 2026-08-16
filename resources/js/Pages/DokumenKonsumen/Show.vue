@@ -94,8 +94,15 @@ const nextStage = computed(() => {
     return null;
 });
 
-// Menuju proses_bank digerbangi kelengkapan dokumen wajib
-const advanceBlocked = computed(() => nextStage.value?.key === 'proses_bank' && !props.transaksi.dokumen_wajib_lengkap);
+// Menuju proses_bank digerbangi kelengkapan dokumen wajib; menuju akad
+// digerbangi Tanggal Rencana Akad sudah diisi (lihat kartu Rencana Akad) —
+// "Lanjutkan ke Akad" cuma konfirmasi bahwa akad terlaksana di tanggal itu.
+const advanceBlockedReason = computed(() => {
+    if (nextStage.value?.key === 'proses_bank' && !props.transaksi.dokumen_wajib_lengkap) return 'Lengkapi dokumen wajib dulu';
+    if (nextStage.value?.key === 'akad' && !props.transaksi.tanggal_rencana_akad) return 'Isi Tanggal Rencana Akad dulu';
+    return '';
+});
+const advanceBlocked = computed(() => advanceBlockedReason.value !== '');
 
 const sp3kBadge = {
     safe:     { label: 'Berlaku',  cls: 'bg-emerald-500/15 text-emerald-400' },
@@ -150,10 +157,15 @@ const submitSp3kDecision = () => {
     sp3kForm.patch(route('bookings.sp3k-decision', props.transaksi.id), { preserveScroll: true });
 };
 
-// ── Revert / batalkan (dipakai dari kartu Proses Bank & SP3K saat ditolak) ─
+// ── Revert / batalkan (dipakai dari kartu Pemberkasan, Proses Bank & SP3K) ─
 const revertToPemberkasan = () => {
     if (!window.confirm('Kembalikan transaksi ke tahap Pemberkasan untuk revisi berkas?')) return;
     router.patch(route('bookings.revert-pemberkasan', props.transaksi.id), {}, { preserveScroll: true });
+};
+
+const revertToBooking = () => {
+    if (!window.confirm('Kembalikan transaksi ke tahap Booking?')) return;
+    router.patch(route('bookings.revert-booking', props.transaksi.id), {}, { preserveScroll: true });
 };
 
 const batalkanTransaksi = () => {
@@ -161,9 +173,25 @@ const batalkanTransaksi = () => {
     router.patch(route('bookings.update-status', props.transaksi.id), { status_penjualan: 'batal' }, { preserveScroll: true });
 };
 
+// ── Rencana Akad ─────────────────────────────────────────────────────────
+const rencanaAkadForm = useForm({
+    tanggal_rencana_akad: props.transaksi.tanggal_rencana_akad ?? '',
+});
+
+const submitRencanaAkad = () => {
+    rencanaAkadForm.patch(route('bookings.rencana-akad', props.transaksi.id), { preserveScroll: true });
+};
+
 // ── BAST ──────────────────────────────────────────────────────────────
 // Checklist BAST cuma relevan begitu pipeline sampai tahap Akad/BAST.
 const showBast = computed(() => currentStageIndex.value >= 5); // 5 = index 'akad'
+const bastSelesai = computed(() => props.transaksi.status_penjualan === 'bast');
+const bastReadyToConfirm = computed(() => !!props.bast?.complete && props.bast?.status_ttd === 'sudah_ttd' && !bastSelesai.value);
+
+const confirmBastSelesai = () => {
+    if (!window.confirm('Konfirmasi transaksi ini Selesai? Serah terima dianggap tuntas sepenuhnya.')) return;
+    router.patch(route('bast.confirm-selesai', props.transaksi.id), {}, { preserveScroll: true });
+};
 
 const bastForm = useForm({
     tanggal_bast: props.bast?.tanggal_bast ?? '',
@@ -246,10 +274,15 @@ const onBastFileChange = (e) => {
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-slate-300 font-medium text-sm">Pipeline KPR</h2>
-                    <span v-if="transaksi.sp3k_expiry_status" :class="sp3kBadge[transaksi.sp3k_expiry_status]?.cls"
-                        class="text-xs px-2 py-0.5 rounded-full font-medium">
-                        SP3K {{ sp3kBadge[transaksi.sp3k_expiry_status]?.label }}
-                    </span>
+                    <div class="flex items-center gap-2">
+                        <span v-if="bastSelesai" class="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400">
+                            ✅ Selesai
+                        </span>
+                        <span v-if="transaksi.sp3k_expiry_status" :class="sp3kBadge[transaksi.sp3k_expiry_status]?.cls"
+                            class="text-xs px-2 py-0.5 rounded-full font-medium">
+                            SP3K {{ sp3kBadge[transaksi.sp3k_expiry_status]?.label }}
+                        </span>
+                    </div>
                 </div>
 
                 <div v-if="isBatal" class="text-center py-4 text-rose-400 text-sm bg-rose-500/10 rounded-xl">
@@ -260,10 +293,10 @@ const onBastFileChange = (e) => {
                     <template v-for="(stage, idx) in PIPELINE_STAGES" :key="stage.key">
                         <div class="flex flex-col items-center flex-shrink-0" style="min-width: 90px;">
                             <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                                :class="idx < currentStageIndex ? 'bg-emerald-500 text-white'
+                                :class="idx < currentStageIndex || (bastSelesai && idx === currentStageIndex) ? 'bg-emerald-500 text-white'
                                     : idx === currentStageIndex ? 'bg-violet-600 text-white ring-4 ring-violet-500/20'
                                     : 'bg-slate-800 text-slate-600'">
-                                <span v-if="idx < currentStageIndex">✓</span>
+                                <span v-if="idx < currentStageIndex || (bastSelesai && idx === currentStageIndex)">✓</span>
                                 <span v-else>{{ idx + 1 }}</span>
                             </div>
                             <span class="text-xs mt-1.5 text-center"
@@ -279,14 +312,43 @@ const onBastFileChange = (e) => {
                     <span v-if="transaksi.tanggal_expired_sp3k">Expired SP3K: {{ transaksi.tanggal_expired_sp3k }}</span>
                     <span v-if="transaksi.tanggal_rencana_akad">Rencana Akad: {{ transaksi.tanggal_rencana_akad }}</span>
                     <span v-if="transaksi.tanggal_akad">Akad: {{ transaksi.tanggal_akad }}</span>
-                    <div v-if="transaksi.can_update_status && nextStage" class="ml-auto flex items-center gap-2">
-                        <span v-if="advanceBlocked" class="text-amber-400 text-xs">Lengkapi dokumen wajib dulu</span>
-                        <button @click="openAdvance" :disabled="advanceBlocked"
-                            class="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors">
-                            Lanjutkan ke {{ nextStage.label }} →
-                        </button>
+                    <div v-if="transaksi.can_update_status" class="ml-auto flex flex-wrap items-center gap-2">
+                        <template v-if="transaksi.status_penjualan === 'pemberkasan'">
+                            <button @click="revertToBooking"
+                                class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors">
+                                ↩ Kembali ke Booking
+                            </button>
+                            <button @click="batalkanTransaksi"
+                                class="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 text-xs font-medium rounded-lg transition-colors">
+                                ✕ Batalkan
+                            </button>
+                        </template>
+                        <template v-if="nextStage">
+                            <span v-if="advanceBlocked" class="text-amber-400 text-xs">{{ advanceBlockedReason }}</span>
+                            <button @click="openAdvance" :disabled="advanceBlocked"
+                                class="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors">
+                                Lanjutkan ke {{ nextStage.label }} →
+                            </button>
+                        </template>
                     </div>
                 </div>
+            </div>
+
+            <!-- Rencana Akad -->
+            <div v-if="transaksi.status_penjualan === 'rencana_akad'" class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+                <h2 class="text-slate-300 font-medium text-sm mb-4">Rencana Akad</h2>
+                <div class="flex flex-wrap items-end gap-3">
+                    <div>
+                        <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Rencana Akad</label>
+                        <input v-model="rencanaAkadForm.tanggal_rencana_akad" type="date" :disabled="!transaksi.can_update_status"
+                            class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
+                    </div>
+                    <button v-if="transaksi.can_update_status" @click="submitRencanaAkad" :disabled="rencanaAkadForm.processing"
+                        class="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
+                        {{ rencanaAkadForm.processing ? 'Menyimpan...' : 'Simpan Tanggal' }}
+                    </button>
+                </div>
+                <p class="text-slate-600 text-xs mt-3">Saat "Lanjutkan ke Akad" ditekan, ini hanya konfirmasi bahwa akad terlaksana sesuai tanggal di atas.</p>
             </div>
 
             <!-- Keputusan Proses Bank / SLIK -->
@@ -433,9 +495,9 @@ const onBastFileChange = (e) => {
             <div v-if="showBast" class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-slate-300 font-medium text-sm">Berita Acara Serah Terima (BAST)</h2>
-                    <span v-if="bast?.complete && bast?.status_ttd === 'sudah_ttd'"
+                    <span v-if="bastSelesai"
                         class="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400">
-                        ✅ Selesai
+                        ✅ Transaksi Selesai
                     </span>
                 </div>
 
@@ -485,10 +547,19 @@ const onBastFileChange = (e) => {
                         class="block w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:bg-slate-700 file:text-slate-300 hover:file:bg-slate-600 cursor-pointer" />
                 </div>
 
-                <button v-if="transaksi.can_update_status" @click="submitBast" :disabled="bastForm.processing"
-                    class="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
-                    {{ bastForm.processing ? 'Menyimpan...' : 'Simpan BAST' }}
-                </button>
+                <div class="flex flex-wrap items-center gap-3">
+                    <button v-if="transaksi.can_update_status" @click="submitBast" :disabled="bastForm.processing"
+                        class="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
+                        {{ bastForm.processing ? 'Menyimpan...' : 'Simpan BAST' }}
+                    </button>
+                    <button v-if="transaksi.can_update_status && bastReadyToConfirm" @click="confirmBastSelesai"
+                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors">
+                        ✅ Konfirmasi Transaksi Selesai
+                    </button>
+                    <span v-else-if="transaksi.can_update_status && !bastSelesai" class="text-slate-600 text-xs">
+                        Checklist & tanda tangan harus lengkap dulu untuk konfirmasi selesai
+                    </span>
+                </div>
             </div>
 
             <!-- Dokumen List -->

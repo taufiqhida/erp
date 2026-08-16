@@ -72,12 +72,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('bookings.sp3k-decision');
     Route::patch('kavling-konsumen/{kk}/revert-pemberkasan', [BookingController::class, 'revertToPemberkasan'])
         ->name('bookings.revert-pemberkasan');
+    Route::patch('kavling-konsumen/{kk}/revert-booking', [BookingController::class, 'revertToBooking'])
+        ->name('bookings.revert-booking');
+    Route::patch('kavling-konsumen/{kk}/rencana-akad', [BookingController::class, 'updateRencanaAkad'])
+        ->name('bookings.rencana-akad');
     Route::patch('kavling-konsumen/{kk}/swap-unit', [BookingController::class, 'swapUnit'])
         ->name('bookings.swap-unit');
 
     // ── BAST ──────────────────────────────────────────────────────────
     Route::patch('kavling-konsumen/{kk}/bast', [BastController::class, 'update'])->name('bast.update');
     Route::post('kavling-konsumen/{kk}/bast/upload', [BastController::class, 'uploadDokumen'])->name('bast.upload');
+    Route::patch('kavling-konsumen/{kk}/bast/confirm-selesai', [BastController::class, 'confirmSelesai'])->name('bast.confirm-selesai');
 
     // ── Dokumen Konsumen ───────────────────────────────────────────────
     Route::get('kavling-konsumen/{kk}/dokumen', [DokumenKonsumenController::class, 'index'])
