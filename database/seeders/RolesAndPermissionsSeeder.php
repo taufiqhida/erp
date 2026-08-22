@@ -64,7 +64,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'superadmin' => $permissions, // all
             'manajer'    => [
                 'view projects', 'create projects', 'edit projects',
-                'view kavlings', 'create kavlings', 'edit kavlings', 'swap kavling',
+                'view kavlings', 'create kavlings', 'edit kavlings', 'book kavling', 'swap kavling',
                 'view konsumens', 'create konsumens', 'edit konsumens',
                 'manage dokumen', 'update status penjualan',
                 'view keuangan', 'manage pembayaran', 'manage kpr', 'manage sbum',

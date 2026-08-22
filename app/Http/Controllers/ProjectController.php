@@ -31,9 +31,11 @@ class ProjectController extends Controller
                 $q->whereHas('users', fn($q2) => $q2->where('users.id', $user->id))
             )
             ->when($request->search, fn($q) =>
-                $q->where('nama', 'like', "%{$request->search}%")
-                  ->orWhere('kode', 'like', "%{$request->search}%")
-                  ->orWhere('kota', 'like', "%{$request->search}%")
+                $q->where(fn($q2) => $q2
+                    ->where('nama', 'like', "%{$request->search}%")
+                    ->orWhere('kode', 'like', "%{$request->search}%")
+                    ->orWhere('kota', 'like', "%{$request->search}%")
+                )
             )
             ->when($request->has('is_active'), fn($q) =>
                 $q->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN))
@@ -42,6 +44,7 @@ class ProjectController extends Controller
                 'kavlings',
                 'kavlings as kavlings_sold_count'      => fn($q) => $q->where('status_jual', 'sold'),
                 'kavlings as kavlings_available_count' => fn($q) => $q->where('status_jual', 'available'),
+                'kavlings as kavlings_booked_count'    => fn($q) => $q->where('status_jual', 'booked'),
             ])
             ->with('creator:id,name')
             ->orderByDesc('created_at')
@@ -56,9 +59,12 @@ class ProjectController extends Controller
                 'kota'               => $p->kota,
                 'luas_tanah_total'   => $p->luas_tanah_total,
                 'is_active'          => $p->is_active,
+                'siteplan_image'     => $p->siteplan_image
+                    ? route('media.show', ['path' => $p->siteplan_image]) : null,
                 'kavlings_count'     => $p->kavlings_count,
                 'kavlings_sold'      => $p->kavlings_sold_count,
                 'kavlings_available' => $p->kavlings_available_count,
+                'kavlings_booked'    => $p->kavlings_booked_count,
                 'progress'           => $p->progress_persentase,
                 'creator'            => $p->creator?->name,
             ]);
@@ -113,6 +119,11 @@ class ProjectController extends Controller
     {
         $this->authorize('view', $project);
 
+        // Membuka detail proyek = mengaktifkan proyek ini sebagai context
+        // global (dipakai Konsumen/Keuangan/Pembatalan & switcher header) —
+        // tidak ada endpoint "set" terpisah, cukup piggyback di sini.
+        session(['current_project_id' => $project->id]);
+
         $project->loadCount([
             'kavlings',
             'kavlings as kavlings_sold_count'      => fn($q) => $q->where('status_jual', 'sold'),
@@ -128,6 +139,7 @@ class ProjectController extends Controller
             ->get()
             ->map(fn($k) => [
                 'id'                => $k->id,
+                'kluster'           => $k->kluster,
                 'nomor_kavling'     => $k->nomor_kavling,
                 'blok'              => $k->blok,
                 'nomor_lengkap'     => $k->nomor_lengkap,
@@ -147,8 +159,8 @@ class ProjectController extends Controller
                 'koordinat_x'       => $k->koordinat_x,
                 'koordinat_y'       => $k->koordinat_y,
                 'konsumen_nama'     => $k->activeTransaction?->konsumen?->nama,
-                'foto_rumah'        => $k->foto_rumah ? Storage::disk('public')->url($k->foto_rumah) : null,
-                'denah_rumah'       => $k->denah_rumah ? Storage::disk('public')->url($k->denah_rumah) : null,
+                'foto_rumah'        => $k->foto_rumah ? route('media.show', ['path' => $k->foto_rumah]) : null,
+                'denah_rumah'       => $k->denah_rumah ? route('media.show', ['path' => $k->denah_rumah]) : null,
                 'tipe_unit'         => $k->tipe_unit,
                 'kamar_tidur'       => $k->kamar_tidur,
                 'kamar_mandi'       => $k->kamar_mandi,
@@ -175,7 +187,8 @@ class ProjectController extends Controller
                 'luas_tanah_total'         => $project->luas_tanah_total,
                 'is_active'                => $project->is_active,
                 'siteplan_image'           => $project->siteplan_image
-                    ? Storage::disk('public')->url($project->siteplan_image) : null,
+                    ? route('media.show', ['path' => $project->siteplan_image]) : null,
+                'siteplan_marker_size'     => $project->siteplan_marker_size,
                 'kavlings_count'           => $project->kavlings_count,
                 'kavlings_sold'            => $project->kavlings_sold_count,
                 'kavlings_available'       => $project->kavlings_available_count,
@@ -283,6 +296,118 @@ class ProjectController extends Controller
     }
 
     /**
+     * Simpan ukuran marker siteplan (global per-proyek, bukan per-unit).
+     * Nilai ini juga dipakai (read-only) oleh halaman Penjualan supaya
+     * tampilan siteplan konsisten antara admin proyek dan sales.
+     */
+    public function updateSiteplanMarkerSize(Request $request, Project $project): RedirectResponse
+    {
+        $this->authorize('update', $project);
+
+        $validated = $request->validate([
+            'siteplan_marker_size' => 'required|integer|min:12|max:56',
+        ]);
+
+        $project->update($validated);
+
+        return back();
+    }
+
+    /**
+     * Download template Excel untuk bulk import kavling — kolom & urutan
+     * di sini HARUS persis sama dengan yang dibaca KavlingImport, supaya
+     * template yang diunduh selalu sinkron dengan validasi backend.
+     */
+    public function downloadKavlingTemplate(Project $project)
+    {
+        $this->authorize('update', $project);
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+
+        // ── Sheet 1: Kavling (diisi user) ──
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Kavling');
+
+        $headers = ['nomor_kavling', 'kluster', 'blok', 'tipe_unit', 'luas_tanah', 'luas_bangunan', 'harga', 'status', 'status_bangun', 'keterangan'];
+        $sheet->fromArray($headers, null, 'A1');
+        $sheet->getStyle('A1:J1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $sheet->getStyle('A1:J1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('7C3AED');
+        $sheet->freezePane('A2');
+
+        $example = ['A-01', 'Kluster Melati', 'A', '36/72', 72, 36, 250000000, 'available', 'not_started', 'Contoh baris — boleh dihapus'];
+        $sheet->fromArray($example, null, 'A2');
+        $sheet->getStyle('A2:J2')->getFont()->setItalic(true)->getColor()->setRGB('999999');
+
+        foreach (range('A', 'J') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        // Dropdown supaya status/status_bangun tidak salah ketik — nilainya
+        // harus persis sama dengan yang diterima KavlingImport.
+        $statusListFormula = '"available,not_for_sale"';
+        $statusBangunListFormula = '"' . implode(',', StatusBangun::values()) . '"';
+
+        for ($row = 2; $row <= 500; $row++) {
+            $statusValidation = $sheet->getCell("H{$row}")->getDataValidation();
+            $statusValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+            $statusValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
+            $statusValidation->setAllowBlank(true);
+            $statusValidation->setShowDropDown(true);
+            $statusValidation->setShowErrorMessage(true);
+            $statusValidation->setErrorTitle('Status tidak dikenal');
+            $statusValidation->setError('Pilih salah satu dari daftar (available / not_for_sale).');
+            $statusValidation->setFormula1($statusListFormula);
+
+            $bangunValidation = $sheet->getCell("I{$row}")->getDataValidation();
+            $bangunValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+            $bangunValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
+            $bangunValidation->setAllowBlank(true);
+            $bangunValidation->setShowDropDown(true);
+            $bangunValidation->setShowErrorMessage(true);
+            $bangunValidation->setErrorTitle('Status Bangun tidak dikenal');
+            $bangunValidation->setError('Pilih salah satu dari daftar, atau kosongkan.');
+            $bangunValidation->setFormula1($statusBangunListFormula);
+        }
+
+        // ── Sheet 2: Petunjuk ──
+        $help = $spreadsheet->createSheet();
+        $help->setTitle('Petunjuk');
+
+        $help->fromArray(['Kolom', 'Wajib?', 'Format / Contoh', 'Keterangan'], null, 'A1');
+        $help->getStyle('A1:D1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $help->getStyle('A1:D1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('7C3AED');
+
+        $helpRows = [
+            ['nomor_kavling', 'Ya', 'A-01', 'Harus unik per proyek — kalau sudah ada atau duplikat dalam file, baris dilewati.'],
+            ['kluster', 'Tidak', 'Kluster Melati', 'Kosongkan jika proyek tidak punya kluster.'],
+            ['blok', 'Tidak', 'A', ''],
+            ['tipe_unit', 'Tidak', '36/72', ''],
+            ['luas_tanah', 'Tidak', '72', 'Angka saja, satuan m².'],
+            ['luas_bangunan', 'Tidak', '36', 'Angka saja, satuan m².'],
+            ['harga', 'Tidak', '250000000', 'Angka saja, tanpa "Rp" atau titik ribuan.'],
+            ['status', 'Tidak (default: available)', 'available / not_for_sale', 'available = tersedia dijual, not_for_sale = ditahan/belum dijual dulu.'],
+            ['status_bangun', 'Tidak (default: not_started)', implode(' / ', StatusBangun::values()), 'Isi kalau proyek sudah berjalan & sebagian unit progressnya bukan dari nol. Kosongkan untuk unit yang belum mulai dibangun.'],
+            ['keterangan', 'Tidak', 'teks bebas', ''],
+        ];
+        $help->fromArray($helpRows, null, 'A2');
+        $help->getStyle('A1:D' . (count($helpRows) + 1))->getAlignment()->setWrapText(true)->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP);
+        foreach (range('A', 'D') as $col) {
+            $help->getColumnDimension($col)->setAutoSize(true);
+        }
+        $help->getColumnDimension('D')->setWidth(60);
+
+        $spreadsheet->setActiveSheetIndex(0);
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, 'template-import-kavling.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    /**
      * Import kavling dari file Excel
      */
     public function importKavling(Request $request, Project $project): RedirectResponse
@@ -320,7 +445,9 @@ class ProjectController extends Controller
         $validated = $request->validate([
             'rows'                    => 'required|array|min:1|max:1000',
             'rows.*.nomor_kavling'    => 'required|string|max:20',
+            'rows.*.kluster'          => 'nullable|string|max:50',
             'rows.*.blok'             => 'nullable|string|max:10',
+            'rows.*.tipe_unit'        => 'nullable|string|max:150',
             'rows.*.luas_tanah'       => 'nullable|numeric|min:0',
             'rows.*.luas_bangunan'    => 'nullable|numeric|min:0',
             'rows.*.harga'            => 'nullable|numeric|min:0',
@@ -351,8 +478,10 @@ class ProjectController extends Controller
 
                 Kavling::create([
                     'project_id'    => $project->id,
+                    'kluster'       => $row['kluster'] ?: null,
                     'nomor_kavling' => $noUnit,
                     'blok'          => $row['blok'] ?: null,
+                    'tipe_unit'     => $row['tipe_unit'] ?: null,
                     'luas_tanah'    => $row['luas_tanah'] ?: null,
                     'luas_bangunan' => $row['luas_bangunan'] ?: null,
                     'harga'         => $row['harga'] ?: null,
@@ -385,7 +514,18 @@ class ProjectController extends Controller
 
         $project->delete();
 
-        return redirect()->route('projects.index')
+        return redirect()->route('beranda')
             ->with('success', "Proyek {$project->nama} berhasil dihapus.");
+    }
+
+    /**
+     * Keluar dari context 1 proyek spesifik ke mode "Semua Proyek" —
+     * dipakai dari kartu "Semua Proyek" di Halaman Utama Pilih Proyek.
+     */
+    public function clearActiveProject(): RedirectResponse
+    {
+        session()->forget('current_project_id');
+
+        return redirect()->route('dashboard');
     }
 }

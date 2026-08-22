@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AuthorizesProjectAccess;
+use App\Http\Controllers\Concerns\ChecksTransactionLock;
+use App\Models\CancellationRequest;
 use App\Models\DokumenKonsumen;
 use App\Models\KavlingKonsumen;
 use Illuminate\Http\RedirectResponse;
@@ -14,7 +16,7 @@ use Inertia\Response;
 
 class DokumenKonsumenController extends Controller
 {
-    use AuthorizesProjectAccess;
+    use AuthorizesProjectAccess, ChecksTransactionLock;
 
     /**
      * List dokumen per transaksi
@@ -23,7 +25,9 @@ class DokumenKonsumenController extends Controller
     {
         $this->authorizeProjectAccess($kk->kavling->project);
 
-        $kk->load(['konsumen', 'kavling.project', 'dokumens.verifiedBy', 'bastRecord']);
+        $kk->load(['konsumen', 'kavling.project', 'dokumens.verifiedBy', 'bastRecord', 'jadwalTagihans']);
+
+        $pendingRequest = CancellationRequest::where('kavling_konsumen_id', $kk->id)->pending()->first();
 
         return Inertia::render('DokumenKonsumen/Show', [
             'transaksi'  => [
@@ -48,6 +52,10 @@ class DokumenKonsumenController extends Controller
                 'sp3k_expiry_status'   => $kk->sp3k_expiry_status,
                 'can_update_status'    => Auth::user()->can('update status penjualan'),
                 'dokumen_wajib_lengkap' => $kk->dokumen_wajib_lengkap,
+                'dp_lunas'             => $kk->dp_lunas,
+                'piutang_lunas'        => $kk->piutang_lunas,
+                'is_locked'            => $kk->is_locked,
+                'bank_rekanan_kpr'     => $kk->bank_rekanan_kpr,
                 // Proses Bank
                 'tanggal_pengajuan_bank' => $kk->tanggal_pengajuan_bank?->format('Y-m-d'),
                 'tanggal_keputusan_bank' => $kk->tanggal_keputusan_bank?->format('Y-m-d'),
@@ -60,8 +68,8 @@ class DokumenKonsumenController extends Controller
                 'status_sp3k_label'      => $kk->status_sp3k_label,
                 'catatan_sp3k'           => $kk->catatan_sp3k,
                 'plafon_kpr'             => $kk->plafon_kpr,
-                'rekening_kpr_dibuka'    => $kk->rekening_kpr_dibuka,
-                'biaya_akad_lunas'       => $kk->biaya_akad_lunas,
+                'has_pending_request'    => (bool) $pendingRequest,
+                'pending_request_type'   => $pendingRequest?->type->value,
             ],
             'konsumen'   => [
                 'id'   => $kk->konsumen->id,
@@ -69,8 +77,12 @@ class DokumenKonsumenController extends Controller
                 'no_hp'=> $kk->konsumen->no_hp,
             ],
             'kavling'    => [
-                'nomor_lengkap' => $kk->kavling->nomor_lengkap,
-                'project_nama'  => $kk->kavling->project->nama,
+                'id'                  => $kk->kavling->id,
+                'project_id'          => $kk->kavling->project_id,
+                'nomor_lengkap'       => $kk->kavling->nomor_lengkap,
+                'project_nama'        => $kk->kavling->project->nama,
+                'status_bangun'       => $kk->kavling->status_bangun->value,
+                'status_bangun_label' => $kk->kavling->status_bangun->label(),
             ],
             'dokumens'   => $kk->dokumens->map(fn($d) => [
                 'id'           => $d->id,
@@ -80,7 +92,7 @@ class DokumenKonsumenController extends Controller
                 'status'       => $d->status,
                 'status_label' => $d->status_label,
                 'status_icon'  => $d->status_icon,
-                'file_path'    => $d->file_path ? Storage::disk('public')->url($d->file_path) : null,
+                'file_path'    => $d->file_path ? route('media.show', ['path' => $d->file_path]) : null,
                 'catatan'      => $d->catatan,
                 'catatan_revisi'     => $d->catatan_revisi,
                 'tanggal_upload'     => $d->tanggal_upload?->format('d M Y H:i'),
@@ -89,14 +101,9 @@ class DokumenKonsumenController extends Controller
             ]),
             'bast' => $kk->bastRecord ? [
                 'tanggal_bast' => $kk->bastRecord->tanggal_bast?->format('Y-m-d'),
-                'penerima'     => $kk->bastRecord->penerima,
                 'catatan'      => $kk->bastRecord->catatan,
                 'status_ttd'   => $kk->bastRecord->status_ttd,
-                'checklist'    => $kk->bastRecord->checklist,
-                'dokumen_path' => $kk->bastRecord->dokumen_path ? Storage::disk('public')->url($kk->bastRecord->dokumen_path) : null,
-                'complete'     => $kk->bastRecord->checklist_complete,
             ] : null,
-            'bastChecklistItems' => \App\Models\BastRecord::CHECKLIST_ITEMS,
         ]);
     }
 
@@ -107,6 +114,7 @@ class DokumenKonsumenController extends Controller
     {
         $this->authorizeProjectAccess($dok->transaksi->kavling->project);
         abort_unless(Auth::user()->can('manage dokumen'), 403);
+        $this->assertTransactionEditable($dok->transaksi, 'Update status dokumen');
 
         $validated = $request->validate([
             'status'  => 'required|in:belum_ada,sudah_ada,perlu_revisi,ditolak',
@@ -134,6 +142,7 @@ class DokumenKonsumenController extends Controller
     {
         $this->authorizeProjectAccess($dok->transaksi->kavling->project);
         abort_unless(Auth::user()->can('manage dokumen'), 403);
+        $this->assertTransactionEditable($dok->transaksi, 'Upload dokumen');
 
         $request->validate([
             'file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240', // max 10MB

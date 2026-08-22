@@ -1,6 +1,6 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, useForm, router, Link } from '@inertiajs/vue3';
+import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
+import { useForm, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
 const props = defineProps({
@@ -49,17 +49,7 @@ const del = (id) => {
 </script>
 
 <template>
-    <Head title="Pengaturan – Template Pemberkasan" />
-    <AuthenticatedLayout>
-        <template #header>
-            <div class="flex items-center gap-2 text-slate-400 text-sm">
-                <Link :href="route('pengaturan.profil-developer')" class="hover:text-slate-200 transition-colors">Pengaturan</Link>
-                <span>/</span>
-                <span class="text-slate-200 font-medium">Template Pemberkasan</span>
-            </div>
-        </template>
-
-        <div class="p-6 space-y-5">
+    <PengaturanLayout title="Template Pemberkasan">
             <div>
                 <h1 class="text-white font-bold text-xl">Template Dokumen Pemberkasan</h1>
                 <p class="text-slate-400 text-sm mt-0.5">Checklist dokumen akan auto-generate saat booking berdasarkan cara pembayaran</p>
@@ -125,6 +115,5 @@ const del = (id) => {
                     </div>
                 </div>
             </div>
-        </div>
-    </AuthenticatedLayout>
+    </PengaturanLayout>
 </template>

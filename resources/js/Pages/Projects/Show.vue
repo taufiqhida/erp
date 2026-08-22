@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InlineSiteplanSvg from '@/Components/InlineSiteplanSvg.vue';
 import CsvImportModal from '@/Components/CsvImportModal.vue';
+import KavlingSearchSelect from '@/Components/KavlingSearchSelect.vue';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 
@@ -20,28 +21,59 @@ const isAdmin = computed(() =>
 // ── View mode ────────────────────────────────────────────────────────────────
 const viewMode = ref('siteplan'); // 'siteplan' | 'table'
 
-// ── Kavling grouped by blok ──────────────────────────────────────────────────
-const kavlingsByBlok = computed(() => {
-    const groups = {};
-    (props.kavlings ?? []).forEach(k => {
-        const blok = k.blok ?? '-';
-        if (!groups[blok]) groups[blok] = [];
-        groups[blok].push(k);
-    });
-    return groups;
-});
+// ── Multi-filter (kluster/blok/tipe/status jual/status bangun) ───────────────
+const filters = ref({ kluster: '', blok: '', tipe_unit: '', status_jual: '', status_bangun: '' });
 
+const uniqueOptions = (key) => {
+    const values = (props.kavlings ?? []).map(k => k[key]).filter(v => v !== null && v !== undefined && v !== '');
+    return [...new Set(values)].sort();
+};
+const klusterOptions   = computed(() => uniqueOptions('kluster'));
+const blokOptions      = computed(() => uniqueOptions('blok'));
+const tipeUnitOptions  = computed(() => uniqueOptions('tipe_unit'));
+
+const filteredKavlings = computed(() => (props.kavlings ?? []).filter(k =>
+    (!filters.value.kluster || k.kluster === filters.value.kluster) &&
+    (!filters.value.blok || k.blok === filters.value.blok) &&
+    (!filters.value.tipe_unit || k.tipe_unit === filters.value.tipe_unit) &&
+    (!filters.value.status_jual || k.status_jual === filters.value.status_jual) &&
+    (!filters.value.status_bangun || k.status_bangun === filters.value.status_bangun)
+));
+
+const resetFilters = () => {
+    filters.value = { kluster: '', blok: '', tipe_unit: '', status_jual: '', status_bangun: '' };
+};
+
+const activeFilterCount = computed(() => Object.values(filters.value).filter(Boolean).length);
+
+const canUpdateStatusBangun = computed(() =>
+    page.props.auth?.user?.permissions?.includes('update status bangun')
+);
+
+// Siteplan selalu tampilkan semua unit (tidak ikut filter Table view, karena
+// filter bar memang tidak ditampilkan di mode Siteplan).
 const kavlingsWithKoordinat = computed(() =>
     (props.kavlings ?? []).filter(k => k.koordinat_x != null && k.koordinat_y != null)
 );
 
 // ── Status config ────────────────────────────────────────────────────────────
 const statusConfig = {
-    available:              { label: 'Tersedia',   bg: 'bg-emerald-500', text: 'text-emerald-400', badge: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30', dot: 'bg-emerald-400', siteplan: 'bg-emerald-500/20 hover:bg-emerald-500/35 border-2 border-emerald-500/60 hover:border-emerald-400 cursor-pointer' },
-    hold:                   { label: 'Hold',       bg: 'bg-yellow-500',  text: 'text-yellow-400',  badge: 'bg-yellow-500/15 text-yellow-400 ring-1 ring-yellow-500/30',   dot: 'bg-yellow-400',  siteplan: 'bg-yellow-500/20 hover:bg-yellow-500/35 border-2 border-yellow-500/60 hover:border-yellow-400 cursor-pointer' },
-    booked:                 { label: 'Booking',    bg: 'bg-blue-500',    text: 'text-blue-400',    badge: 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30',         dot: 'bg-blue-400',    siteplan: 'bg-blue-500/20 border-2 border-blue-500/50 cursor-default opacity-80' },
-    sold:                   { label: 'Terjual',    bg: 'bg-rose-500',    text: 'text-rose-400',    badge: 'bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30',         dot: 'bg-rose-400',    siteplan: 'bg-rose-500/20 border-2 border-rose-500/50 cursor-default opacity-80' },
-    cancellation_requested: { label: 'Pembatalan', bg: 'bg-orange-500',  text: 'text-orange-400',  badge: 'bg-orange-500/15 text-orange-400 ring-1 ring-orange-500/30',   dot: 'bg-orange-400',  siteplan: 'bg-orange-500/20 border-2 border-orange-500/50 cursor-default opacity-80' },
+    available:              { label: 'Tersedia',       bg: 'bg-emerald-500', text: 'text-emerald-400', badge: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30', dot: 'bg-emerald-400', siteplan: 'bg-emerald-500/20 border-2 border-emerald-500/60' },
+    hold:                   { label: 'Tidak Tersedia', bg: 'bg-yellow-500',  text: 'text-yellow-400',  badge: 'bg-yellow-500/15 text-yellow-400 ring-1 ring-yellow-500/30',   dot: 'bg-yellow-400',  siteplan: 'bg-yellow-500/20 border-2 border-yellow-500/60' },
+    booked:                 { label: 'Dipesan',        bg: 'bg-blue-500',    text: 'text-blue-400',    badge: 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30',         dot: 'bg-blue-400',    siteplan: 'bg-blue-500/20 border-2 border-blue-500/50 opacity-80' },
+    sold:                   { label: 'Terjual',        bg: 'bg-rose-500',    text: 'text-rose-400',    badge: 'bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30',         dot: 'bg-rose-400',    siteplan: 'bg-rose-500/20 border-2 border-rose-500/50 opacity-80' },
+    cancellation_requested: { label: 'Pembatalan',     bg: 'bg-orange-500',  text: 'text-orange-400',  badge: 'bg-orange-500/15 text-orange-400 ring-1 ring-orange-500/30',   dot: 'bg-orange-400',  siteplan: 'bg-orange-500/20 border-2 border-orange-500/50 opacity-80' },
+};
+
+// Warna ring/border marker siteplan berdasar status_bangun (dikombinasikan
+// dengan warna isi/fill dari status_jual di atas)
+const statusBangunColorHex = {
+    not_started:    '#64748b',
+    foundation:     '#f97316',
+    structure:      '#3b82f6',
+    roofing:        '#6366f1',
+    finishing:      '#a855f7',
+    handover_ready: '#10b981',
 };
 
 // Warna hex untuk fill elemen SVG (siteplan berbasis SVG ID-matching)
@@ -57,31 +89,78 @@ const isSvgSiteplan = computed(() =>
     (props.project.siteplan_image ?? '').toLowerCase().endsWith('.svg')
 );
 
-// ── Selected kavling ──────────────────────────────────────────────────────────
+// ── Selected kavling (dipakai untuk modal Detail, dibuka dari Tabel) ─────────
 const selectedKavling  = ref(null);
 const showDetailModal  = ref(false);
 const showAddModal     = ref(false);
+const showEditModal    = ref(false);
 
 const selectKavling = (kavling) => {
     selectedKavling.value = kavling;
-    // Saat mode atur posisi aktif, jangan buka modal detail (menutupi siteplan) —
-    // cukup pilih kavling-nya, lalu user klik posisi di gambar siteplan.
-    if (!editingKoordinat.value) {
-        showDetailModal.value = true;
-    }
+    showDetailModal.value = true;
 };
 
 const closeDetail = () => {
     showDetailModal.value = false;
 };
 
-const isClickable = (k) => ['available', 'hold'].includes(k.status_jual);
+const isClickable = (k) => k.status_jual === 'available';
 
 // ── Forms ────────────────────────────────────────────────────────────────
 const kavlingForm = useForm({
-    nomor_kavling: '', blok: '', luas_tanah: '', luas_bangunan: '',
-    harga: '', status_jual: 'available', status_bangun: 'not_started', catatan: '',
+    kluster: '', blok: '', nomor_kavling: '', tipe_unit: '', luas_tanah: '', luas_bangunan: '',
+    harga: '', keterangan: '', status_jual: 'available', status_bangun: 'not_started', catatan: '',
 });
+
+// ── Edit Kavling (info umum saja — status_jual & konsumen bukan bagian ini) ──
+const kavlingEditForm = useForm({
+    kluster: '', blok: '', nomor_kavling: '', tipe_unit: '', luas_tanah: '', luas_bangunan: '',
+    harga: '', keterangan: '', catatan: '',
+});
+
+const openEditKavling = (k) => {
+    kavlingEditForm.clearErrors();
+    kavlingEditForm.kluster = k.kluster ?? '';
+    kavlingEditForm.blok = k.blok ?? '';
+    kavlingEditForm.nomor_kavling = k.nomor_kavling ?? '';
+    kavlingEditForm.tipe_unit = k.tipe_unit ?? '';
+    kavlingEditForm.luas_tanah = k.luas_tanah ?? '';
+    kavlingEditForm.luas_bangunan = k.luas_bangunan ?? '';
+    kavlingEditForm.harga = k.harga ?? '';
+    kavlingEditForm.keterangan = k.keterangan ?? '';
+    kavlingEditForm.catatan = k.catatan ?? '';
+    selectedKavling.value = k;
+    showEditModal.value = true;
+};
+
+const submitEditKavling = () => {
+    kavlingEditForm.put(route('kavlings.update', selectedKavling.value.id), {
+        onSuccess: () => { showEditModal.value = false; },
+    });
+};
+
+// ── Toggle ketersediaan (Tersedia / Tidak Tersedia) ──────────────────────
+const statusJualForms = ref({});
+const toggleStatusJual = (k) => {
+    const next = k.status_jual === 'available' ? 'hold' : 'available';
+    if (!statusJualForms.value[k.id]) {
+        statusJualForms.value[k.id] = useForm({ status_jual: next });
+    }
+    const form = statusJualForms.value[k.id];
+    form.status_jual = next;
+    form.patch(route('kavlings.status-jual', k.id), { preserveScroll: true });
+};
+
+// ── Update status bangun langsung dari tabel (tanpa buka modal) ─────────
+const statusBangunInlineForms = ref({});
+const updateStatusBangunInline = (k, value) => {
+    if (!statusBangunInlineForms.value[k.id]) {
+        statusBangunInlineForms.value[k.id] = useForm({ status_bangun: value, catatan: k.catatan ?? '' });
+    }
+    const form = statusBangunInlineForms.value[k.id];
+    form.status_bangun = value;
+    form.patch(route('kavlings.status-bangun', k.id), { preserveScroll: true });
+};
 
 const statusBangunForm = useForm({
     status_bangun: 'not_started',
@@ -167,19 +246,55 @@ const statusBangunOptions = [
 ];
 
 // ── Siteplan koordinat edit mode ────────────────────────────────────────
+// Assign posisi: admin pilih kavling dari dropdown, lalu klik posisinya di
+// gambar siteplan (tidak lagi lewat klik card per-unit).
 const editingKoordinat   = ref(false);
 const pendingKoordinats  = ref({});
+const positioningKavlingId = ref(null);
+
+const startEditingKoordinat = () => {
+    editingKoordinat.value = true;
+    positioningKavlingId.value = null;
+};
+
+const cancelEditingKoordinat = () => {
+    editingKoordinat.value = false;
+    positioningKavlingId.value = null;
+    pendingKoordinats.value = {};
+};
 
 const onSiteplanClick = (e) => {
-    if (!editingKoordinat.value || !selectedKavling.value) return;
+    if (!editingKoordinat.value || !positioningKavlingId.value) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width * 100).toFixed(2);
     const y = ((e.clientY - rect.top)  / rect.height * 100).toFixed(2);
-    pendingKoordinats.value[selectedKavling.value.id] = { x, y };
+    pendingKoordinats.value[positioningKavlingId.value] = { x, y };
     // Update visual instantly
-    const k = props.kavlings.find(k => k.id === selectedKavling.value.id);
+    const k = props.kavlings.find(k => k.id === positioningKavlingId.value);
     if (k) { k.koordinat_x = x; k.koordinat_y = y; }
 };
+
+const onMarkerClick = (k) => {
+    if (editingKoordinat.value) {
+        positioningKavlingId.value = k.id;
+    } else {
+        selectKavling(k);
+    }
+};
+
+// Ukuran marker siteplan (global per-proyek, tidak per-unit) ───────────────
+const markerSize = ref(props.project.siteplan_marker_size ?? 28); // px
+let markerSizeSaveTimer = null;
+const saveMarkerSize = (value) => {
+    clearTimeout(markerSizeSaveTimer);
+    markerSizeSaveTimer = setTimeout(() => {
+        useForm({ siteplan_marker_size: value }).patch(route('projects.siteplan-marker-size', props.project.id), {
+            preserveScroll: true,
+            preserveState: true,
+        });
+    }, 400);
+};
+watch(markerSize, saveMarkerSize);
 
 const saveAllKoordinat = () => {
     const kavlingsPayload = Object.entries(pendingKoordinats.value).map(([id, pos]) => ({
@@ -191,6 +306,7 @@ const saveAllKoordinat = () => {
     koordinatForm.patch(route('projects.kavling-koordinat', props.project.id), {
         onSuccess: () => {
             editingKoordinat.value = false;
+            positioningKavlingId.value = null;
             pendingKoordinats.value = {};
         }
     });
@@ -213,6 +329,29 @@ const onCsvImported = () => {
     router.reload({ only: ['kavlings', 'project'] });
 };
 
+// ── Upload / ganti gambar Siteplan ───────────────────────────────────────
+const showUploadSiteplan = ref(false);
+const siteplanUploadForm = useForm({ siteplan_image: null });
+const siteplanPreview = ref(null);
+
+const onSiteplanFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    siteplanUploadForm.siteplan_image = file;
+    siteplanPreview.value = URL.createObjectURL(file);
+};
+
+const submitUploadSiteplan = () => {
+    siteplanUploadForm.post(route('projects.siteplan.upload', props.project.id), {
+        forceFormData: true,
+        onSuccess: () => {
+            showUploadSiteplan.value = false;
+            siteplanUploadForm.reset();
+            siteplanPreview.value = null;
+        },
+    });
+};
+
 </script>
 
 <template>
@@ -220,7 +359,7 @@ const onCsvImported = () => {
     <AuthenticatedLayout>
         <template #header>
             <div class="flex items-center gap-2 text-slate-400 text-sm">
-                <Link :href="route('projects.index')" class="hover:text-slate-200 transition-colors">Proyek</Link>
+                <Link :href="route('beranda')" class="hover:text-slate-200 transition-colors">Proyek</Link>
                 <span>/</span>
                 <span class="text-slate-200 font-medium">{{ project.nama }}</span>
             </div>
@@ -294,7 +433,7 @@ const onCsvImported = () => {
                     </div>
                     <div class="bg-blue-500/10 rounded-xl p-3 text-center">
                         <div class="text-blue-400 font-bold text-2xl">{{ project.kavlings_booked }}</div>
-                        <div class="text-slate-400 text-xs mt-0.5">Booking</div>
+                        <div class="text-slate-400 text-xs mt-0.5">Dipesan</div>
                     </div>
                     <div class="bg-rose-500/10 rounded-xl p-3 text-center">
                         <div class="text-rose-400 font-bold text-2xl">{{ project.kavlings_sold }}</div>
@@ -332,22 +471,27 @@ const onCsvImported = () => {
                 </div>
                 <!-- Admin action buttons -->
                 <div class="flex items-center gap-2 flex-wrap">
+                    <!-- Upload/ganti siteplan (admin only) -->
+                    <button v-if="isAdmin && viewMode === 'siteplan'" @click="showUploadSiteplan = true"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+                        </svg>
+                        {{ project.siteplan_image ? 'Ganti Siteplan' : 'Upload Siteplan' }}
+                    </button>
                     <!-- Edit koordinat mode (admin only) -->
                     <template v-if="isAdmin && viewMode === 'siteplan' && project.siteplan_image && !isSvgSiteplan">
                         <div v-if="editingKoordinat" class="flex items-center gap-2">
-                            <span class="text-amber-400 text-xs animate-pulse font-medium">
-                                📍 Pilih unit di panel kanan lalu klik siteplan
-                            </span>
                             <button @click="saveAllKoordinat"
                                 class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs rounded-lg font-medium transition-colors">
                                 Simpan Posisi
                             </button>
-                            <button @click="editingKoordinat = false; pendingKoordinats = {}"
+                            <button @click="cancelEditingKoordinat"
                                 class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs rounded-lg transition-colors">
                                 Batal
                             </button>
                         </div>
-                        <button v-else @click="editingKoordinat = true"
+                        <button v-else @click="startEditingKoordinat"
                             class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 text-xs rounded-lg transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -356,7 +500,12 @@ const onCsvImported = () => {
                             Atur Posisi Unit
                         </button>
                     </template>
-                    <button @click="showAddModal = true"
+                    <Link :href="route('projects.kavlings.index', project.id)"
+                            class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+                        Semua Unit
+                    </Link>
+                    <button v-if="isAdmin" @click="showAddModal = true"
                             class="inline-flex items-center gap-2 px-3 py-2 bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 text-xs font-medium rounded-lg transition-colors border border-violet-500/20">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"/></svg>
                         Tambah Kavling
@@ -364,191 +513,144 @@ const onCsvImported = () => {
                 </div>
             </div>
 
+            <!-- ── Multi-Filter (hanya di Table view) ──────────────────────── -->
+            <div v-if="viewMode === 'table'" class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 text-slate-500 text-xs font-medium mr-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" /></svg>
+                    Filter
+                </span>
+                <div v-for="(sel, idx) in [
+                        { model: 'kluster', options: klusterOptions, placeholder: 'Semua Kluster' },
+                        { model: 'blok', options: blokOptions, placeholder: 'Semua Blok' },
+                        { model: 'tipe_unit', options: tipeUnitOptions, placeholder: 'Semua Tipe' },
+                    ]" :key="idx" class="relative">
+                    <select v-model="filters[sel.model]"
+                        class="appearance-none pl-2.5 pr-7 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer">
+                        <option value="">{{ sel.placeholder }}</option>
+                        <option v-for="v in sel.options" :key="v" :value="v">{{ v }}</option>
+                    </select>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 011.06 0L10 11.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 9.28a.75.75 0 010-1.06z" clip-rule="evenodd"/></svg>
+                </div>
+                <div class="relative">
+                    <select v-model="filters.status_jual"
+                        class="appearance-none pl-2.5 pr-7 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer">
+                        <option value="">Semua Status Jual</option>
+                        <option v-for="(cfg, key) in statusConfig" :key="key" :value="key">{{ cfg.label }}</option>
+                    </select>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 011.06 0L10 11.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 9.28a.75.75 0 010-1.06z" clip-rule="evenodd"/></svg>
+                </div>
+                <div class="relative">
+                    <select v-model="filters.status_bangun"
+                        class="appearance-none pl-2.5 pr-7 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer">
+                        <option value="">Semua Status Bangun</option>
+                        <option v-for="opt in statusBangunOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                    </select>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 011.06 0L10 11.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 9.28a.75.75 0 010-1.06z" clip-rule="evenodd"/></svg>
+                </div>
+                <button v-if="activeFilterCount > 0" @click="resetFilters"
+                    class="px-2.5 py-1.5 text-slate-400 hover:text-slate-200 text-xs rounded-lg transition-colors">
+                    ✕ Reset ({{ activeFilterCount }})
+                </button>
+                <span class="text-slate-500 text-xs ml-auto">{{ filteredKavlings.length }} / {{ (kavlings ?? []).length }} unit</span>
+            </div>
+
             <!-- ═══════════════════════════════════════════════════════════════
-                 SITEPLAN VIEW
+                 SITEPLAN VIEW — visual status saja, detail & edit unit ada di Tabel
             ════════════════════════════════════════════════════════════════ -->
-            <div v-if="viewMode === 'siteplan'" class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div v-if="viewMode === 'siteplan'" class="space-y-5">
 
-                <!-- Left: Grid -->
-                <div class="lg:col-span-2 space-y-5">
-                    <!-- Legend -->
-                    <div class="flex flex-wrap gap-4">
-                        <div v-for="(cfg, key) in statusConfig" :key="key" class="flex items-center gap-2 text-xs text-slate-400">
-                            <span :class="cfg.dot" class="w-3 h-3 rounded-sm inline-block"></span>
-                            {{ cfg.label }}
-                        </div>
+                <!-- Legend -->
+                <div class="flex flex-wrap items-center gap-4">
+                    <div v-for="(cfg, key) in statusConfig" :key="key" class="flex items-center gap-2 text-xs text-slate-400">
+                        <span :class="cfg.dot" class="w-3 h-3 rounded-sm inline-block"></span>
+                        {{ cfg.label }}
                     </div>
-
-                    <!-- Peta Siteplan SVG (ID-matching, warna & klik otomatis) -->
-                    <div v-if="project.siteplan_image && isSvgSiteplan" class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden p-3">
-                        <InlineSiteplanSvg
-                            :siteplan-url="project.siteplan_image"
-                            :kavlings="kavlings"
-                            :status-colors="statusColorHex"
-                            :selected-id="selectedKavling?.id"
-                            @select="selectKavling"
-                        />
+                    <span class="text-slate-700">|</span>
+                    <span class="text-slate-500 text-xs">Cincin warna = status pembangunan</span>
+                    <div v-for="opt in statusBangunOptions" :key="opt.value" class="flex items-center gap-1.5 text-xs text-slate-500">
+                        <span class="w-2.5 h-2.5 rounded-full inline-block ring-2" :style="`background:${statusBangunColorHex[opt.value]}30; box-shadow: 0 0 0 2px ${statusBangunColorHex[opt.value]}`"></span>
+                        {{ opt.label }}
                     </div>
-
-                    <!-- Peta Siteplan gambar raster (klik untuk atur posisi unit) -->
-                    <div v-else-if="project.siteplan_image" class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                        <div v-if="editingKoordinat" class="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-amber-400 text-xs font-medium">
-                            📍 Pilih kavling di panel kanan, lalu klik posisinya di siteplan.
-                        </div>
-                        <div
-                            class="relative select-none"
-                            :class="editingKoordinat ? 'cursor-crosshair' : ''"
-                            style="min-height: 300px;"
-                            @click="onSiteplanClick"
-                        >
-                            <img :src="project.siteplan_image" class="w-full object-contain pointer-events-none" alt="Siteplan" />
-                            <template v-for="k in kavlingsWithKoordinat" :key="k.id">
-                                <div
-                                    @click.stop="selectKavling(k)"
-                                    :class="[
-                                        'absolute transform -translate-x-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-xs font-bold transition-all duration-150',
-                                        statusConfig[k.status_jual]?.siteplan ?? 'bg-gray-500/20 border-2 border-gray-500',
-                                        selectedKavling?.id === k.id ? 'ring-2 ring-white z-10' : ''
-                                    ]"
-                                    :style="`left: ${k.koordinat_x}%; top: ${k.koordinat_y}%;`"
-                                    :title="k.nomor_lengkap"
-                                >
-                                    <span class="text-white drop-shadow text-[10px]">{{ k.nomor_kavling }}</span>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-
-                    <div v-if="!kavlings?.length" class="bg-slate-900 border border-dashed border-slate-700 rounded-2xl p-16 text-center text-slate-500">
-                        Belum ada kavling. Klik "Tambah Kavling" untuk mulai.
-                    </div>
-
-                    <!-- Blok Groups -->
-                    <div v-for="(kavs, blok) in kavlingsByBlok" :key="blok" class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                        <div class="flex items-center gap-2 mb-4">
-                            <span class="w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-400 text-xs font-bold flex-shrink-0">{{ blok }}</span>
-                            <span class="text-slate-300 font-semibold text-sm">Blok {{ blok }}</span>
-                            <span class="text-slate-600 text-xs">· {{ kavs.length }} unit</span>
-                        </div>
-
-                        <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                            <button
-                                v-for="k in kavs"
-                                :key="k.id"
-                                @click="selectKavling(k)"
-                                :class="[
-                                    statusConfig[k.status_jual]?.siteplan ?? 'bg-slate-800 border-2 border-slate-700',
-                                    selectedKavling?.id === k.id ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900 scale-105 z-10' : '',
-                                    'relative rounded-xl p-3 text-center transition-all duration-200'
-                                ]"
-                            >
-                                <span :class="statusConfig[k.status_jual]?.dot ?? 'bg-slate-500'" class="absolute top-2 right-2 w-2 h-2 rounded-full"></span>
-                                <div class="text-white font-bold text-sm leading-tight">{{ k.nomor_kavling }}</div>
-                                <div class="text-slate-400 text-xs mt-0.5">{{ k.luas_tanah ?? '?' }}m²</div>
-                                <div :class="statusConfig[k.status_jual]?.text ?? 'text-slate-400'" class="text-xs mt-1 font-medium truncate">
-                                    {{ isClickable(k) ? (statusConfig[k.status_jual]?.label) : (k.konsumen_nama ? k.konsumen_nama.split(' ')[0] : statusConfig[k.status_jual]?.label) }}
-                                </div>
-                            </button>
-                        </div>
+                    <div v-if="!isSvgSiteplan && project.siteplan_image" class="flex items-center gap-2 ml-auto">
+                        <span class="text-slate-500 text-xs whitespace-nowrap">Ukuran titik</span>
+                        <input type="range" v-model.number="markerSize" min="12" max="56" step="2" class="w-24 accent-violet-500" />
+                        <span class="text-slate-500 text-xs w-8">{{ markerSize }}px</span>
                     </div>
                 </div>
 
-                <!-- Right: Detail Panel (sticky) -->
-                <div class="lg:col-span-1">
-                    <div class="sticky top-6 space-y-3">
-
-                        <!-- Hint -->
-                        <div v-if="!selectedKavling" class="bg-slate-900 border border-dashed border-slate-700 rounded-2xl p-8 text-center">
-                            <div class="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto mb-3">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7 text-slate-600"><path stroke-linecap="round" stroke-linejoin="round" d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zM12 2.25V4.5m5.834.166l-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243l-1.59-1.59"/></svg>
-                            </div>
-                            <p class="text-slate-500 text-sm font-medium">Pilih kavling</p>
-                            <p class="text-slate-600 text-xs mt-1">Klik blok pada siteplan untuk melihat detail & booking</p>
-                        </div>
-
-                        <!-- Detail Card -->
-                        <div v-else class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-                            <!-- Colored top bar -->
-                            <div :class="statusConfig[selectedKavling.status_jual]?.bg ?? 'bg-slate-700'" class="h-1.5 w-full"/>
-
-                            <div class="p-5">
-                                <div class="flex items-start justify-between mb-4">
-                                    <div>
-                                        <div class="text-white font-bold text-2xl">{{ selectedKavling.nomor_lengkap }}</div>
-                                        <span :class="statusConfig[selectedKavling.status_jual]?.badge" class="inline-flex items-center mt-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium">
-                                            {{ statusConfig[selectedKavling.status_jual]?.label }}
-                                        </span>
-                                    </div>
-                                    <button @click="selectedKavling = null" class="text-slate-600 hover:text-slate-400 transition-colors p-1 -mr-1 -mt-1">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
-                                    </button>
-                                </div>
-
-                                <!-- Info grid -->
-                                <div class="space-y-2.5">
-                                    <div class="grid grid-cols-2 gap-2">
-                                        <div class="bg-slate-800/60 rounded-lg p-3">
-                                            <div class="text-slate-500 text-xs mb-0.5">Luas Tanah</div>
-                                            <div class="text-slate-200 font-semibold text-sm">{{ selectedKavling.luas_tanah ?? '-' }} m²</div>
-                                        </div>
-                                        <div class="bg-slate-800/60 rounded-lg p-3">
-                                            <div class="text-slate-500 text-xs mb-0.5">Luas Bangun</div>
-                                            <div class="text-slate-200 font-semibold text-sm">{{ selectedKavling.luas_bangunan ?? '-' }} m²</div>
-                                        </div>
-                                    </div>
-                                    <div class="bg-slate-800/60 rounded-lg p-3">
-                                        <div class="text-slate-500 text-xs mb-0.5">Harga</div>
-                                        <div class="text-violet-300 font-bold text-lg">{{ formatRupiah(selectedKavling.harga) }}</div>
-                                    </div>
-                                    <div class="bg-slate-800/60 rounded-lg p-3">
-                                        <div class="text-slate-500 text-xs mb-1.5">Pembangunan</div>
-                                        <div class="flex items-center gap-2">
-                                            <div class="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                                                <div class="h-full bg-gradient-to-r from-violet-500 to-indigo-400 rounded-full" :style="{ width: selectedKavling.progress_bangun + '%' }"/>
-                                            </div>
-                                            <span class="text-slate-300 text-xs whitespace-nowrap">{{ selectedKavling.status_bangun_label }}</span>
-                                        </div>
-                                    </div>
-                                    <div v-if="selectedKavling.konsumen_nama" class="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                                        <div class="text-slate-500 text-xs mb-0.5">Konsumen</div>
-                                        <div class="text-blue-300 font-medium text-sm">{{ selectedKavling.konsumen_nama }}</div>
-                                    </div>
-                                </div>
-
-                                <!-- Action -->
-                                <div class="mt-4 space-y-3">
-                                    <div v-if="isClickable(selectedKavling)" class="bg-violet-500/10 border border-violet-500/20 rounded-xl p-3 text-center">
-                                        <p class="text-violet-300 text-xs mb-1.5">Booking unit ini dilakukan lewat menu Penjualan</p>
-                                        <Link :href="route('penjualan.project', project.id)" class="inline-flex items-center gap-1 text-violet-400 hover:text-violet-300 text-xs font-semibold">
-                                            Buka Penjualan
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path fill-rule="evenodd" d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z" clip-rule="evenodd"/></svg>
-                                        </Link>
-                                    </div>
-
-                                    <!-- Update Status Bangun -->
-                                    <div class="bg-slate-800/60 rounded-xl p-3 space-y-2">
-                                        <div class="text-slate-500 text-xs font-medium">Update Progress Bangun</div>
-                                        <select
-                                            v-model="statusBangunForm.status_bangun"
-                                            class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
-                                        >
-                                            <option v-for="opt in statusBangunOptions" :key="opt.value" :value="opt.value">
-                                                {{ opt.label }}
-                                            </option>
-                                        </select>
-                                        <button
-                                            @click="submitStatusBangun"
-                                            :disabled="statusBangunForm.processing"
-                                            class="w-full py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-200 text-xs font-medium rounded-lg transition-colors"
-                                        >
-                                            {{ statusBangunForm.processing ? 'Menyimpan...' : 'Simpan Status Bangun' }}
-                                        </button>
-                                    </div>
-                                </div>
-
-                            </div>
-                        </div>
+                <!-- Picker kavling saat mode "Atur Posisi Unit" aktif -->
+                <div v-if="editingKoordinat" class="bg-slate-900 border border-amber-500/30 rounded-xl p-3 flex flex-wrap items-center gap-3">
+                    <span class="text-amber-400 text-xs font-medium flex-shrink-0">📍 Cari & pilih unit, lalu klik posisinya di gambar:</span>
+                    <div class="flex-1 min-w-[220px]">
+                        <KavlingSearchSelect
+                            v-model="positioningKavlingId"
+                            :kavlings="kavlings"
+                            placeholder="-- pilih kavling --"
+                            :option-hint="k => [k.blok ? `Blok ${k.blok}` : null, k.tipe_unit, k.koordinat_x != null ? 'sudah diposisikan' : null].filter(Boolean).join(' · ')"
+                        />
                     </div>
+                </div>
+
+                <!-- Peta Siteplan SVG (ID-matching, warna otomatis) -->
+                <div v-if="project.siteplan_image && isSvgSiteplan" class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden p-3">
+                    <InlineSiteplanSvg
+                        :siteplan-url="project.siteplan_image"
+                        :kavlings="kavlings"
+                        :status-colors="statusColorHex"
+                        :status-bangun-colors="statusBangunColorHex"
+                        :interactive="true"
+                        @select="selectKavling"
+                    />
+                </div>
+
+                <!-- Peta Siteplan gambar raster -->
+                <div v-else-if="project.siteplan_image" class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                    <div
+                        class="relative select-none"
+                        :class="editingKoordinat ? 'cursor-crosshair' : ''"
+                        style="min-height: 300px;"
+                        @click="onSiteplanClick"
+                    >
+                        <img :src="project.siteplan_image" class="w-full object-contain pointer-events-none" alt="Siteplan" />
+                        <template v-for="k in kavlingsWithKoordinat" :key="k.id">
+                            <div
+                                @click.stop="onMarkerClick(k)"
+                                class="group absolute transform -translate-x-1/2 -translate-y-1/2 z-0 hover:z-20"
+                                :style="`left: ${k.koordinat_x}%; top: ${k.koordinat_y}%;`"
+                            >
+                                <!-- Lingkaran marker -->
+                                <div
+                                    :class="[
+                                        'rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer',
+                                        statusConfig[k.status_jual]?.siteplan ?? 'bg-gray-500/40 border-2 border-gray-500',
+                                        positioningKavlingId === k.id ? 'ring-2 ring-white' : ''
+                                    ]"
+                                    :style="`width: ${markerSize}px; height: ${markerSize}px; box-shadow: 0 0 0 2px ${statusBangunColorHex[k.status_bangun] ?? '#64748b'};`"
+                                >
+                                    <span class="text-white font-bold drop-shadow leading-none select-none" :style="`font-size: ${Math.max(8, Math.round(markerSize / 2.6))}px;`">{{ k.nomor_kavling }}</span>
+                                </div>
+
+                                <!-- Hover card: identitas + status jual/bangun -->
+                                <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-max max-w-[180px] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-100 pointer-events-none">
+                                    <div class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 shadow-xl text-left">
+                                        <div class="text-white text-xs font-semibold">{{ k.nomor_lengkap }}</div>
+                                        <div class="flex items-center gap-1 mt-0.5">
+                                            <span :class="statusConfig[k.status_jual]?.dot" class="w-1.5 h-1.5 rounded-full inline-block"></span>
+                                            <span class="text-slate-300 text-[11px]">{{ statusConfig[k.status_jual]?.label }}</span>
+                                        </div>
+                                        <div class="flex items-center gap-1 mt-0.5">
+                                            <span class="w-1.5 h-1.5 rounded-full inline-block" :style="`background:${statusBangunColorHex[k.status_bangun]}`"></span>
+                                            <span class="text-slate-400 text-[11px]">{{ k.status_bangun_label }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div v-if="!kavlings?.length" class="bg-slate-900 border border-dashed border-slate-700 rounded-2xl p-16 text-center text-slate-500">
+                    Belum ada kavling. Klik "Tambah Kavling" untuk mulai.
                 </div>
             </div>
 
@@ -560,7 +662,9 @@ const onCsvImported = () => {
                     <table class="w-full text-sm">
                         <thead>
                             <tr class="border-b border-slate-800">
-                                <th class="text-left px-5 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Kavling</th>
+                                <th class="text-left px-5 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Kluster</th>
+                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Kavling</th>
+                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Tipe</th>
                                 <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Luas</th>
                                 <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Harga</th>
                                 <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Status Jual</th>
@@ -570,36 +674,58 @@ const onCsvImported = () => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-800/60">
-                            <tr v-if="!kavlings?.length">
-                                <td colspan="7" class="text-center py-12 text-slate-500">Belum ada kavling.</td>
+                            <tr v-if="!filteredKavlings.length">
+                                <td colspan="9" class="text-center py-12 text-slate-500">Tidak ada kavling yang cocok dengan filter.</td>
                             </tr>
-                            <tr v-for="k in kavlings" :key="k.id" class="hover:bg-slate-800/20 transition-colors">
-                                <td class="px-5 py-3.5 text-slate-200 font-medium">{{ k.nomor_lengkap }}</td>
+                            <tr v-for="k in filteredKavlings" :key="k.id" class="hover:bg-slate-800/20 transition-colors">
+                                <td class="px-5 py-3.5 text-slate-400 text-xs">{{ k.kluster ?? '-' }}</td>
+                                <td class="px-4 py-3.5 text-slate-200 font-medium">{{ k.nomor_lengkap }}</td>
+                                <td class="px-4 py-3.5 text-slate-400 text-xs">{{ k.tipe_unit ?? '-' }}</td>
                                 <td class="px-4 py-3.5 text-slate-400 text-xs">
                                     <div v-if="k.luas_tanah">T: {{ k.luas_tanah }} m²</div>
                                     <div v-if="k.luas_bangunan" class="text-slate-500">B: {{ k.luas_bangunan }} m²</div>
                                 </td>
                                 <td class="px-4 py-3.5 text-slate-300 text-xs font-mono">{{ formatRupiah(k.harga) }}</td>
                                 <td class="px-4 py-3.5">
-                                    <span :class="statusConfig[k.status_jual]?.badge" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium">
+                                    <button v-if="isAdmin && ['available', 'hold'].includes(k.status_jual)"
+                                        @click="toggleStatusJual(k)"
+                                        :title="`Klik untuk ubah jadi ${k.status_jual === 'available' ? 'Tidak Tersedia' : 'Tersedia'}`"
+                                        :class="statusConfig[k.status_jual]?.badge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium hover:opacity-75 transition-opacity cursor-pointer">
+                                        {{ statusConfig[k.status_jual]?.label ?? k.status_jual }}
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3"><path fill-rule="evenodd" d="M4 10a.75.75 0 01.75-.75h10.638L11.29 5.29a.75.75 0 111.06-1.06l5.5 5.5a.75.75 0 010 1.06l-5.5 5.5a.75.75 0 11-1.06-1.06l4.098-4.098H4.75A.75.75 0 014 10z" clip-rule="evenodd"/></svg>
+                                    </button>
+                                    <span v-else :class="statusConfig[k.status_jual]?.badge" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium">
                                         {{ statusConfig[k.status_jual]?.label ?? k.status_jual }}
                                     </span>
                                 </td>
                                 <td class="px-4 py-3.5">
                                     <div class="flex items-center gap-2">
-                                        <div class="w-16 h-1 bg-slate-800 rounded-full overflow-hidden">
+                                        <div class="w-12 h-1 bg-slate-800 rounded-full overflow-hidden flex-shrink-0">
                                             <div class="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full" :style="{ width: k.progress_bangun + '%' }"/>
                                         </div>
-                                        <span class="text-slate-400 text-xs">{{ k.status_bangun_label }}</span>
+                                        <select v-if="canUpdateStatusBangun"
+                                            :value="k.status_bangun"
+                                            @change="updateStatusBangunInline(k, $event.target.value)"
+                                            class="px-2 py-1 bg-slate-800 border border-slate-700 rounded-md text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer">
+                                            <option v-for="opt in statusBangunOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                                        </select>
+                                        <span v-else class="text-slate-400 text-xs">{{ k.status_bangun_label }}</span>
                                     </div>
                                 </td>
                                 <td class="px-4 py-3.5 text-slate-400 text-xs">{{ k.konsumen_nama ?? '-' }}</td>
                                 <td class="px-5 py-3.5 text-right">
-                                    <button @click="selectKavling(k)"
-                                            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>
-                                        Detail
-                                    </button>
+                                    <div class="inline-flex items-center gap-1.5">
+                                        <button @click="selectKavling(k)"
+                                                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>
+                                            Detail
+                                        </button>
+                                        <button v-if="isAdmin" @click="openEditKavling(k)"
+                                                class="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+                                            Edit
+                                        </button>
+                                    </div>
                                 </td>
 
                             </tr>
@@ -646,14 +772,9 @@ const onCsvImported = () => {
                         <!-- Info Grid 2 kolom -->
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             <div class="bg-slate-800/60 rounded-xl p-3 text-center">
-                                <div class="text-slate-500 text-xs mb-1">Luas Tanah</div>
-                                <div class="text-white font-bold text-lg">{{ selectedKavling.luas_tanah ?? '-' }}</div>
-                                <div class="text-slate-500 text-xs">m²</div>
-                            </div>
-                            <div class="bg-slate-800/60 rounded-xl p-3 text-center">
-                                <div class="text-slate-500 text-xs mb-1">Luas Bangunan</div>
-                                <div class="text-white font-bold text-lg">{{ selectedKavling.luas_bangunan ?? '-' }}</div>
-                                <div class="text-slate-500 text-xs">m²</div>
+                                <div class="text-slate-500 text-xs mb-1">Kluster</div>
+                                <div class="text-white font-bold text-lg">{{ selectedKavling.kluster ?? '-' }}</div>
+                                <div class="text-slate-500 text-xs">Kluster</div>
                             </div>
                             <div class="bg-slate-800/60 rounded-xl p-3 text-center">
                                 <div class="text-slate-500 text-xs mb-1">Blok</div>
@@ -665,6 +786,27 @@ const onCsvImported = () => {
                                 <div class="text-white font-bold text-lg">{{ selectedKavling.nomor_kavling }}</div>
                                 <div class="text-slate-500 text-xs">Unit</div>
                             </div>
+                            <div class="bg-slate-800/60 rounded-xl p-3 text-center">
+                                <div class="text-slate-500 text-xs mb-1">Tipe</div>
+                                <div class="text-white font-bold text-lg">{{ selectedKavling.tipe_unit ?? '-' }}</div>
+                                <div class="text-slate-500 text-xs">Tipe Unit</div>
+                            </div>
+                            <div class="bg-slate-800/60 rounded-xl p-3 text-center">
+                                <div class="text-slate-500 text-xs mb-1">Luas Tanah</div>
+                                <div class="text-white font-bold text-lg">{{ selectedKavling.luas_tanah ?? '-' }}</div>
+                                <div class="text-slate-500 text-xs">m²</div>
+                            </div>
+                            <div class="bg-slate-800/60 rounded-xl p-3 text-center">
+                                <div class="text-slate-500 text-xs mb-1">Luas Bangunan</div>
+                                <div class="text-white font-bold text-lg">{{ selectedKavling.luas_bangunan ?? '-' }}</div>
+                                <div class="text-slate-500 text-xs">m²</div>
+                            </div>
+                        </div>
+
+                        <!-- Keterangan (jika ada) -->
+                        <div v-if="selectedKavling.keterangan" class="bg-violet-500/10 border border-violet-500/20 rounded-xl p-3">
+                            <div class="text-violet-400 text-xs font-medium mb-1">🏷️ Keterangan</div>
+                            <div class="text-slate-300 text-sm">{{ selectedKavling.keterangan }}</div>
                         </div>
 
                         <!-- Harga -->
@@ -827,13 +969,21 @@ const onCsvImported = () => {
                     <form @submit.prevent="submitAddKavling" class="p-5 space-y-4">
                         <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-slate-400 text-xs mb-1.5">Nomor Kavling <span class="text-rose-400">*</span></label>
-                                <input v-model="kavlingForm.nomor_kavling" type="text" placeholder="A01" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': kavlingForm.errors.nomor_kavling }"/>
-                                <p v-if="kavlingForm.errors.nomor_kavling" class="text-rose-400 text-xs mt-1">{{ kavlingForm.errors.nomor_kavling }}</p>
+                                <label class="block text-slate-400 text-xs mb-1.5">Kluster</label>
+                                <input v-model="kavlingForm.kluster" type="text" placeholder="Cluster A" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
                             </div>
                             <div>
                                 <label class="block text-slate-400 text-xs mb-1.5">Blok</label>
                                 <input v-model="kavlingForm.blok" type="text" placeholder="A" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-slate-400 text-xs mb-1.5">Nomor Kavling <span class="text-rose-400">*</span></label>
+                                <input v-model="kavlingForm.nomor_kavling" type="text" placeholder="A01" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': kavlingForm.errors.nomor_kavling }"/>
+                                <p v-if="kavlingForm.errors.nomor_kavling" class="text-rose-400 text-xs mt-1">{{ kavlingForm.errors.nomor_kavling }}</p>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-slate-400 text-xs mb-1.5">Tipe Unit</label>
+                                <input v-model="kavlingForm.tipe_unit" type="text" placeholder="36/72" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
                             </div>
                             <div>
                                 <label class="block text-slate-400 text-xs mb-1.5">Luas Tanah (m²)</label>
@@ -847,6 +997,10 @@ const onCsvImported = () => {
                                 <label class="block text-slate-400 text-xs mb-1.5">Harga (Rp)</label>
                                 <input v-model="kavlingForm.harga" type="number" step="1000000" placeholder="500000000" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
                             </div>
+                            <div class="col-span-2">
+                                <label class="block text-slate-400 text-xs mb-1.5">Keterangan</label>
+                                <input v-model="kavlingForm.keterangan" type="text" placeholder="Hook, strategis, dll" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
+                            </div>
                         </div>
                         <div class="flex justify-end gap-3">
                             <button type="button" @click="showAddModal = false" class="px-4 py-2.5 text-slate-400 text-sm">Batal</button>
@@ -855,6 +1009,107 @@ const onCsvImported = () => {
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- ═══ MODAL: EDIT KAVLING (info umum saja) ═══════════════════════════ -->
+        <Teleport to="body">
+            <div v-if="showEditModal && selectedKavling" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showEditModal = false"/>
+                <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+                    <div class="flex items-center justify-between p-5 border-b border-slate-800">
+                        <div>
+                            <h3 class="text-white font-semibold">Edit Kavling {{ selectedKavling.nomor_lengkap }}</h3>
+                            <p class="text-slate-500 text-xs mt-0.5">Status jual & konsumen tidak diubah dari sini</p>
+                        </div>
+                        <button @click="showEditModal = false" class="text-slate-500 hover:text-slate-300">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
+                        </button>
+                    </div>
+                    <form @submit.prevent="submitEditKavling" class="p-5 space-y-4">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-slate-400 text-xs mb-1.5">Kluster</label>
+                                <input v-model="kavlingEditForm.kluster" type="text" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 text-xs mb-1.5">Blok</label>
+                                <input v-model="kavlingEditForm.blok" type="text" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-slate-400 text-xs mb-1.5">Nomor Kavling <span class="text-rose-400">*</span></label>
+                                <input v-model="kavlingEditForm.nomor_kavling" type="text" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': kavlingEditForm.errors.nomor_kavling }"/>
+                                <p v-if="kavlingEditForm.errors.nomor_kavling" class="text-rose-400 text-xs mt-1">{{ kavlingEditForm.errors.nomor_kavling }}</p>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-slate-400 text-xs mb-1.5">Tipe Unit</label>
+                                <input v-model="kavlingEditForm.tipe_unit" type="text" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 text-xs mb-1.5">Luas Tanah (m²)</label>
+                                <input v-model="kavlingEditForm.luas_tanah" type="number" step="0.01" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 text-xs mb-1.5">Luas Bangunan (m²)</label>
+                                <input v-model="kavlingEditForm.luas_bangunan" type="number" step="0.01" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-slate-400 text-xs mb-1.5">Harga (Rp)</label>
+                                <input v-model="kavlingEditForm.harga" type="number" step="1000000" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-slate-400 text-xs mb-1.5">Keterangan</label>
+                                <input v-model="kavlingEditForm.keterangan" type="text" placeholder="Hook, strategis, dll" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-slate-400 text-xs mb-1.5">Catatan</label>
+                                <textarea v-model="kavlingEditForm.catatan" rows="2" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"/>
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-3">
+                            <button type="button" @click="showEditModal = false" class="px-4 py-2.5 text-slate-400 text-sm">Batal</button>
+                            <button type="submit" :disabled="kavlingEditForm.processing" class="px-4 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors">
+                                {{ kavlingEditForm.processing ? 'Menyimpan...' : 'Simpan Perubahan' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- ── MODAL: Upload / Ganti Siteplan ────────────────────────────── -->
+        <Teleport to="body">
+            <div v-if="showUploadSiteplan" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showUploadSiteplan = false" />
+                <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+                        <div>
+                            <h3 class="text-white font-semibold">{{ project.siteplan_image ? 'Ganti Siteplan' : 'Upload Siteplan' }}</h3>
+                            <p class="text-slate-400 text-xs mt-0.5">Format PNG/JPG (klik posisi manual) atau SVG (ID per-unit sudah disiapkan)</p>
+                        </div>
+                        <button @click="showUploadSiteplan = false" class="text-slate-500 hover:text-slate-300">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
+                        </button>
+                    </div>
+                    <div class="px-6 py-5 space-y-4">
+                        <div v-if="siteplanPreview || project.siteplan_image" class="rounded-xl overflow-hidden border border-slate-700 bg-slate-800">
+                            <img :src="siteplanPreview || project.siteplan_image" class="w-full max-h-48 object-contain" alt="Preview Siteplan" />
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-xs font-medium mb-1.5">Pilih File</label>
+                            <input type="file" accept=".png,.jpg,.jpeg,.svg" @change="onSiteplanFileChange"
+                                class="block w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:bg-slate-700 file:text-slate-300 hover:file:bg-slate-600 cursor-pointer" />
+                            <p v-if="siteplanUploadForm.errors.siteplan_image" class="text-rose-400 text-xs mt-1">{{ siteplanUploadForm.errors.siteplan_image }}</p>
+                        </div>
+                    </div>
+                    <div class="px-6 pb-5 flex gap-3">
+                        <button @click="showUploadSiteplan = false" class="flex-1 py-2.5 text-slate-400 border border-slate-700 rounded-lg text-sm transition-colors hover:text-slate-200">Batal</button>
+                        <button @click="submitUploadSiteplan" :disabled="siteplanUploadForm.processing || !siteplanUploadForm.siteplan_image"
+                            class="flex-1 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-all">
+                            {{ siteplanUploadForm.processing ? 'Mengupload...' : '📤 Upload' }}
+                        </button>
+                    </div>
                 </div>
             </div>
         </Teleport>
@@ -874,18 +1129,26 @@ const onCsvImported = () => {
                         </button>
                     </div>
                     <div class="px-6 py-5 space-y-4">
+                        <a :href="route('projects.kavling-template', project.id)"
+                            class="flex items-center justify-center gap-2 w-full py-2.5 bg-violet-600/15 hover:bg-violet-600/25 text-violet-300 text-sm font-medium rounded-lg transition-colors border border-violet-500/30">
+                            📄 Download Template Excel
+                        </a>
                         <!-- Format info -->
                         <div class="bg-slate-800 rounded-xl p-4 text-xs space-y-1.5 text-slate-400">
                             <div class="text-slate-300 font-medium mb-2">Format kolom Excel yang diperlukan:</div>
                             <div class="grid grid-cols-2 gap-1">
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">Blok</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">No Unit</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">LB</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">LT</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">Harga</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">Status</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded col-span-2">Keterangan (opsional)</span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">nomor_kavling (wajib)</span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">kluster (opsional)</span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">blok (opsional)</span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">tipe_unit (opsional)</span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">luas_tanah (opsional)</span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">luas_bangunan (opsional)</span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">harga (opsional)</span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">status (opsional)</span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">status_bangun (opsional)</span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">keterangan (opsional)</span>
                             </div>
+                            <p class="pt-1 text-slate-500">status: <span class="font-mono">available</span> / <span class="font-mono">not_for_sale</span> (default available) · status_bangun: <span class="font-mono">not_started</span> / <span class="font-mono">foundation</span> / <span class="font-mono">structure</span> / <span class="font-mono">roofing</span> / <span class="font-mono">finishing</span> / <span class="font-mono">handover_ready</span> (default not_started, isi kalau proyek sudah berjalan)</p>
                         </div>
                         <div>
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">Pilih File Excel</label>

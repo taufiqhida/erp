@@ -15,7 +15,9 @@ const step = ref(1); // 1: upload, 2: mapping, 3: preview
 
 const SYSTEM_FIELDS = [
     { key: 'nomor_kavling', label: 'No Unit / Kode Kavling', required: true, guesses: ['nomor_kavling', 'no_unit', 'nomor_unit', 'kavling', 'unit', 'kode', 'no'] },
+    { key: 'kluster', label: 'Kluster', required: false, guesses: ['kluster', 'cluster'] },
     { key: 'blok', label: 'Blok', required: false, guesses: ['blok', 'block'] },
+    { key: 'tipe_unit', label: 'Tipe', required: false, guesses: ['tipe', 'tipe_unit', 'type'] },
     { key: 'luas_tanah', label: 'Luas Tanah (m²)', required: false, guesses: ['luas_tanah', 'lt', 'luas_m2', 'luas'] },
     { key: 'luas_bangunan', label: 'Luas Bangunan (m²)', required: false, guesses: ['luas_bangunan', 'lb'] },
     { key: 'harga', label: 'Harga', required: false, guesses: ['harga', 'price'] },
@@ -228,7 +230,9 @@ const resetAndClose = () => {
                                 <thead>
                                     <tr class="bg-slate-800/50 border-b border-slate-800">
                                         <th class="px-3 py-2 text-left text-slate-400 font-medium">No Unit</th>
+                                        <th class="px-3 py-2 text-left text-slate-400 font-medium">Kluster</th>
                                         <th class="px-3 py-2 text-left text-slate-400 font-medium">Blok</th>
+                                        <th class="px-3 py-2 text-left text-slate-400 font-medium">Tipe</th>
                                         <th class="px-3 py-2 text-left text-slate-400 font-medium">LT</th>
                                         <th class="px-3 py-2 text-left text-slate-400 font-medium">LB</th>
                                         <th class="px-3 py-2 text-left text-slate-400 font-medium">Harga</th>
@@ -244,7 +248,9 @@ const resetAndClose = () => {
                                             <input v-model="row.nomor_kavling" class="w-24 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200"
                                                 :class="{ 'border-rose-500': !row.nomor_kavling }" />
                                         </td>
+                                        <td class="px-2 py-1.5"><input v-model="row.kluster" class="w-16 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200" /></td>
                                         <td class="px-2 py-1.5"><input v-model="row.blok" class="w-14 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200" /></td>
+                                        <td class="px-2 py-1.5"><input v-model="row.tipe_unit" class="w-20 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200" /></td>
                                         <td class="px-2 py-1.5"><input v-model="row.luas_tanah" class="w-20 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200" /></td>
                                         <td class="px-2 py-1.5"><input v-model="row.luas_bangunan" class="w-20 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200" /></td>
                                         <td class="px-2 py-1.5"><input v-model="row.harga" class="w-28 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200" /></td>

@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
@@ -24,6 +23,7 @@ class Project extends Model
         'kota',
         'luas_tanah_total',
         'siteplan_image',
+        'siteplan_marker_size',
         'is_active',
         'created_by',
     ];
@@ -54,11 +54,6 @@ class Project extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
-    }
-
-    public function pembiayaan(): HasOne
-    {
-        return $this->hasOne(PembiayaanProyek::class);
     }
 
     public function scopeActive($query)

@@ -7,11 +7,13 @@ const props = defineProps({
     requests: Object,
     filters: Object,
     statusOptions: Array,
+    typeOptions: Array,
 });
 
 const statusFilter = ref(props.filters?.status ?? '');
-watch(statusFilter, (val) => {
-    router.get(route('cancellation-requests.index'), { status: val || undefined }, { preserveState: true, replace: true });
+const typeFilter = ref(props.filters?.type ?? '');
+watch([statusFilter, typeFilter], ([status, type]) => {
+    router.get(route('cancellation-requests.index'), { status: status || undefined, type: type || undefined }, { preserveState: true, replace: true });
 });
 
 // Modal state
@@ -61,16 +63,25 @@ const statusBadgeClass = {
         <div class="p-6 space-y-5">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 class="text-white font-bold text-xl">Pengajuan Pembatalan</h1>
-                    <p class="text-slate-400 text-sm mt-0.5">Review dan kelola permintaan pembatalan kavling</p>
+                    <h1 class="text-white font-bold text-xl">Pembatalan &amp; Tukar Unit</h1>
+                    <p class="text-slate-400 text-sm mt-0.5">Review dan kelola permintaan pembatalan &amp; tukar unit kavling</p>
                 </div>
-                <select
-                    v-model="statusFilter"
-                    class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
-                >
-                    <option value="">Semua Status</option>
-                    <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
+                <div class="flex items-center gap-2">
+                    <select
+                        v-model="typeFilter"
+                        class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    >
+                        <option value="">Semua Tipe</option>
+                        <option v-for="opt in typeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                    </select>
+                    <select
+                        v-model="statusFilter"
+                        class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    >
+                        <option value="">Semua Status</option>
+                        <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                    </select>
+                </div>
             </div>
 
             <!-- Table -->
@@ -79,6 +90,7 @@ const statusBadgeClass = {
                     <table class="w-full text-sm">
                         <thead>
                             <tr class="border-b border-slate-800">
+                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Tipe</th>
                                 <th class="text-left px-5 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Kavling / Proyek</th>
                                 <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Konsumen</th>
                                 <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Alasan</th>
@@ -89,15 +101,21 @@ const statusBadgeClass = {
                         </thead>
                         <tbody class="divide-y divide-slate-800/70">
                             <tr v-if="!requests.data.length">
-                                <td colspan="6" class="text-center py-12 text-slate-500">Tidak ada pengajuan pembatalan.</td>
+                                <td colspan="7" class="text-center py-12 text-slate-500">Tidak ada pengajuan.</td>
                             </tr>
                             <tr
                                 v-for="req in requests.data"
                                 :key="req.id"
                                 class="hover:bg-slate-800/20 transition-colors"
                             >
+                                <td class="px-4 py-4">
+                                    <span :class="req.type === 'unit_swap' ? 'bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/25' : 'bg-slate-700/50 text-slate-300 ring-1 ring-slate-600'"
+                                        class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium">
+                                        {{ req.type_label }}
+                                    </span>
+                                </td>
                                 <td class="px-5 py-4">
-                                    <div class="text-slate-200 font-medium text-sm">{{ req.kavling }}</div>
+                                    <div class="text-slate-200 font-medium text-sm">{{ req.kavling }}<span v-if="req.kavling_baru" class="text-slate-500"> → {{ req.kavling_baru }}</span></div>
                                     <div class="text-slate-500 text-xs">{{ req.project }}</div>
                                     <div class="text-slate-600 text-xs mt-0.5">{{ req.created_at }}</div>
                                 </td>
@@ -168,7 +186,7 @@ const statusBadgeClass = {
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
                     <div class="flex items-center justify-between p-5 border-b border-slate-800">
                         <h3 class="text-white font-semibold">
-                            {{ reviewType === 'approve' ? '✅ Setujui Pembatalan' : '❌ Tolak Pembatalan' }}
+                            {{ reviewType === 'approve' ? `✅ Setujui ${selectedRequest.type_label}` : `❌ Tolak ${selectedRequest.type_label}` }}
                         </h3>
                         <button @click="showReviewModal = false" class="text-slate-500 hover:text-slate-300">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
@@ -177,32 +195,40 @@ const statusBadgeClass = {
                     <div class="p-5 space-y-4">
                         <!-- Info -->
                         <div class="bg-slate-800/50 rounded-lg p-3 text-xs space-y-1">
-                            <div class="text-slate-300"><span class="text-slate-500">Kavling:</span> {{ selectedRequest.kavling }}</div>
+                            <div class="text-slate-300"><span class="text-slate-500">Kavling:</span> {{ selectedRequest.kavling }}<span v-if="selectedRequest.kavling_baru"> → {{ selectedRequest.kavling_baru }}</span></div>
                             <div class="text-slate-300"><span class="text-slate-500">Konsumen:</span> {{ selectedRequest.konsumen }}</div>
                             <div class="text-slate-400"><span class="text-slate-500">Alasan:</span> {{ selectedRequest.alasan }}</div>
                         </div>
-                        <div v-if="reviewType === 'approve'" class="text-yellow-400 text-xs bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
-                            ⚠️ Kavling akan kembali ke status <strong>Tersedia</strong> dan transaksi akan dibatalkan.
-                        </div>
-                        <div v-if="reviewType === 'approve'" class="space-y-3">
-                            <div class="bg-slate-800/50 rounded-lg p-3 flex justify-between items-center text-sm">
-                                <span class="text-slate-400">Total Dana Diterima</span>
-                                <span class="text-slate-200 font-semibold">{{ formatRupiah(selectedRequest.total_terbayar) }}</span>
+
+                        <template v-if="selectedRequest.type === 'unit_swap'">
+                            <div v-if="reviewType === 'approve'" class="text-yellow-400 text-xs bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
+                                ⚠️ Unit akan langsung ditukar: {{ selectedRequest.kavling }} → {{ selectedRequest.kavling_baru }}.
                             </div>
-                            <div>
-                                <label class="block text-slate-400 text-xs font-medium mb-1.5">Nominal Dikembalikan ke Konsumen <span class="text-rose-400">*</span></label>
-                                <input
-                                    v-model="reviewForm.nominal_dikembalikan"
-                                    type="number" min="0" :max="selectedRequest.total_terbayar" placeholder="0"
-                                    class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
-                                    :class="{ 'border-rose-500': reviewForm.errors.nominal_dikembalikan }"
-                                />
-                                <p v-if="reviewForm.errors.nominal_dikembalikan" class="text-rose-400 text-xs mt-1">{{ reviewForm.errors.nominal_dikembalikan }}</p>
-                                <p v-else-if="reviewForm.nominal_dikembalikan !== ''" class="text-slate-500 text-xs mt-1">
-                                    Hangus: {{ formatRupiah(Math.max(0, (selectedRequest.total_terbayar || 0) - (reviewForm.nominal_dikembalikan || 0))) }}
-                                </p>
+                        </template>
+                        <template v-else>
+                            <div v-if="reviewType === 'approve'" class="text-yellow-400 text-xs bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
+                                ⚠️ Kavling akan kembali ke status <strong>Tersedia</strong> dan transaksi akan dibatalkan.
                             </div>
-                        </div>
+                            <div v-if="reviewType === 'approve'" class="space-y-3">
+                                <div class="bg-slate-800/50 rounded-lg p-3 flex justify-between items-center text-sm">
+                                    <span class="text-slate-400">Total Dana Diterima</span>
+                                    <span class="text-slate-200 font-semibold">{{ formatRupiah(selectedRequest.total_terbayar) }}</span>
+                                </div>
+                                <div>
+                                    <label class="block text-slate-400 text-xs font-medium mb-1.5">Nominal Dikembalikan ke Konsumen <span class="text-rose-400">*</span></label>
+                                    <input
+                                        v-model="reviewForm.nominal_dikembalikan"
+                                        type="number" min="0" :max="selectedRequest.total_terbayar" placeholder="0"
+                                        class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                        :class="{ 'border-rose-500': reviewForm.errors.nominal_dikembalikan }"
+                                    />
+                                    <p v-if="reviewForm.errors.nominal_dikembalikan" class="text-rose-400 text-xs mt-1">{{ reviewForm.errors.nominal_dikembalikan }}</p>
+                                    <p v-else-if="reviewForm.nominal_dikembalikan !== ''" class="text-slate-500 text-xs mt-1">
+                                        Hangus: {{ formatRupiah(Math.max(0, (selectedRequest.total_terbayar || 0) - (reviewForm.nominal_dikembalikan || 0))) }}
+                                    </p>
+                                </div>
+                            </div>
+                        </template>
                         <div>
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">
                                 Catatan {{ reviewType === 'reject' ? '(Wajib)' : '(Opsional)' }}

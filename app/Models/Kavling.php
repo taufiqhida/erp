@@ -19,6 +19,7 @@ class Kavling extends Model
 
     protected $fillable = [
         'project_id',
+        'kluster',
         'nomor_kavling',
         'blok',
         'luas_tanah',
@@ -60,6 +61,11 @@ class Kavling extends Model
             ->setDescriptionForEvent(
                 fn(string $event) => "Kavling {$this->nomor_kavling} (Blok {$this->blok}) telah di-{$event}"
             );
+    }
+
+    public function scopeByKluster($query, string $kluster)
+    {
+        return $query->where('kluster', $kluster);
     }
 
     /* ---------------------------------------------------------------

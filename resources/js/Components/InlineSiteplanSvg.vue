@@ -6,6 +6,12 @@ const props = defineProps({
     kavlings: { type: Array, default: () => [] },
     // Map status_jual value -> warna fill
     statusColors: { type: Object, required: true },
+    // Map status_bangun value -> warna stroke/ring (opsional)
+    statusBangunColors: { type: Object, default: () => ({}) },
+    // Kalau true: unit bisa diklik (emit 'select') & selectedId di-highlight.
+    // Dipakai di halaman Penjualan (klik unit -> buka detail/booking).
+    // Kalau false: murni visual read-only, tanpa modal (dipakai di Manajemen Proyek).
+    interactive: { type: Boolean, default: false },
     selectedId: { type: [Number, String], default: null },
 });
 
@@ -38,14 +44,26 @@ const applyColorsAndListeners = () => {
         }
 
         el.style.fill = props.statusColors[k.status_jual] ?? '#94a3b8';
-        el.style.cursor = 'pointer';
+        el.style.stroke = props.statusBangunColors[k.status_bangun] ?? 'none';
+        el.style.strokeWidth = '2px';
         el.style.transition = 'opacity 0.15s ease';
         el.classList.add('siteplan-svg-unit');
-        el.classList.toggle('siteplan-svg-unit-selected', String(k.id) === String(props.selectedId));
+        el.classList.toggle('siteplan-svg-unit-interactive', props.interactive);
+        el.classList.toggle('siteplan-svg-unit-selected', props.interactive && String(k.id) === String(props.selectedId));
 
-        const handler = () => emit('select', k);
-        el.addEventListener('click', handler);
-        attachedListeners.push({ el, handler });
+        // Tooltip native (nomor + status jual + status bangun), tanpa modal.
+        let titleEl = el.querySelector(':scope > title');
+        if (!titleEl) {
+            titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+            el.prepend(titleEl);
+        }
+        titleEl.textContent = `${k.nomor_lengkap} — ${k.status_jual_label ?? k.status_jual} · ${k.status_bangun_label ?? k.status_bangun}`;
+
+        if (props.interactive) {
+            const handler = () => emit('select', k);
+            el.addEventListener('click', handler);
+            attachedListeners.push({ el, handler });
+        }
     });
 
     if (unmatched.length) {
@@ -103,11 +121,14 @@ watch(() => props.selectedId, applyColorsAndListeners);
 </template>
 
 <style scoped>
-:deep(.siteplan-svg-unit:hover) {
+:deep(.siteplan-svg-unit-interactive) {
+    cursor: pointer;
+}
+:deep(.siteplan-svg-unit-interactive:hover) {
     opacity: 0.75;
 }
 :deep(.siteplan-svg-unit-selected) {
-    stroke: #ffffff;
+    stroke: #ffffff !important;
     stroke-width: 2px;
 }
 </style>

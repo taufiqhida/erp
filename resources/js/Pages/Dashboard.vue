@@ -110,7 +110,7 @@ const statCards = [
                 <div class="xl:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                     <div class="flex items-center justify-between px-5 py-4 border-b border-slate-800">
                         <h2 class="text-slate-200 font-semibold text-sm">Proyek Aktif</h2>
-                        <Link :href="route('projects.index')" class="text-xs text-violet-400 hover:text-violet-300 transition-colors font-medium">
+                        <Link :href="route('beranda')" class="text-xs text-violet-400 hover:text-violet-300 transition-colors font-medium">
                             Lihat semua →
                         </Link>
                     </div>

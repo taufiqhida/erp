@@ -1,5 +1,5 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import BerandaLayout from '@/Layouts/BerandaLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -41,10 +41,10 @@ const submit = () => {
 
 <template>
     <Head :title="isEdit ? 'Edit Proyek' : 'Tambah Proyek'" />
-    <AuthenticatedLayout>
+    <BerandaLayout>
         <template #header>
             <div class="flex items-center gap-2 text-slate-400 text-sm">
-                <Link :href="route('projects.index')" class="hover:text-slate-200 transition-colors">Proyek</Link>
+                <Link :href="route('beranda')" class="hover:text-slate-200 transition-colors">Proyek</Link>
                 <span>/</span>
                 <span class="text-slate-200 font-medium">{{ isEdit ? 'Edit' : 'Tambah' }}</span>
             </div>
@@ -175,7 +175,7 @@ const submit = () => {
                 <!-- Actions -->
                 <div class="flex items-center justify-end gap-3">
                     <Link
-                        :href="route('projects.index')"
+                        :href="route('beranda')"
                         class="px-4 py-2.5 text-slate-400 hover:text-slate-200 text-sm font-medium transition-colors"
                     >
                         Batal
@@ -190,5 +190,5 @@ const submit = () => {
                 </div>
             </form>
         </div>
-    </AuthenticatedLayout>
+    </BerandaLayout>
 </template>

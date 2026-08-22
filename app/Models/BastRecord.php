@@ -14,28 +14,13 @@ class BastRecord extends Model
     protected $fillable = [
         'kavling_konsumen_id',
         'tanggal_bast',
-        'penerima',
         'catatan',
-        'dokumen_path',
         'status_ttd',
-        'checklist',
         'created_by',
     ];
 
     protected $casts = [
         'tanggal_bast' => 'date',
-        'checklist'    => 'array',
-    ];
-
-    public const CHECKLIST_ITEMS = [
-        'listrik'  => 'Listrik aktif',
-        'air'      => 'Air tersedia',
-        'meteran'  => 'Meteran terpasang',
-        'sanitair' => 'Sanitair lengkap',
-        'pintu'    => 'Pintu lengkap',
-        'jendela'  => 'Jendela lengkap',
-        'kunci'    => 'Kunci tersedia',
-        'siap'     => 'Bangunan siap serah terima',
     ];
 
     public function getActivitylogOptions(): LogOptions
@@ -54,14 +39,5 @@ class BastRecord extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
-    }
-
-    public function getChecklistCompleteAttribute(): bool
-    {
-        $checklist = $this->checklist ?? [];
-        foreach (array_keys(self::CHECKLIST_ITEMS) as $key) {
-            if (empty($checklist[$key])) return false;
-        }
-        return true;
     }
 }

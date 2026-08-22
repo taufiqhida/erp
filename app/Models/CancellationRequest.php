@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CancellationRequestType;
 use App\Enums\CancellationStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,8 +15,11 @@ class CancellationRequest extends Model
     use HasFactory, LogsActivity;
 
     protected $fillable = [
+        'type',
         'kavling_id',
+        'kavling_baru_id',
         'kavling_konsumen_id',
+        'kavling_status_before',
         'requested_by',
         'reviewed_by',
         'status',
@@ -28,6 +32,7 @@ class CancellationRequest extends Model
     ];
 
     protected $casts = [
+        'type'                 => CancellationRequestType::class,
         'status'               => CancellationStatus::class,
         'reviewed_at'          => 'datetime',
         'nominal_diterima'     => 'decimal:2',
@@ -50,6 +55,11 @@ class CancellationRequest extends Model
     public function kavling(): BelongsTo
     {
         return $this->belongsTo(Kavling::class);
+    }
+
+    public function kavlingBaru(): BelongsTo
+    {
+        return $this->belongsTo(Kavling::class, 'kavling_baru_id');
     }
 
     public function kavlingKonsumen(): BelongsTo
@@ -93,5 +103,10 @@ class CancellationRequest extends Model
     public function isRejected(): bool
     {
         return $this->status === CancellationStatus::Rejected;
+    }
+
+    public function isUnitSwap(): bool
+    {
+        return $this->type === CancellationRequestType::UnitSwap;
     }
 }

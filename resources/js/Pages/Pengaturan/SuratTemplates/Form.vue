@@ -1,6 +1,6 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
+import { Link, useForm } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 
 const props = defineProps({
@@ -73,19 +73,7 @@ const templateVars = [
 </script>
 
 <template>
-    <Head :title="isEdit ? 'Edit Template Surat' : 'Buat Template Surat'" />
-    <AuthenticatedLayout>
-        <template #header>
-            <div class="flex items-center gap-2 text-slate-400 text-sm">
-                <Link :href="route('pengaturan.profil-developer')" class="hover:text-slate-200 transition-colors">Pengaturan</Link>
-                <span>/</span>
-                <Link :href="route('pengaturan.surat-templates')" class="hover:text-slate-200 transition-colors">Template Surat</Link>
-                <span>/</span>
-                <span class="text-slate-200 font-medium">{{ isEdit ? 'Edit' : 'Buat Baru' }}</span>
-            </div>
-        </template>
-
-        <div class="p-6 space-y-5">
+    <PengaturanLayout :title="isEdit ? 'Template Surat — Edit' : 'Template Surat — Buat Baru'">
             <div class="flex items-center justify-between">
                 <h1 class="text-white font-bold text-xl">{{ isEdit ? 'Edit Template' : 'Buat Template Baru' }}</h1>
                 <button @click="showPreview = !showPreview"
@@ -171,6 +159,5 @@ const templateVars = [
                     </div>
                 </div>
             </div>
-        </div>
-    </AuthenticatedLayout>
+    </PengaturanLayout>
 </template>

@@ -42,11 +42,17 @@ class PembayaranKonsumen extends Model
     public function getJenisLabelAttribute(): string
     {
         return match($this->jenis) {
-            'booking_fee' => 'Booking Fee / UTJ',
-            'dp'          => 'Uang Muka (DP)',
-            'angsuran'    => 'Angsuran',
-            'pelunasan'   => 'Pelunasan',
-            default       => $this->jenis,
+            'booking_fee'    => 'Booking Fee / UTJ',
+            'dp'             => 'Uang Muka (DP)',
+            'angsuran'       => 'Angsuran',
+            'pelunasan'      => 'Pelunasan',
+            'biaya_tanah'    => 'Biaya Penambahan Tanah',
+            'biaya_tambahan' => 'Biaya Tambahan',
+            'sbum'           => 'SBUM',
+            'dajam'          => 'Dana Jaminan',
+            'biaya_akad'     => 'Biaya Akad',
+            'tambahan_um'    => 'Tambahan Uang Muka',
+            default          => $this->jenis,
         };
     }
 }

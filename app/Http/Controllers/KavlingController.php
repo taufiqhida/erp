@@ -33,6 +33,12 @@ class KavlingController extends Controller
             ->when($request->blok, fn($q) =>
                 $q->where('blok', $request->blok)
             )
+            ->when($request->kluster, fn($q) =>
+                $q->where('kluster', $request->kluster)
+            )
+            ->when($request->tipe_unit, fn($q) =>
+                $q->where('tipe_unit', $request->tipe_unit)
+            )
             ->with(['activeTransaction.konsumen'])
             ->orderBy('blok')
             ->orderBy('nomor_kavling')
@@ -43,9 +49,12 @@ class KavlingController extends Controller
         return Inertia::render('Kavlings/Index', [
             'project'       => ['id' => $project->id, 'nama' => $project->nama, 'kode' => $project->kode],
             'kavlings'      => $kavlings,
-            'filters'       => $request->only(['status_jual', 'status_bangun', 'blok']),
+            'filters'       => $request->only(['status_jual', 'status_bangun', 'blok', 'kluster', 'tipe_unit']),
             'statusJualOptions'   => array_map(fn($s) => ['value' => $s->value, 'label' => $s->label(), 'color' => $s->color()], StatusJual::cases()),
             'statusBangunOptions' => array_map(fn($s) => ['value' => $s->value, 'label' => $s->label(), 'color' => $s->color()], StatusBangun::cases()),
+            'klusterOptions' => $project->kavlings()->whereNotNull('kluster')->distinct()->orderBy('kluster')->pluck('kluster'),
+            'blokOptions'    => $project->kavlings()->whereNotNull('blok')->distinct()->orderBy('blok')->pluck('blok'),
+            'tipeOptions'    => $project->kavlings()->whereNotNull('tipe_unit')->distinct()->orderBy('tipe_unit')->pluck('tipe_unit'),
             'konsumens'     => Konsumen::orderBy('nama')->get(['id', 'nama', 'no_hp']),
         ]);
     }
@@ -57,6 +66,7 @@ class KavlingController extends Controller
 
         $validated = $request->validate([
             'nomor_kavling'  => "required|string|max:20|unique:kavlings,nomor_kavling,NULL,id,project_id,{$project->id}",
+            'kluster'        => 'nullable|string|max:50',
             'blok'           => 'nullable|string|max:10',
             'luas_tanah'     => 'nullable|numeric|min:0',
             'luas_bangunan'  => 'nullable|numeric|min:0',
@@ -70,6 +80,7 @@ class KavlingController extends Controller
             'spek_dinding'   => 'nullable|string|max:100',
             'spek_lantai'    => 'nullable|string|max:100',
             'spek_pondasi'   => 'nullable|string|max:100',
+            'keterangan'     => 'nullable|string|max:255',
             'catatan'        => 'nullable|string',
         ]);
 
@@ -85,6 +96,7 @@ class KavlingController extends Controller
 
         $validated = $request->validate([
             'nomor_kavling'  => "required|string|max:20|unique:kavlings,nomor_kavling,{$kavling->id},id,project_id,{$kavling->project_id}",
+            'kluster'        => 'nullable|string|max:50',
             'blok'           => 'nullable|string|max:10',
             'luas_tanah'     => 'nullable|numeric|min:0',
             'luas_bangunan'  => 'nullable|numeric|min:0',
@@ -96,6 +108,7 @@ class KavlingController extends Controller
             'spek_dinding'   => 'nullable|string|max:100',
             'spek_lantai'    => 'nullable|string|max:100',
             'spek_pondasi'   => 'nullable|string|max:100',
+            'keterangan'     => 'nullable|string|max:255',
             'catatan'        => 'nullable|string',
         ]);
 
@@ -144,6 +157,32 @@ class KavlingController extends Controller
     }
 
     /**
+     * Toggle ketersediaan kavling (Tersedia <-> Tidak Tersedia) oleh admin
+     * proyek. Hanya berlaku selama kavling belum dibooking/terjual —
+     * begitu masuk pipeline penjualan, status_jual dikendalikan otomatis
+     * oleh BookingController, bukan lewat sini.
+     */
+    public function updateStatusJual(Request $request, Kavling $kavling): RedirectResponse
+    {
+        $this->authorizeProjectAccess($kavling->project);
+        abort_unless(Auth::user()->can('edit kavlings'), 403);
+
+        abort_unless(
+            in_array($kavling->status_jual, [StatusJual::Available, StatusJual::Hold]),
+            422,
+            'Ketersediaan hanya bisa diubah selama kavling belum dibooking/terjual.'
+        );
+
+        $validated = $request->validate([
+            'status_jual' => 'required|in:available,hold',
+        ]);
+
+        $kavling->update($validated);
+
+        return back()->with('success', "Kavling {$kavling->nomor_lengkap} sekarang: {$kavling->status_jual->label()}");
+    }
+
+    /**
      * Update status pembangunan (khusus staff lapangan)
      */
     public function updateStatusBangun(Request $request, Kavling $kavling): RedirectResponse
@@ -169,6 +208,7 @@ class KavlingController extends Controller
     {
         return [
             'id'                  => $k->id,
+            'kluster'             => $k->kluster,
             'nomor_kavling'       => $k->nomor_kavling,
             'blok'                => $k->blok,
             'nomor_lengkap'       => $k->nomor_lengkap,
@@ -185,8 +225,8 @@ class KavlingController extends Controller
             'progress_bangun'     => $k->progress_bangun,
             'konsumen_nama'       => $k->activeTransaction?->konsumen?->nama,
             'konsumen_id'         => $k->activeTransaction?->konsumen_id,
-            'foto_rumah'          => $k->foto_rumah ? Storage::disk('public')->url($k->foto_rumah) : null,
-            'denah_rumah'         => $k->denah_rumah ? Storage::disk('public')->url($k->denah_rumah) : null,
+            'foto_rumah'          => $k->foto_rumah ? route('media.show', ['path' => $k->foto_rumah]) : null,
+            'denah_rumah'         => $k->denah_rumah ? route('media.show', ['path' => $k->denah_rumah]) : null,
             'tipe_unit'           => $k->tipe_unit,
             'kamar_tidur'         => $k->kamar_tidur,
             'kamar_mandi'         => $k->kamar_mandi,
@@ -194,6 +234,7 @@ class KavlingController extends Controller
             'spek_dinding'        => $k->spek_dinding,
             'spek_lantai'         => $k->spek_lantai,
             'spek_pondasi'        => $k->spek_pondasi,
+            'keterangan'          => $k->keterangan,
             'catatan'             => $k->catatan,
         ];
     }

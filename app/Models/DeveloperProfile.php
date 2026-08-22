@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DeveloperProfile extends Model
 {
@@ -12,12 +13,14 @@ class DeveloperProfile extends Model
         'telepon',
         'email',
         'npwp',
-        'nama_bank',
-        'nomor_rekening',
-        'atas_nama_rekening',
         'logo_path',
         'kop_surat_path',
     ];
+
+    public function banks(): HasMany
+    {
+        return $this->hasMany(DeveloperProfileBank::class);
+    }
 
     /**
      * Ambil (atau buat) satu-satunya record profil developer.

@@ -1,5 +1,5 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import BerandaLayout from '@/Layouts/BerandaLayout.vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 
@@ -117,7 +117,7 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
 
 <template>
     <Head title="Manajemen Role" />
-    <AuthenticatedLayout>
+    <BerandaLayout>
         <template #header>
             <div class="flex items-center gap-2 text-slate-400 text-sm">
                 <span class="text-slate-200 font-medium">Manajemen Role</span>
@@ -445,5 +445,5 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                 </div>
             </div>
         </Teleport>
-    </AuthenticatedLayout>
+    </BerandaLayout>
 </template>
