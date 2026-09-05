@@ -11,6 +11,9 @@ const props = defineProps({
     transaksis: Array,
     openTransaksiId: Number,
     dajamSbumPresets: Array,
+    statusBangunStages: Array,
+    biayaTambahanPresets: { type: Array, default: () => [] },
+    promoPresets: { type: Array, default: () => [] },
 });
 
 const canManageKpr = computed(() => usePage().props.auth.user?.permissions?.includes('manage kpr'));
@@ -32,6 +35,72 @@ const isManajerOrAdmin = computed(() => {
     return roles.includes('manajer') || roles.includes('superadmin');
 });
 const canEditBiayaAkad = (trx) => canManageKpr.value && (!trx.is_locked || isManajerOrAdmin.value);
+
+// ── Edit Rincian Pesanan — sengaja dibatasi cuma boleh mengubah komponen
+// yang BELUM ada pembayaran tercatat (Biaya Kelebihan Tanah, Biaya Tambahan
+// per-item, Diskon/Promo). Cara Bayar & Skema DP tidak bisa diganti di sini
+// sama sekali (lihat BookingController::updateRincianPesanan).
+const canBookKavling = computed(() => usePage().props.auth.user?.permissions?.includes('book kavling'));
+const canEditRincian = (trx) => canBookKavling.value && (!trx.is_locked || isManajerOrAdmin.value);
+const biayaKelebihanLocked = (trx) => trx.biaya_kelebihan_tanah_status && trx.biaya_kelebihan_tanah_status !== 'belum_bayar';
+
+const editingRincian = reactive({});
+const rincianForms = reactive({});
+
+const getRincianForm = (trx) => {
+    if (!rincianForms[trx.id]) {
+        rincianForms[trx.id] = {
+            biaya_kelebihan_tanah_aktif: trx.biaya_kelebihan_tanah_aktif ?? false,
+            biaya_kelebihan_tanah_luas: trx.biaya_kelebihan_tanah_luas ?? '',
+            biaya_kelebihan_tanah_mode: trx.biaya_kelebihan_tanah_mode ?? 'per_m2',
+            biaya_kelebihan_tanah_harga_per_m2: trx.biaya_kelebihan_tanah_harga_per_m2 ?? '',
+            biaya_kelebihan_tanah_nominal_input: trx.biaya_kelebihan_tanah_mode === 'nominal' ? (trx.biaya_kelebihan_tanah_nominal ?? '') : '',
+            biaya_tambahan: (trx.biaya_tambahan || []).map(bt => ({ ...bt })),
+            promo_preset_id: trx.promo_preset_id ?? '',
+            diskon_mode: trx.diskon_mode ?? '',
+            diskon_nilai: trx.diskon_nilai ?? '',
+            processing: false,
+            errors: {},
+        };
+    }
+    return rincianForms[trx.id];
+};
+
+const openEditRincian = (trx) => {
+    delete rincianForms[trx.id];
+    getRincianForm(trx);
+    editingRincian[trx.id] = true;
+};
+const cancelEditRincian = (trxId) => { editingRincian[trxId] = false; };
+
+const addRincianBiayaTambahan = (trx) => {
+    getRincianForm(trx).biaya_tambahan.push({ id: null, preset_id: '', nama: '', nominal: '', status: 'belum_bayar' });
+};
+const removeRincianBiayaTambahan = (trx, idx) => {
+    getRincianForm(trx).biaya_tambahan.splice(idx, 1);
+};
+
+const submitRincianPesanan = (trx) => {
+    const form = getRincianForm(trx);
+    form.processing = true;
+    form.errors = {};
+    router.patch(route('bookings.rincian-pesanan', trx.id), {
+        biaya_kelebihan_tanah_aktif: form.biaya_kelebihan_tanah_aktif,
+        biaya_kelebihan_tanah_luas: form.biaya_kelebihan_tanah_luas || null,
+        biaya_kelebihan_tanah_mode: form.biaya_kelebihan_tanah_mode,
+        biaya_kelebihan_tanah_harga_per_m2: form.biaya_kelebihan_tanah_harga_per_m2 || null,
+        biaya_kelebihan_tanah_nominal_input: form.biaya_kelebihan_tanah_nominal_input || null,
+        biaya_tambahan: form.biaya_tambahan.map(bt => ({ id: bt.id || null, preset_id: bt.preset_id, nominal: Number(bt.nominal) || 0 })),
+        promo_preset_id: form.promo_preset_id || null,
+        diskon_mode: form.diskon_mode || null,
+        diskon_nilai: form.diskon_nilai || null,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => { editingRincian[trx.id] = false; delete rincianForms[trx.id]; },
+        onError: (errors) => { form.errors = errors; },
+        onFinish: () => { form.processing = false; },
+    });
+};
 // Pencatatan pembayaran sekarang murni domain Keuangan (lihat
 // Keuangan/TransaksiDetail.vue) — di tab Konsumen cuma tampil status
 // Lunas/Belum Bayar, tidak ada aksi. Sales/manajer tetap kelola item
@@ -113,28 +182,25 @@ const nominalLabel = (nominal, dibayar, status) => status === 'sebagian' && diba
     ? `${formatRp(dibayar)} / ${formatRp(nominal)}`
     : formatRp(nominal);
 
-// Pipeline (status_penjualan) — dipakai jadi badge di sini & di Konsumens/Index.vue,
-// warnanya harus konsisten di kedua tempat.
-const statusPenjualanConfig = {
-    booking:      { label: 'Booking',            cls: 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30' },
-    pemberkasan:  { label: 'Pemberkasan',         cls: 'bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30' },
-    proses_bank:  { label: 'Proses Bank/SLIK',    cls: 'bg-orange-500/15 text-orange-400 ring-1 ring-orange-500/30' },
-    sp3k:         { label: 'SP3K',                cls: 'bg-indigo-500/15 text-indigo-400 ring-1 ring-indigo-500/30' },
-    rencana_akad: { label: 'Rencana Akad',        cls: 'bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/30' },
-    akad:         { label: 'Akad',                cls: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30' },
-    bast:         { label: 'BAST / Selesai',      cls: 'bg-teal-500/15 text-teal-400 ring-1 ring-teal-500/30' },
-    batal:        { label: 'Batal',               cls: 'bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30' },
+// Pipeline (status_penjualan) — warnanya dinamis dari master "Warna Status"
+// (Pengaturan), sama sumbernya dengan Konsumens/Index.vue.
+const STATUS_PENJUALAN_LABELS = {
+    booking: 'Booking', pemberkasan: 'Pemberkasan', proses_bank: 'Proses Bank/SLIK',
+    sp3k: 'SP3K', rencana_akad: 'Rencana Akad', akad: 'Akad', bast: 'BAST / Selesai', batal: 'Batal',
 };
+const statusPenjualanConfig = computed(() => {
+    const colors = usePage().props.statusColors?.status_penjualan ?? {};
+    return Object.fromEntries(Object.entries(STATUS_PENJUALAN_LABELS).map(([k, label]) => {
+        const hex = colors[k] ?? '#94a3b8';
+        return [k, { label, style: `background:${hex}26; color:${hex}` }];
+    }));
+});
 
-// Status Bangun — warna konsisten dengan Penjualan/Project.vue (statusBangunColorHex)
-const statusBangunConfig = {
-    not_started:    { label: 'Belum Mulai',       cls: 'bg-slate-700/50 text-slate-400 ring-1 ring-slate-600' },
-    foundation:     { label: 'Pondasi',           cls: 'bg-orange-500/15 text-orange-400 ring-1 ring-orange-500/30' },
-    structure:      { label: 'Struktur',          cls: 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30' },
-    roofing:        { label: 'Atap',              cls: 'bg-indigo-500/15 text-indigo-400 ring-1 ring-indigo-500/30' },
-    finishing:      { label: 'Finishing',         cls: 'bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/30' },
-    handover_ready: { label: 'Siap Serah Terima', cls: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30' },
-};
+// Status Bangun — sumbernya master preset live (props.statusBangunStages),
+// warna badge dibentuk inline dari hex `warna`, bukan class hardcode.
+const statusBangunColorHex = computed(() =>
+    Object.fromEntries((props.statusBangunStages ?? []).map(s => [s.id, s.warna]))
+);
 
 const activeTransaksi = ref(null);
 
@@ -194,9 +260,9 @@ onMounted(() => {
                         <div class="text-slate-500 text-xs">Email</div>
                         <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.email }}</div>
                     </div>
-                    <div v-if="konsumen.pekerjaan">
-                        <div class="text-slate-500 text-xs">Pekerjaan</div>
-                        <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.pekerjaan }}</div>
+                    <div v-if="konsumen.pekerjaan_label">
+                        <div class="text-slate-500 text-xs">Jenis Pekerjaan</div>
+                        <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.pekerjaan_label }}</div>
                     </div>
                     <div v-if="konsumen.alamat">
                         <div class="text-slate-500 text-xs">Alamat</div>
@@ -226,7 +292,7 @@ onMounted(() => {
                         </div>
                     </div>
                     <div class="flex items-center gap-3">
-                        <span :class="['px-2 py-0.5 text-xs rounded-full font-medium', statusPenjualanConfig[trx.status_penjualan]?.cls]">
+                        <span class="px-2 py-0.5 text-xs rounded-full font-medium" :style="statusPenjualanConfig[trx.status_penjualan]?.style">
                             {{ statusPenjualanConfig[trx.status_penjualan]?.label }}
                         </span>
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
@@ -258,13 +324,26 @@ onMounted(() => {
                         </div>
                         <div>
                             <div class="text-slate-500 text-[11px] mb-1">Status Bangun</div>
-                            <span :class="['px-2 py-0.5 text-xs rounded-full font-medium', statusBangunConfig[trx.status_bangun]?.cls]">
-                                {{ statusBangunConfig[trx.status_bangun]?.label ?? trx.status_bangun_label }}
+                            <span :style="`background:${statusBangunColorHex[trx.status_bangun_stage_id]}25; color:${statusBangunColorHex[trx.status_bangun_stage_id]}`"
+                                class="px-2 py-0.5 text-xs rounded-full font-medium">
+                                {{ trx.status_bangun_label }}
                             </span>
                         </div>
                         <div v-if="trx.is_kpr">
                             <div class="text-slate-500 text-[11px]">Bank Rekanan KPR</div>
                             <div class="text-slate-200 text-sm mt-0.5">{{ trx.bank_rekanan_kpr ?? '-' }}</div>
+                        </div>
+                        <div>
+                            <div class="text-slate-500 text-[11px] mb-1">ID Rumah (Tapera/SIKUMBANG)</div>
+                            <div class="text-slate-200 text-sm mt-0.5 font-mono">{{ trx.id_rumah ?? '-' }}</div>
+                        </div>
+                        <div>
+                            <div class="text-slate-500 text-[11px]">Tanggal Booking</div>
+                            <div class="text-slate-200 text-sm mt-0.5">{{ trx.tanggal_booking ?? '-' }}</div>
+                        </div>
+                        <div>
+                            <div class="text-slate-500 text-[11px]">Tanggal Akad</div>
+                            <div class="text-slate-200 text-sm mt-0.5">{{ trx.tanggal_akad ?? '-' }}</div>
                         </div>
                     </div>
 
@@ -306,8 +385,16 @@ onMounted(() => {
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.email ?? '-' }}</div>
                             </div>
                             <div>
-                                <div class="text-slate-500 text-[11px]">Pekerjaan</div>
-                                <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.pekerjaan ?? '-' }}</div>
+                                <div class="text-slate-500 text-[11px]">Jenis Pekerjaan</div>
+                                <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.pekerjaan_label ?? '-' }}</div>
+                            </div>
+                            <div>
+                                <div class="text-slate-500 text-[11px]">Status Pernikahan</div>
+                                <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.status_pernikahan_label ?? '-' }}</div>
+                            </div>
+                            <div>
+                                <div class="text-slate-500 text-[11px]">Sumber Lead</div>
+                                <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.sumber_lead_nama ?? '-' }}</div>
                             </div>
                             <div>
                                 <div class="text-slate-500 text-[11px]">Alamat</div>
@@ -322,8 +409,12 @@ onMounted(() => {
 
                     <!-- ═══ Rincian Pemesanan: kalkulasi harga sama seperti form booking ═══ -->
                     <div class="space-y-2">
-                        <h3 class="text-slate-300 text-sm font-semibold flex items-center gap-1.5">🧾 Rincian Pemesanan</h3>
-                        <div class="bg-slate-800/40 rounded-lg p-3 space-y-1.5 text-sm">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-slate-300 text-sm font-semibold flex items-center gap-1.5">🧾 Rincian Pemesanan</h3>
+                            <button v-if="canEditRincian(trx) && !editingRincian[trx.id]" @click="openEditRincian(trx)"
+                                class="text-xs text-violet-400 hover:text-violet-300 transition-colors">✏️ Edit</button>
+                        </div>
+                        <div v-if="!editingRincian[trx.id]" class="bg-slate-800/40 rounded-lg p-3 space-y-1.5 text-sm">
                             <div class="flex justify-between text-slate-400">
                                 <span>Harga Dasar</span>
                                 <span class="text-slate-300">{{ formatRp(trx.harga_dasar) }}</span>
@@ -373,6 +464,103 @@ onMounted(() => {
                                     <span class="text-slate-300">{{ formatRp(trx.dp_nominal) }}</span>
                                 </div>
                                 <div v-if="!(trx.booking_fee > 0) && !(trx.dp_nominal > 0)" class="text-slate-600 text-xs">Tidak ada booking fee maupun DP.</div>
+                            </div>
+                        </div>
+
+                        <!-- Edit Rincian Pesanan — cuma komponen yang belum ada
+                             pembayaran (Biaya Kelebihan Tanah/Biaya Tambahan/Diskon)
+                             yang bisa diubah. Cara Bayar & Skema DP terkunci total. -->
+                        <div v-else class="bg-slate-800/40 rounded-lg p-4 space-y-4 text-sm border border-violet-500/30">
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-slate-300 font-medium">Biaya Kelebihan Tanah</span>
+                                    <button v-if="!biayaKelebihanLocked(trx)" type="button"
+                                        @click="getRincianForm(trx).biaya_kelebihan_tanah_aktif = !getRincianForm(trx).biaya_kelebihan_tanah_aktif"
+                                        :class="getRincianForm(trx).biaya_kelebihan_tanah_aktif ? 'bg-violet-600' : 'bg-slate-700'"
+                                        class="relative w-9 h-5 rounded-full transition-colors flex-shrink-0">
+                                        <span :class="getRincianForm(trx).biaya_kelebihan_tanah_aktif ? 'translate-x-4' : 'translate-x-0.5'"
+                                            class="absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform" />
+                                    </button>
+                                    <span v-else class="text-amber-400 text-xs">🔒 Sudah ada pembayaran</span>
+                                </div>
+                                <div v-if="biayaKelebihanLocked(trx)" class="text-slate-500 text-xs">
+                                    {{ formatRp(trx.biaya_kelebihan_tanah_nominal) }} (terkunci, sudah ada pembayaran)
+                                </div>
+                                <div v-else-if="getRincianForm(trx).biaya_kelebihan_tanah_aktif" class="space-y-2">
+                                    <div class="flex gap-3">
+                                        <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
+                                            <input type="radio" v-model="getRincianForm(trx).biaya_kelebihan_tanah_mode" value="per_m2" class="accent-violet-500" /> Per m²
+                                        </label>
+                                        <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
+                                            <input type="radio" v-model="getRincianForm(trx).biaya_kelebihan_tanah_mode" value="nominal" class="accent-violet-500" /> Nominal
+                                        </label>
+                                    </div>
+                                    <div v-if="getRincianForm(trx).biaya_kelebihan_tanah_mode === 'per_m2'" class="grid grid-cols-2 gap-2">
+                                        <input v-model="getRincianForm(trx).biaya_kelebihan_tanah_luas" type="number" min="0" step="0.01" placeholder="Luas (m²)"
+                                            class="px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                        <input v-model="getRincianForm(trx).biaya_kelebihan_tanah_harga_per_m2" type="number" min="0" placeholder="Harga/m²"
+                                            class="px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                    </div>
+                                    <input v-else v-model="getRincianForm(trx).biaya_kelebihan_tanah_nominal_input" type="number" min="0" placeholder="Nominal"
+                                        class="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="text-slate-300 font-medium mb-2">Biaya Tambahan</div>
+                                <div v-for="(bt, idx) in getRincianForm(trx).biaya_tambahan" :key="idx" class="flex items-center gap-2 mb-1.5">
+                                    <template v-if="bt.status && bt.status !== 'belum_bayar'">
+                                        <span class="flex-1 text-slate-500 text-xs">🔒 {{ bt.nama }}</span>
+                                        <span class="text-slate-500 text-xs">{{ formatRp(bt.nominal) }} (terkunci)</span>
+                                    </template>
+                                    <template v-else>
+                                        <select v-model="bt.preset_id" class="flex-1 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                            <option value="" disabled>Pilih item...</option>
+                                            <option v-for="p in biayaTambahanPresets" :key="p.id" :value="p.id">{{ p.nama }}</option>
+                                        </select>
+                                        <input v-model="bt.nominal" type="number" min="0" placeholder="Nominal"
+                                            class="w-28 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                        <button type="button" @click="removeRincianBiayaTambahan(trx, idx)"
+                                            class="text-rose-400 hover:bg-rose-500/10 rounded p-1.5 flex-shrink-0">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </template>
+                                </div>
+                                <button type="button" @click="addRincianBiayaTambahan(trx)" class="text-violet-400 hover:text-violet-300 text-xs">+ Tambah Biaya Tambahan</button>
+                            </div>
+
+                            <div>
+                                <div class="text-slate-300 font-medium mb-2">Diskon / Promo</div>
+                                <select v-model="getRincianForm(trx).promo_preset_id" class="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-300 text-xs mb-2 focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                    <option value="">Tanpa promo</option>
+                                    <option v-for="p in promoPresets" :key="p.id" :value="p.id">{{ p.nama }}</option>
+                                </select>
+                                <div class="flex gap-3 mb-2">
+                                    <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
+                                        <input type="radio" v-model="getRincianForm(trx).diskon_mode" value="persen" class="accent-violet-500" /> Persen
+                                    </label>
+                                    <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
+                                        <input type="radio" v-model="getRincianForm(trx).diskon_mode" value="nominal" class="accent-violet-500" /> Nominal
+                                    </label>
+                                </div>
+                                <input v-model="getRincianForm(trx).diskon_nilai" type="number" min="0"
+                                    :placeholder="getRincianForm(trx).diskon_mode === 'persen' ? '%' : 'Rp'"
+                                    class="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                            </div>
+
+                            <p v-if="Object.keys(getRincianForm(trx).errors).length" class="text-rose-400 text-xs space-y-0.5">
+                                <span v-for="(msg, field) in getRincianForm(trx).errors" :key="field" class="block">{{ msg }}</span>
+                            </p>
+                            <p class="text-slate-600 text-[11px]">Cara Bayar &amp; Skema DP tidak bisa diubah di sini — kalau memang perlu ganti, transaksi harus dibatalkan &amp; booking ulang. Booking Fee/DP yang sudah digenerate juga tidak ikut berubah.</p>
+
+                            <div class="flex justify-end gap-2 pt-1">
+                                <button type="button" @click="cancelEditRincian(trx.id)" class="px-3 py-1.5 text-slate-400 hover:text-slate-200 text-xs">Batal</button>
+                                <button type="button" @click="submitRincianPesanan(trx)" :disabled="getRincianForm(trx).processing"
+                                    class="px-4 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
+                                    {{ getRincianForm(trx).processing ? 'Menyimpan...' : 'Simpan' }}
+                                </button>
                             </div>
                         </div>
                     </div>

@@ -17,7 +17,7 @@ const SYSTEM_FIELDS = [
     { key: 'nomor_kavling', label: 'No Unit / Kode Kavling', required: true, guesses: ['nomor_kavling', 'no_unit', 'nomor_unit', 'kavling', 'unit', 'kode', 'no'] },
     { key: 'kluster', label: 'Kluster', required: false, guesses: ['kluster', 'cluster'] },
     { key: 'blok', label: 'Blok', required: false, guesses: ['blok', 'block'] },
-    { key: 'tipe_unit', label: 'Tipe', required: false, guesses: ['tipe', 'tipe_unit', 'type'] },
+    { key: 'tipe_unit', label: 'Tipe', required: true, guesses: ['tipe', 'tipe_unit', 'type'] },
     { key: 'luas_tanah', label: 'Luas Tanah (m²)', required: false, guesses: ['luas_tanah', 'lt', 'luas_m2', 'luas'] },
     { key: 'luas_bangunan', label: 'Luas Bangunan (m²)', required: false, guesses: ['luas_bangunan', 'lb'] },
     { key: 'harga', label: 'Harga', required: false, guesses: ['harga', 'price'] },
@@ -97,6 +97,7 @@ const buildPreview = () => {
 // ── Validasi baris di preview (client-side, sebelum submit) ─────────
 const rowError = (row) => {
     if (!row.nomor_kavling) return 'No Unit kosong';
+    if (!row.tipe_unit) return 'Tipe kosong';
     if (row.status_unit && !['available', 'not_for_sale'].includes(row.status_unit)) {
         return `Status "${row.status_unit}" tidak dikenal`;
     }
@@ -210,7 +211,8 @@ const resetAndClose = () => {
                                 </select>
                             </div>
                         </div>
-                        <p v-if="!mappingValid" class="text-amber-400 text-xs">Field wajib ("No Unit / Kode Kavling") harus dipetakan ke salah satu kolom CSV.</p>
+                        <p class="text-slate-500 text-xs">Tipe akan dicocokkan dengan Tipe Unit yang sudah ada di proyek ini. Kalau namanya belum ada, Tipe baru otomatis dibuat (spek kosong, lengkapi belakangan di menu "Kelola Tipe Unit").</p>
+                        <p v-if="!mappingValid" class="text-amber-400 text-xs">Field wajib ("No Unit / Kode Kavling", "Tipe") harus dipetakan ke salah satu kolom CSV.</p>
                         <div class="flex justify-between pt-2">
                             <button @click="step = 1" class="px-4 py-2 text-slate-400 hover:text-slate-200 text-sm">← Kembali</button>
                             <button @click="buildPreview" :disabled="!mappingValid"
@@ -250,7 +252,10 @@ const resetAndClose = () => {
                                         </td>
                                         <td class="px-2 py-1.5"><input v-model="row.kluster" class="w-16 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200" /></td>
                                         <td class="px-2 py-1.5"><input v-model="row.blok" class="w-14 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200" /></td>
-                                        <td class="px-2 py-1.5"><input v-model="row.tipe_unit" class="w-20 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200" /></td>
+                                        <td class="px-2 py-1.5">
+                                            <input v-model="row.tipe_unit" class="w-20 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200"
+                                                :class="{ 'border-rose-500': !row.tipe_unit }" />
+                                        </td>
                                         <td class="px-2 py-1.5"><input v-model="row.luas_tanah" class="w-20 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200" /></td>
                                         <td class="px-2 py-1.5"><input v-model="row.luas_bangunan" class="w-20 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200" /></td>
                                         <td class="px-2 py-1.5"><input v-model="row.harga" class="w-28 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200" /></td>

@@ -106,6 +106,15 @@ class KeuanganController extends Controller
             ->when($request->status_penjualan, fn($q) => $q->where('status_penjualan', $request->status_penjualan))
             ->when($request->cara_bayar, fn($q) => $q->where('cara_bayar', $request->cara_bayar))
             ->when($request->bank, fn($q) => $q->where('bank_rekanan_kpr', $request->bank))
+            // Search bebas: nama/NIK/No. HP konsumen atau nomor unit (blok+nomor).
+            ->when($request->search, function ($q) use ($request) {
+                $keyword = $request->search;
+                $q->where(function ($sub) use ($keyword) {
+                    $sub->whereHas('konsumen', fn($k) => $k->search($keyword))
+                        ->orWhereHas('kavling', fn($kv) => $kv->where('nomor_kavling', 'like', "%{$keyword}%")
+                            ->orWhere('blok', 'like', "%{$keyword}%"));
+                });
+            })
             // Transaksi 'completed' (sudah ditandai Selesai) TETAP tampil di
             // sini — cuma yang batal (cancelled) yang disaring keluar.
             ->where('status', '!=', 'cancelled')
@@ -139,7 +148,7 @@ class KeuanganController extends Controller
         return Inertia::render('Keuangan/Index', [
             'rows'          => $rows,
             'filterOptions' => $filterOptions,
-            'filters'       => $request->only(['kluster', 'blok', 'status_penjualan', 'cara_bayar', 'bank']),
+            'filters'       => $request->only(['search', 'kluster', 'blok', 'status_penjualan', 'cara_bayar', 'bank']),
         ]);
     }
 

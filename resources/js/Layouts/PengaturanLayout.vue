@@ -22,12 +22,26 @@ const navGroups = [
             { label: 'Promo',                route: 'pengaturan.promo' },
             { label: 'Skema DP',             route: 'pengaturan.skema-dp' },
             { label: 'Dana Jaminan & SBUM',  route: 'pengaturan.dajam-sbum' },
+            { label: 'Warna Status',         route: 'pengaturan.status-colors' },
+        ],
+    },
+    {
+        label: 'Master Data Konsumen',
+        items: [
+            { label: 'Sumber Lead',       route: 'pengaturan.sumber-lead' },
+            { label: 'Bank Rekanan KPR',  route: 'pengaturan.bank-rekanan' },
         ],
     },
     {
         label: 'Tim Penjualan',
         items: [
             { label: 'Sales / Agent', route: 'pengaturan.sales-agents' },
+        ],
+    },
+    {
+        label: 'Konstruksi',
+        items: [
+            { label: 'Status Bangun', route: 'pengaturan.status-bangun' },
         ],
     },
 ];

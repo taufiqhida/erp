@@ -2,19 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BankRekananPreset;
 use App\Models\BiayaTambahanPreset;
 use App\Models\DajamSbumPreset;
 use App\Models\DeveloperProfile;
 use App\Models\DeveloperProfileBank;
 use App\Models\DokumenTemplate;
+use App\Models\Kavling;
 use App\Models\PromoPreset;
 use App\Models\SalesAgent;
 use App\Models\SkemaDpPreset;
+use App\Models\StatusBangunStage;
+use App\Models\StatusColor;
+use App\Models\SumberLead;
 use App\Models\SuratTemplate;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -242,6 +248,169 @@ class PengaturanController extends Controller
     }
 
     /* ---------------------------------------------------------------
+     | Warna Status (global) — hanya warna badge/marker untuk status_jual
+     | & pipeline KPR (status_penjualan) yang admin-editable. Daftar status
+     | & labelnya TETAP system-driven (StatusJual enum, KavlingKonsumen::
+     | getStatusPenjualanLabelAttribute()) — tidak ada tambah/hapus baris,
+     | cuma ganti warna dari set yang sudah di-seed lengkap.
+     --------------------------------------------------------------- */
+
+    public function statusColors(): Response
+    {
+        $statusJualLabels = collect(\App\Enums\StatusJual::cases())
+            ->mapWithKeys(fn($s) => [$s->value => $s->label()]);
+
+        $statusPenjualanLabels = collect([
+            'booking'      => 'Booking',
+            'pemberkasan'  => 'Pemberkasan',
+            'proses_bank'  => 'Proses Bank / SLIK',
+            'sp3k'         => 'SP3K',
+            'rencana_akad' => 'Rencana Akad',
+            'akad'         => 'Akad',
+            'bast'         => 'BAST',
+            'batal'        => 'Batal',
+        ]);
+
+        $withLabel = fn($kategori, $labels) => StatusColor::where('kategori', $kategori)
+            ->get()
+            ->map(fn($c) => ['id' => $c->id, 'kode' => $c->kode, 'warna' => $c->warna, 'label' => $labels->get($c->kode, $c->kode)])
+            ->sortBy(fn($c) => array_search($c['kode'], $labels->keys()->all()))
+            ->values();
+
+        return Inertia::render('Pengaturan/StatusColors', [
+            'statusJual'      => $withLabel('status_jual', $statusJualLabels),
+            'statusPenjualan' => $withLabel('status_penjualan', $statusPenjualanLabels),
+        ]);
+    }
+
+    public function updateStatusColor(Request $request, StatusColor $statusColor): RedirectResponse
+    {
+        $validated = $request->validate([
+            'warna' => 'required|string|max:7',
+        ]);
+
+        $statusColor->update($validated);
+
+        return back()->with('success', 'Warna berhasil diperbarui.');
+    }
+
+    /* ---------------------------------------------------------------
+     | Master Status Bangun (global) — tahap progress pembangunan kavling
+     | dengan bobot custom, menggantikan enum StatusBangun lama. Progress
+     | dihitung linear-kumulatif berdasarkan `urutan`, jadi total bobot
+     | seluruh tahap idealnya selalu 100 (ditampilkan sebagai banner live
+     | di frontend, tidak di-hard-block per aksi supaya rebalance bertahap
+     | antar beberapa tahap tetap bisa dilakukan).
+     --------------------------------------------------------------- */
+
+    public function statusBangun(): Response
+    {
+        return Inertia::render('Pengaturan/StatusBangun', [
+            'stages' => StatusBangunStage::ordered()->withCount('kavlings')->get(),
+        ]);
+    }
+
+    public function storeStatusBangunStage(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama'  => 'required|string|max:100',
+            'bobot' => 'required|numeric|min:0|max:100',
+            'warna' => 'nullable|string|max:7',
+        ]);
+
+        StatusBangunStage::create([
+            'nama'   => $validated['nama'],
+            'bobot'  => $validated['bobot'],
+            'warna'  => $validated['warna'] ?? '#64748b',
+            'urutan' => (StatusBangunStage::max('urutan') ?? 0) + 1,
+        ]);
+
+        return back()->with('success', 'Tahap berhasil ditambahkan.');
+    }
+
+    public function updateStatusBangunStage(Request $request, StatusBangunStage $statusBangunStage): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama'  => 'required|string|max:100',
+            'bobot' => 'required|numeric|min:0|max:100',
+            'warna' => 'nullable|string|max:7',
+        ]);
+
+        // Bobot "Belum Mulai" selalu 0 — tidak ikut menyusun progress apapun,
+        // dikunci di server terlepas dari apa yang dikirim client.
+        if ($statusBangunStage->is_default) {
+            $validated['bobot'] = 0;
+        }
+
+        $statusBangunStage->update($validated);
+
+        return back()->with('success', 'Tahap berhasil diperbarui.');
+    }
+
+    /**
+     * Hapus tahap. "Belum Mulai" (is_default) tidak pernah bisa dihapus —
+     * dijamin selalu ada, jadi tahap lain manapun yang dihapus SELALU
+     * punya target revert yang valid untuk kavling yang masih memakainya.
+     */
+    public function destroyStatusBangunStage(StatusBangunStage $statusBangunStage): RedirectResponse
+    {
+        abort_if($statusBangunStage->is_default, 422, '"Belum Mulai" tidak bisa dihapus.');
+
+        $affectedCount = Kavling::where('status_bangun_stage_id', $statusBangunStage->id)->count();
+        $previous = StatusBangunStage::where('urutan', '<', $statusBangunStage->urutan)
+            ->orderByDesc('urutan')
+            ->first();
+
+        DB::transaction(function () use ($statusBangunStage, $previous, $affectedCount) {
+            if ($affectedCount > 0) {
+                Kavling::where('status_bangun_stage_id', $statusBangunStage->id)
+                    ->update(['status_bangun_stage_id' => $previous->id]);
+            }
+            $statusBangunStage->delete();
+        });
+
+        $msg = $affectedCount > 0
+            ? "Tahap \"{$statusBangunStage->nama}\" dihapus, {$affectedCount} kavling dipindahkan ke \"{$previous->nama}\"."
+            : "Tahap \"{$statusBangunStage->nama}\" berhasil dihapus.";
+
+        return back()->with('success', $msg);
+    }
+
+    public function moveUpStatusBangunStage(StatusBangunStage $statusBangunStage): RedirectResponse
+    {
+        $this->swapStatusBangunStageOrder($statusBangunStage, 'up');
+        return back();
+    }
+
+    public function moveDownStatusBangunStage(StatusBangunStage $statusBangunStage): RedirectResponse
+    {
+        $this->swapStatusBangunStageOrder($statusBangunStage, 'down');
+        return back();
+    }
+
+    /**
+     * "Belum Mulai" selalu di urutan pertama & tidak bisa digeser — kalau
+     * tetangganya adalah "Belum Mulai", tukar posisi ditolak (bukan cuma
+     * tombolnya disembunyikan di frontend, dijaga juga di server).
+     */
+    private function swapStatusBangunStageOrder(StatusBangunStage $stage, string $direction): void
+    {
+        if ($stage->is_default) return;
+
+        $neighbor = $direction === 'up'
+            ? StatusBangunStage::where('urutan', '<', $stage->urutan)->orderByDesc('urutan')->first()
+            : StatusBangunStage::where('urutan', '>', $stage->urutan)->orderBy('urutan')->first();
+
+        if (!$neighbor || $neighbor->is_default) return;
+
+        DB::transaction(function () use ($stage, $neighbor) {
+            $stageUrutan = $stage->urutan;
+            $stage->update(['urutan' => $neighbor->urutan]);
+            $neighbor->update(['urutan' => $stageUrutan]);
+        });
+    }
+
+    /* ---------------------------------------------------------------
      | Template Surat
      --------------------------------------------------------------- */
 
@@ -351,6 +520,92 @@ class PengaturanController extends Controller
     {
         $biayaTambahan->delete();
         return back()->with('success', 'Preset biaya tambahan berhasil dihapus.');
+    }
+
+    /* ---------------------------------------------------------------
+     | Master Sumber Lead (global) — dropdown asal lead konsumen, diisi
+     | sales saat booking konsumen baru.
+     --------------------------------------------------------------- */
+
+    public function sumberLead(): Response
+    {
+        return Inertia::render('Pengaturan/SumberLead', [
+            'presets' => SumberLead::orderBy('nama')->get(),
+        ]);
+    }
+
+    public function storeSumberLead(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama'       => 'required|string|max:100',
+            'keterangan' => 'nullable|string|max:255',
+        ]);
+
+        SumberLead::create($validated);
+
+        return back()->with('success', 'Sumber lead berhasil ditambahkan.');
+    }
+
+    public function updateSumberLead(Request $request, SumberLead $sumberLead): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama'       => 'required|string|max:100',
+            'keterangan' => 'nullable|string|max:255',
+            'is_active'  => 'boolean',
+        ]);
+
+        $sumberLead->update($validated);
+
+        return back()->with('success', 'Sumber lead berhasil diperbarui.');
+    }
+
+    public function destroySumberLead(SumberLead $sumberLead): RedirectResponse
+    {
+        $sumberLead->delete();
+        return back()->with('success', 'Sumber lead berhasil dihapus.');
+    }
+
+    /* ---------------------------------------------------------------
+     | Master Bank Rekanan KPR (global) — dropdown pilihan bank di tahap
+     | Pemberkasan/Proses Bank, menggantikan input teks bebas.
+     --------------------------------------------------------------- */
+
+    public function bankRekanan(): Response
+    {
+        return Inertia::render('Pengaturan/BankRekanan', [
+            'presets' => BankRekananPreset::orderBy('nama')->get(),
+        ]);
+    }
+
+    public function storeBankRekanan(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama'       => 'required|string|max:100',
+            'keterangan' => 'nullable|string|max:255',
+        ]);
+
+        BankRekananPreset::create($validated);
+
+        return back()->with('success', 'Bank rekanan berhasil ditambahkan.');
+    }
+
+    public function updateBankRekanan(Request $request, BankRekananPreset $bankRekanan): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama'       => 'required|string|max:100',
+            'keterangan' => 'nullable|string|max:255',
+            'is_active'  => 'boolean',
+        ]);
+
+        $bankRekanan->update($validated);
+
+        return back()->with('success', 'Bank rekanan berhasil diperbarui.');
+    }
+
+    public function destroyBankRekanan(BankRekananPreset $bankRekanan): RedirectResponse
+    {
+        $bankRekanan->delete();
+        return back()->with('success', 'Bank rekanan berhasil dihapus.');
     }
 
     /* ---------------------------------------------------------------

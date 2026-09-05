@@ -10,6 +10,16 @@ const props = defineProps({
     kavling:    Object,
     dokumens:   Array,
     bast:       Object,
+    bankRekananPresets: { type: Array, default: () => [] },
+});
+
+// Kalau bank yang sudah tersimpan belum ada di master data (mis. data lama
+// sebelum master ini ada), tetap disisipkan ke opsi biar nilainya tidak
+// hilang diam-diam — tinggal pilih ulang dari master kalau perlu dirapikan.
+const bankRekananOptions = computed(() => {
+    const current = props.transaksi.bank_rekanan_kpr;
+    const names = props.bankRekananPresets.map(b => b.nama);
+    return (current && !names.includes(current)) ? [current, ...names] : names;
 });
 
 // Status config
@@ -95,6 +105,26 @@ const PIPELINE_STAGES = computed(() => PIPELINE_STAGES_FULL.map(s => ({
 const currentStageIndex = computed(() => PIPELINE_STAGES_FULL.findIndex(s => s.key === props.transaksi.status_penjualan));
 const isBatal = computed(() => props.transaksi.status_penjualan === 'batal');
 
+// Tanggal per tahap di stepper — masing-masing pakai tanggal yang menandai
+// tahap itu "kelar"/tercapai: booking = tanggal booking, pemberkasan =
+// tanggal pengajuan bank (submit ke bank), proses_bank = tanggal keputusan
+// bank, sp3k = tanggal terbit SP3K, rencana_akad = tanggal target akad,
+// akad/bast = tanggal realisasi masing-masing.
+const formatTanggalPendek = (isoDate) => {
+    if (!isoDate) return null;
+    const [y, m, d] = isoDate.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+const stageDates = computed(() => ({
+    booking:      formatTanggalPendek(props.transaksi.tanggal_booking),
+    pemberkasan:  formatTanggalPendek(props.transaksi.tanggal_pengajuan_bank),
+    proses_bank:  formatTanggalPendek(props.transaksi.tanggal_keputusan_bank),
+    sp3k:         formatTanggalPendek(props.transaksi.tanggal_sp3k),
+    rencana_akad: formatTanggalPendek(props.transaksi.tanggal_rencana_akad),
+    akad:         formatTanggalPendek(props.transaksi.tanggal_akad),
+    bast:         formatTanggalPendek(props.bast?.tanggal_bast),
+}));
+
 // "Lanjutkan" generik dipakai untuk booking→pemberkasan, pemberkasan→
 // proses_bank (KPR) / rencana_akad (cash), dan rencana_akad→akad. Transisi
 // proses_bank→sp3k dan sp3k→rencana_akad punya kartu keputusan khusus
@@ -140,16 +170,31 @@ const sp3kBadge = {
     expired:  { label: 'Expired',  cls: 'bg-rose-500/15 text-rose-400' },
 };
 
+// Tanggal hari ini dalam format lokal YYYY-MM-DD — dibangun dari komponen
+// lokal, BUKAN toISOString() (yang bisa mundur 1 hari di UTC+7).
+const todayDateStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const showAdvanceModal = ref(false);
 const advanceForm = useForm({
     status_penjualan: '',
     catatan: '',
+    tanggal_pengajuan_bank: '',
 });
 
 const openAdvance = () => {
     if (!nextStage.value || advanceBlocked.value) return;
     advanceForm.reset();
     advanceForm.status_penjualan = nextStage.value.key;
+    if (nextStage.value.key === 'proses_bank') {
+        // Kalau transaksi ini PERNAH masuk Proses Bank sebelumnya (mis.
+        // dikembalikan ke Pemberkasan buat revisi, lalu lanjut lagi), default
+        // ke tanggal pengajuan yang lama, bukan hari ini — supaya histori
+        // submit asli ke bank ga ketimpa cuma gara-gara direview ulang.
+        advanceForm.tanggal_pengajuan_bank = props.transaksi.tanggal_pengajuan_bank || todayDateStr();
+    }
     showAdvanceModal.value = true;
 };
 
@@ -170,8 +215,13 @@ const submitBankRekanan = () => {
 };
 
 // ── Keputusan Proses Bank / SLIK ────────────────────────────────────────
+// Pengajuan & Keputusan sengaja jadi field terpisah — "diajukan" bukan
+// sebuah keputusan, cuma fakta bahwa berkas sudah disubmit ke bank
+// (auto-stamp saat masuk tahap ini, tapi tetap bisa dikoreksi manual kalau
+// tanggal submit ke bank beda dari tanggal update sistem).
 const bankForm = useForm({
-    status_bank: props.transaksi.status_bank ?? 'diajukan',
+    tanggal_pengajuan_bank: props.transaksi.tanggal_pengajuan_bank ?? '',
+    status_bank: props.transaksi.status_bank === 'ditolak' ? 'ditolak' : 'disetujui',
     tanggal_keputusan_bank: props.transaksi.tanggal_keputusan_bank ?? '',
     catatan_bank: props.transaksi.catatan_bank ?? '',
 });
@@ -193,7 +243,6 @@ const sp3kForm = useForm({
     tanggal_sp3k: props.transaksi.tanggal_sp3k ?? '',
     tanggal_expired_sp3k: props.transaksi.tanggal_expired_sp3k ?? '',
     status_sp3k: props.transaksi.status_sp3k ?? 'approved',
-    tanggal_disetujui_sp3k: props.transaksi.tanggal_disetujui_sp3k ?? '',
     catatan_sp3k: props.transaksi.catatan_sp3k ?? '',
     plafon_baru: props.transaksi.plafon_kpr ?? '',
 });
@@ -241,7 +290,7 @@ const submitRencanaAkad = () => {
 // (dipindah dari gerbang Proses Bank).
 const showBast = computed(() => currentStageIndex.value >= 5); // 5 = index 'akad'
 const bastSelesai = computed(() => props.transaksi.status_penjualan === 'bast');
-const bangunanSiap = computed(() => props.kavling.status_bangun === 'handover_ready');
+const bangunanSiap = computed(() => props.kavling.status_bangun_is_final === true);
 const bastReadyToConfirm = computed(() =>
     bangunanSiap.value && bastForm.status_ttd === 'sudah_ttd' && props.transaksi.dp_lunas && !bastSelesai.value
 );
@@ -320,9 +369,11 @@ const submitBast = () => {
                 <div class="flex flex-wrap items-end gap-3">
                     <div class="flex-1 min-w-[200px]">
                         <label class="block text-slate-400 text-xs font-medium mb-1.5">Nama Bank</label>
-                        <input v-model="bankRekananForm.bank_rekanan_kpr" type="text" :disabled="!isEditable"
-                            placeholder="mis. Bank BTN, Bank BRI, dst"
-                            class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
+                        <select v-model="bankRekananForm.bank_rekanan_kpr" :disabled="!isEditable"
+                            class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60">
+                            <option value="">— Pilih Bank —</option>
+                            <option v-for="nama in bankRekananOptions" :key="nama" :value="nama">{{ nama }}</option>
+                        </select>
                     </div>
                     <button v-if="isEditable" @click="submitBankRekanan" :disabled="bankRekananForm.processing"
                         class="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
@@ -372,6 +423,7 @@ const submitBast = () => {
                             <span class="text-xs mt-1.5 text-center"
                                 :class="stage.skipped ? 'text-slate-700' : idx <= currentStageIndex ? 'text-slate-300' : 'text-slate-600'">{{ stage.label }}</span>
                             <span v-if="stage.skipped" class="text-[10px] text-slate-700">(dilewati)</span>
+                            <span v-else-if="stageDates[stage.key]" class="text-[10px] text-slate-500 mt-0.5 text-center">{{ stageDates[stage.key] }}</span>
                         </div>
                         <div v-if="idx < PIPELINE_STAGES.length - 1" class="flex-1 h-0.5 min-w-[16px]"
                             :class="idx < currentStageIndex ? 'bg-emerald-500' : 'bg-slate-800'" />
@@ -383,10 +435,7 @@ const submitBast = () => {
                 </p>
 
                 <div v-if="!isBatal" class="mt-4 pt-4 border-t border-slate-800 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500">
-                    <span v-if="transaksi.tanggal_sp3k">SP3K: {{ transaksi.tanggal_sp3k }}</span>
                     <span v-if="transaksi.tanggal_expired_sp3k">Expired SP3K: {{ transaksi.tanggal_expired_sp3k }}</span>
-                    <span v-if="transaksi.tanggal_rencana_akad">Rencana Akad: {{ transaksi.tanggal_rencana_akad }}</span>
-                    <span v-if="transaksi.tanggal_akad">Akad: {{ transaksi.tanggal_akad }}</span>
                     <div v-if="isEditable && !transaksi.has_pending_request" class="ml-auto flex flex-wrap items-center gap-2">
                         <button v-if="previousStage && transaksi.status_penjualan !== 'akad'"
                             @click="revertToPreviousStage(`Kembalikan transaksi ke tahap ${previousStage.label}?`)"
@@ -446,19 +495,26 @@ const submitBast = () => {
             <!-- Keputusan Proses Bank / SLIK -->
             <div v-if="transaksi.status_penjualan === 'proses_bank'" class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-slate-300 font-medium text-sm">Keputusan Proses Bank / SLIK</h2>
-                    <span v-if="transaksi.tanggal_pengajuan_bank" class="text-slate-500 text-xs">
-                        Diajukan {{ transaksi.tanggal_pengajuan_bank }}
-                        <span v-if="hariBerjalanBank !== null" class="ml-1 px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400">{{ hariBerjalanBank }} hari berjalan</span>
-                    </span>
+                    <h2 class="text-slate-300 font-medium text-sm">Proses Bank / SLIK</h2>
+                    <span v-if="hariBerjalanBank !== null" class="px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400 text-xs">{{ hariBerjalanBank }} hari berjalan</span>
                 </div>
 
+                <!-- Pengajuan — fakta submit ke bank, bukan keputusan -->
+                <div class="mb-4">
+                    <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Pengajuan</label>
+                    <input v-model="bankForm.tanggal_pengajuan_bank" type="date" :disabled="!transaksi.can_update_status"
+                        class="w-full sm:w-1/2 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
+                </div>
+
+                <div class="border-t border-slate-800 my-4"/>
+
+                <!-- Keputusan — cuma 2 opsi nyata, "diajukan" bukan keputusan -->
+                <h3 class="text-slate-400 text-xs font-medium uppercase tracking-wider mb-3">Keputusan</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                     <div>
                         <label class="block text-slate-400 text-xs font-medium mb-1.5">Status Keputusan</label>
                         <select v-model="bankForm.status_bank" :disabled="!transaksi.can_update_status"
                             class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60">
-                            <option value="diajukan">Diajukan</option>
                             <option value="disetujui">Disetujui</option>
                             <option value="ditolak">Ditolak</option>
                         </select>
@@ -517,20 +573,13 @@ const submitBast = () => {
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                    <div>
-                        <label class="block text-slate-400 text-xs font-medium mb-1.5">Keputusan</label>
-                        <select v-model="sp3kForm.status_sp3k" :disabled="!transaksi.can_update_status"
-                            class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60">
-                            <option value="approved">Approved</option>
-                            <option value="turun_plafon">Turun Plafon</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Disetujui</label>
-                        <input v-model="sp3kForm.tanggal_disetujui_sp3k" type="date" :disabled="!transaksi.can_update_status"
-                            class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
-                    </div>
+                <div class="mb-4">
+                    <label class="block text-slate-400 text-xs font-medium mb-1.5">Keputusan</label>
+                    <select v-model="sp3kForm.status_sp3k" :disabled="!transaksi.can_update_status"
+                        class="w-full sm:w-1/2 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60">
+                        <option value="approved">Approved</option>
+                        <option value="turun_plafon">Turun Plafon</option>
+                    </select>
                 </div>
 
                 <div v-if="sp3kForm.status_sp3k === 'turun_plafon'" class="mb-4">
@@ -718,6 +767,16 @@ const submitBast = () => {
                         <p v-if="dokumenIncomplete" class="text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                             ⚠ Dokumen wajib belum lengkap. Tetap bisa lanjut, tapi wajib isi catatan alasannya di bawah.
                         </p>
+                        <div v-if="advanceForm.status_penjualan === 'proses_bank'">
+                            <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Pengajuan ke Bank</label>
+                            <input v-model="advanceForm.tanggal_pengajuan_bank" type="date"
+                                class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                            <p class="text-slate-600 text-xs mt-1">
+                                {{ transaksi.tanggal_pengajuan_bank
+                                    ? 'Transaksi ini pernah masuk Proses Bank sebelumnya — default ke tanggal pengajuan yang lama. Ubah kalau memang submit ulang ke bank.'
+                                    : 'Default hari ini — ubah kalau berkas sudah disubmit ke bank di tanggal lain.' }}
+                            </p>
+                        </div>
                         <div>
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">Catatan {{ dokumenIncomplete ? '(wajib)' : '(opsional)' }}</label>
                             <textarea v-model="advanceForm.catatan" rows="2" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-violet-500" />

@@ -13,7 +13,24 @@ const props = defineProps({
     biayaTambahanPresets: { type: Array, default: () => [] },
     promoPresets: { type: Array, default: () => [] },
     skemaDpPresets: { type: Array, default: () => [] },
+    statusBangunStages: { type: Array, default: () => [] },
+    sumberLeadPresets: { type: Array, default: () => [] },
 });
+
+// Kategori tetap (bukan master data admin-editable) — dropdown fixed set,
+// beda dari sumberLeadPresets yang memang diatur di Pengaturan.
+const JENIS_PEKERJAAN_OPTIONS = {
+    karyawan_swasta:        'Karyawan Swasta',
+    pns_asn_tni_polri_bumn: 'PNS / ASN / TNI / Polri / BUMN',
+    wirausaha:               'Wirausaha',
+    freelance:               'Freelance',
+};
+const STATUS_PERNIKAHAN_OPTIONS = {
+    belum_menikah: 'Belum Menikah',
+    menikah:       'Menikah',
+    cerai_hidup:   'Cerai Hidup',
+    cerai_mati:    'Cerai Mati',
+};
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const basisLabels = { harga_dasar: 'Harga Dasar', harga_netto: 'Harga Jual Netto' };
@@ -29,61 +46,46 @@ const isSalesOnly = computed(() =>
 // ── View mode ────────────────────────────────────────────────────────
 const viewMode = ref('siteplan');
 
-// ── Status config ────────────────────────────────────────────────────
-const statusConfig = {
-    available:              { label: 'Tersedia',       siteplan: 'bg-emerald-500/25 hover:bg-emerald-500/40 border-2 border-emerald-500 hover:border-emerald-400 shadow-lg shadow-emerald-500/20',  badge: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30', dot: 'bg-emerald-400' },
-    hold:                   { label: 'Tidak Tersedia', siteplan: 'bg-yellow-500/25 border-2 border-yellow-500 opacity-80',                                        badge: 'bg-yellow-500/15 text-yellow-400 ring-1 ring-yellow-500/30', dot: 'bg-yellow-400' },
-    booked:                 { label: 'Dipesan',        siteplan: 'bg-blue-500/25 border-2 border-blue-500 opacity-80',                                                                                 badge: 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30', dot: 'bg-blue-400' },
-    sold:                   { label: 'Terjual',        siteplan: 'bg-rose-500/25 border-2 border-rose-500 opacity-70',                                                                                 badge: 'bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30', dot: 'bg-rose-400' },
-    cancellation_requested: { label: 'Pembatalan',     siteplan: 'bg-orange-500/25 border-2 border-orange-500 opacity-70',                                                                             badge: 'bg-orange-500/15 text-orange-400 ring-1 ring-orange-500/30', dot: 'bg-orange-400' },
+// ── Status config — nama status tetap system-driven, warnanya dinamis dari
+// master "Warna Status" (Pengaturan), sumber: page.props.statusColors ──────
+const STATUS_JUAL_LABELS = {
+    available: 'Tersedia', hold: 'Tidak Tersedia', booked: 'Dipesan',
+    sold: 'Terjual', cancellation_requested: 'Pembatalan',
 };
+const statusConfig = computed(() => {
+    const colors = page.props.statusColors?.status_jual ?? {};
+    return Object.fromEntries(Object.entries(STATUS_JUAL_LABELS).map(([key, label]) => {
+        const hex = colors[key] ?? '#94a3b8';
+        return [key, {
+            label, hex,
+            badgeStyle:    `background:${hex}26; color:${hex}`,
+            dotStyle:      `background:${hex}`,
+            siteplanStyle: `background:${hex}B3; border-color:${hex}`,
+        }];
+    }));
+});
 
 // Warna hex untuk fill elemen SVG (siteplan berbasis SVG ID-matching)
-const statusColorHex = {
-    available:              '#10b981',
-    hold:                   '#eab308',
-    booked:                 '#3b82f6',
-    sold:                   '#f43f5e',
-    cancellation_requested: '#f97316',
-};
+const statusColorHex = computed(() => page.props.statusColors?.status_jual ?? {});
 
 const isSvgSiteplan = computed(() =>
     (props.project.siteplan_image ?? '').toLowerCase().endsWith('.svg')
 );
 
-const statusBangunLabels = {
-    not_started:    'Belum Mulai',
-    foundation:     'Pondasi',
-    structure:      'Struktur',
-    roofing:        'Atap',
-    finishing:      'Finishing',
-    handover_ready: 'Siap Serah Terima',
-};
-
-const statusBangunColorHex = {
-    not_started:    '#64748b',
-    foundation:     '#f97316',
-    structure:      '#3b82f6',
-    roofing:        '#6366f1',
-    finishing:      '#a855f7',
-    handover_ready: '#10b981',
-};
-
-const statusBangunOptionsLegend = [
-    { value: 'not_started',    label: 'Belum Mulai' },
-    { value: 'foundation',     label: 'Pondasi' },
-    { value: 'structure',      label: 'Struktur' },
-    { value: 'roofing',        label: 'Atap' },
-    { value: 'finishing',      label: 'Finishing' },
-    { value: 'handover_ready', label: 'Siap Serah Terima' },
-];
+// Status Bangun — sumbernya master preset live (Pengaturan > Status Bangun).
+const statusBangunColorHex = computed(() =>
+    Object.fromEntries((props.statusBangunStages ?? []).map(s => [s.id, s.warna]))
+);
+const statusBangunOptionsLegend = computed(() =>
+    (props.statusBangunStages ?? []).map(s => ({ value: s.id, label: s.nama }))
+);
 
 // Ukuran marker siteplan mengikuti pengaturan admin di halaman Proyek
 // (tidak ada slider terpisah di sini, supaya tampilan selalu konsisten).
 const markerSize = computed(() => props.project.siteplan_marker_size ?? 28);
 
 // ── Multi-filter (kluster/blok/tipe/status jual/status bangun) ───────────
-const filters = ref({ kluster: '', blok: '', tipe_unit: '', status_jual: '', status_bangun: '' });
+const filters = ref({ kluster: '', blok: '', tipe_unit: '', status_jual: '', status_bangun_stage_id: '' });
 
 const uniqueOptions = (key) => {
     const values = (props.kavlings ?? []).map(k => k[key]).filter(v => v !== null && v !== undefined && v !== '');
@@ -92,18 +94,17 @@ const uniqueOptions = (key) => {
 const klusterOptions  = computed(() => uniqueOptions('kluster'));
 const blokOptions     = computed(() => uniqueOptions('blok'));
 const tipeUnitOptions = computed(() => uniqueOptions('tipe_unit'));
-const statusBangunOptions = computed(() => uniqueOptions('status_bangun'));
 
 const filteredKavlings = computed(() => (props.kavlings ?? []).filter(k =>
     (!filters.value.kluster || k.kluster === filters.value.kluster) &&
     (!filters.value.blok || k.blok === filters.value.blok) &&
     (!filters.value.tipe_unit || k.tipe_unit === filters.value.tipe_unit) &&
     (!filters.value.status_jual || k.status_jual === filters.value.status_jual) &&
-    (!filters.value.status_bangun || k.status_bangun === filters.value.status_bangun)
+    (!filters.value.status_bangun_stage_id || k.status_bangun_stage_id === filters.value.status_bangun_stage_id)
 ));
 
 const resetFilters = () => {
-    filters.value = { kluster: '', blok: '', tipe_unit: '', status_jual: '', status_bangun: '' };
+    filters.value = { kluster: '', blok: '', tipe_unit: '', status_jual: '', status_bangun_stage_id: '' };
 };
 
 const activeFilterCount = computed(() => Object.values(filters.value).filter(Boolean).length);
@@ -150,7 +151,11 @@ const bookForm = useForm({
     konsumen_no_hp:  '',
     konsumen_nik:    '',
     konsumen_email:  '',
-    konsumen_mode:   'existing', // 'existing' | 'new'
+    konsumen_pekerjaan:         '',
+    konsumen_status_pernikahan: '',
+    konsumen_sumber_lead_id:    '',
+    konsumen_mode:   'new', // 'existing' | 'new' — mayoritas konsumen kami baru, bukan lama
+
     sales_agent_id:  null,
     // Section 2 — Biaya Kelebihan Tanah
     biaya_kelebihan_tanah_aktif: false,
@@ -345,7 +350,7 @@ const isBookable = (k) => k.status_jual === 'available';
             <!-- Legend -->
             <div class="flex flex-wrap items-center gap-4">
                 <div v-for="(cfg, key) in statusConfig" :key="key" class="flex items-center gap-2 text-xs text-slate-400">
-                    <span :class="cfg.dot" class="w-3 h-3 rounded-sm inline-block"></span>
+                    <span :style="cfg.dotStyle" class="w-3 h-3 rounded-sm inline-block"></span>
                     {{ cfg.label }}
                 </div>
                 <span class="text-slate-700">|</span>
@@ -383,10 +388,10 @@ const isBookable = (k) => k.status_jual === 'available';
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 011.06 0L10 11.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 9.28a.75.75 0 010-1.06z" clip-rule="evenodd"/></svg>
                 </div>
                 <div class="relative">
-                    <select v-model="filters.status_bangun"
+                    <select v-model="filters.status_bangun_stage_id"
                         class="appearance-none pl-2.5 pr-7 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer">
                         <option value="">Semua Status Bangun</option>
-                        <option v-for="v in statusBangunOptions" :key="v" :value="v">{{ statusBangunLabels[v] ?? v }}</option>
+                        <option v-for="opt in statusBangunOptionsLegend" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                     </select>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"><path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 011.06 0L10 11.94l3.72-3.72a.75.75 0 111.06 1.06l-4.25 4.25a.75.75 0 01-1.06 0L5.22 9.28a.75.75 0 010-1.06z" clip-rule="evenodd"/></svg>
                 </div>
@@ -428,13 +433,10 @@ const isBookable = (k) => k.status_jual === 'available';
                         >
                             <!-- Lingkaran marker -->
                             <div
-                                :class="[
-                                    'rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer',
-                                    statusConfig[kavling.status_jual]?.siteplan ?? 'bg-gray-500/40 border-2 border-gray-500'
-                                ]"
-                                :style="`width: ${markerSize}px; height: ${markerSize}px; box-shadow: 0 0 0 2px ${statusBangunColorHex[kavling.status_bangun] ?? '#64748b'};`"
+                                class="rounded-full border-2 flex items-center justify-center transition-all duration-150 cursor-pointer"
+                                :style="`width: ${markerSize}px; height: ${markerSize}px; ${statusConfig[kavling.status_jual]?.siteplanStyle ?? 'background:#94a3b880; border-color:#94a3b8'}; box-shadow: 0 0 0 2px ${statusBangunColorHex[kavling.status_bangun_stage_id] ?? '#64748b'};`"
                             >
-                                <span class="text-white font-bold drop-shadow leading-none select-none" :style="`font-size: ${Math.max(8, Math.round(markerSize / 2.6))}px;`">{{ kavling.nomor_kavling }}</span>
+                                <span class="text-slate-900 font-bold leading-none select-none" :style="`font-size: ${Math.max(8, Math.round(markerSize / 2.6))}px; text-shadow: 0 0 3px white, 0 0 3px white, 0 1px 2px white;`">{{ kavling.nomor_kavling }}</span>
                             </div>
 
                             <!-- Hover card: identitas + status jual/bangun -->
@@ -442,12 +444,12 @@ const isBookable = (k) => k.status_jual === 'available';
                                 <div class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 shadow-xl text-left">
                                     <div class="text-white text-xs font-semibold">{{ kavling.nomor_lengkap }}</div>
                                     <div class="flex items-center gap-1 mt-0.5">
-                                        <span :class="statusConfig[kavling.status_jual]?.dot" class="w-1.5 h-1.5 rounded-full inline-block"></span>
+                                        <span :style="statusConfig[kavling.status_jual]?.dotStyle" class="w-1.5 h-1.5 rounded-full inline-block"></span>
                                         <span class="text-slate-300 text-[11px]">{{ statusConfig[kavling.status_jual]?.label }}</span>
                                     </div>
                                     <div class="flex items-center gap-1 mt-0.5">
-                                        <span class="w-1.5 h-1.5 rounded-full inline-block" :style="`background:${statusBangunColorHex[kavling.status_bangun]}`"></span>
-                                        <span class="text-slate-400 text-[11px]">{{ statusBangunLabels[kavling.status_bangun] ?? kavling.status_bangun }}</span>
+                                        <span class="w-1.5 h-1.5 rounded-full inline-block" :style="`background:${statusBangunColorHex[kavling.status_bangun_stage_id]}`"></span>
+                                        <span class="text-slate-400 text-[11px]">{{ kavling.status_bangun_label }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -495,7 +497,7 @@ const isBookable = (k) => k.status_jual === 'available';
                                 </td>
                                 <td class="px-4 py-2.5 text-slate-300 text-xs font-mono">{{ formatRupiah(k.harga) }}</td>
                                 <td class="px-4 py-2.5">
-                                    <span :class="statusConfig[k.status_jual]?.badge" class="px-2 py-0.5 rounded-full text-xs font-medium">
+                                    <span :style="statusConfig[k.status_jual]?.badgeStyle" class="px-2 py-0.5 rounded-full text-xs font-medium">
                                         {{ statusConfig[k.status_jual]?.label ?? k.status_jual }}
                                     </span>
                                 </td>
@@ -543,13 +545,14 @@ const isBookable = (k) => k.status_jual === 'available';
 
                     <div class="flex items-start justify-between p-5 border-b border-slate-800">
                         <div class="flex items-center gap-4">
-                            <div :class="['w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black shadow-lg', statusConfig[selectedKavling.status_jual]?.badge ?? 'bg-slate-700 text-slate-300']">
+                            <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black shadow-lg"
+                                :style="statusConfig[selectedKavling.status_jual]?.badgeStyle ?? 'background:#334155; color:#cbd5e1'">
                                 {{ selectedKavling.nomor_kavling }}
                             </div>
                             <div>
                                 <div class="flex items-center gap-2 flex-wrap">
                                     <h3 class="text-white font-bold text-xl">{{ selectedKavling.nomor_lengkap }}</h3>
-                                    <span :class="statusConfig[selectedKavling.status_jual]?.badge" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold">
+                                    <span :style="statusConfig[selectedKavling.status_jual]?.badgeStyle" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold">
                                         {{ statusConfig[selectedKavling.status_jual]?.label }}
                                     </span>
                                 </div>
@@ -611,6 +614,12 @@ const isBookable = (k) => k.status_jual === 'available';
                         <div v-if="selectedKavling.keterangan" class="bg-violet-500/10 border border-violet-500/20 rounded-xl p-3">
                             <div class="text-violet-400 text-xs font-medium mb-1">🏷️ Keterangan</div>
                             <div class="text-slate-300 text-sm">{{ selectedKavling.keterangan }}</div>
+                        </div>
+
+                        <!-- ID Rumah (Tapera/SIKUMBANG) -->
+                        <div v-if="selectedKavling.id_rumah" class="bg-slate-800/50 rounded-xl p-3">
+                            <div class="text-slate-500 text-xs mb-0.5">ID Rumah (Tapera/SIKUMBANG)</div>
+                            <div class="text-slate-200 text-sm font-mono">{{ selectedKavling.id_rumah }}</div>
                         </div>
 
                         <!-- Konsumen -->
@@ -727,12 +736,12 @@ const isBookable = (k) => k.status_jual === 'available';
                             <h4 class="text-slate-300 text-sm font-medium border-b border-slate-800 pb-2">Data Konsumen</h4>
                             <div class="flex gap-3">
                                 <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="radio" v-model="bookForm.konsumen_mode" value="existing" class="accent-violet-500" />
-                                    <span class="text-slate-300 text-sm">Konsumen Lama</span>
-                                </label>
-                                <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="radio" v-model="bookForm.konsumen_mode" value="new" class="accent-violet-500" />
                                     <span class="text-slate-300 text-sm">Konsumen Baru</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" v-model="bookForm.konsumen_mode" value="existing" class="accent-violet-500" />
+                                    <span class="text-slate-300 text-sm">Konsumen Lama</span>
                                 </label>
                             </div>
                             <div v-if="bookForm.konsumen_mode === 'existing'">
@@ -770,6 +779,30 @@ const isBookable = (k) => k.status_jual === 'available';
                                         <label class="block text-slate-400 text-xs mb-1.5">Email</label>
                                         <input v-model="bookForm.konsumen_email" type="email" placeholder="nama@email.com"
                                             class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-400 text-xs mb-1.5">Status Pernikahan</label>
+                                        <select v-model="bookForm.konsumen_status_pernikahan"
+                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                            <option value="">— Pilih —</option>
+                                            <option v-for="(label, key) in STATUS_PERNIKAHAN_OPTIONS" :key="key" :value="key">{{ label }}</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-400 text-xs mb-1.5">Jenis Pekerjaan</label>
+                                        <select v-model="bookForm.konsumen_pekerjaan"
+                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                            <option value="">— Pilih —</option>
+                                            <option v-for="(label, key) in JENIS_PEKERJAAN_OPTIONS" :key="key" :value="key">{{ label }}</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-400 text-xs mb-1.5">Sumber Lead</label>
+                                        <select v-model="bookForm.konsumen_sumber_lead_id"
+                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                            <option value="">— Pilih —</option>
+                                            <option v-for="s in sumberLeadPresets" :key="s.id" :value="s.id">{{ s.nama }}</option>
+                                        </select>
                                     </div>
                                 </div>
                             </div>

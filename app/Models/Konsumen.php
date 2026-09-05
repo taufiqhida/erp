@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
@@ -20,9 +21,31 @@ class Konsumen extends Model
         'email',
         'alamat',
         'pekerjaan',
+        'status_pernikahan',
+        'sumber_lead_id',
         'catatan',
         'drive_folder_link',
     ];
+
+    public static function jenisPekerjaanLabel(): array
+    {
+        return [
+            'karyawan_swasta'          => 'Karyawan Swasta',
+            'pns_asn_tni_polri_bumn'   => 'PNS / ASN / TNI / Polri / BUMN',
+            'wirausaha'                => 'Wirausaha',
+            'freelance'                => 'Freelance',
+        ];
+    }
+
+    public static function statusPernikahanLabel(): array
+    {
+        return [
+            'belum_menikah' => 'Belum Menikah',
+            'menikah'       => 'Menikah',
+            'cerai_hidup'   => 'Cerai Hidup',
+            'cerai_mati'    => 'Cerai Mati',
+        ];
+    }
 
     public function getActivitylogOptions(): LogOptions
     {
@@ -39,6 +62,11 @@ class Konsumen extends Model
     public function kavlingKonsumens(): HasMany
     {
         return $this->hasMany(KavlingKonsumen::class);
+    }
+
+    public function sumberLead(): BelongsTo
+    {
+        return $this->belongsTo(SumberLead::class);
     }
 
     /** Kavling yang aktif dimiliki konsumen */

@@ -2,16 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\StatusBangun;
 use App\Enums\StatusJual;
+use App\Models\StatusBangunStage;
 use App\Http\Controllers\Concerns\AuthorizesProjectAccess;
 use App\Http\Controllers\Concerns\ChecksTransactionLock;
+use App\Models\BiayaTambahanPreset;
 use App\Models\CancellationRequest;
 use App\Models\DajamSbumPreset;
 use App\Models\Kavling;
 use App\Models\KavlingKonsumen;
 use App\Models\KavlingKonsumenDajamSbum;
 use App\Models\Konsumen;
+use App\Models\PromoPreset;
+use App\Models\SumberLead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -52,11 +55,11 @@ class KonsumenController extends Controller
             if ($activeProjectId) $q->where('project_id', $activeProjectId);
             if ($request->kluster) $q->where('kluster', $request->kluster);
             if ($request->blok) $q->where('blok', $request->blok);
-            if ($request->tipe_unit) $q->where('tipe_unit', $request->tipe_unit);
+            if ($request->tipe_unit_preset_id) $q->where('tipe_unit_preset_id', $request->tipe_unit_preset_id);
             if ($request->status_jual) $q->where('status_jual', $request->status_jual);
-            if ($request->status_bangun) $q->where('status_bangun', $request->status_bangun);
+            if ($request->status_bangun_stage_id) $q->where('status_bangun_stage_id', $request->status_bangun_stage_id);
         };
-        $hasUnitFilter = $activeProjectId || collect(['kluster', 'blok', 'tipe_unit', 'status_jual', 'status_bangun'])
+        $hasUnitFilter = $activeProjectId || collect(['kluster', 'blok', 'tipe_unit_preset_id', 'status_jual', 'status_bangun_stage_id'])
             ->contains(fn($key) => $request->filled($key));
 
         // RBAC: non-global hanya boleh lihat kavling di proyek yang di-assign.
@@ -70,18 +73,26 @@ class KonsumenController extends Controller
         $filterOptions = [
             'kluster'       => (clone $optionsQuery)->whereNotNull('kluster')->where('kluster', '!=', '')->distinct()->orderBy('kluster')->pluck('kluster'),
             'blok'          => (clone $optionsQuery)->whereNotNull('blok')->where('blok', '!=', '')->distinct()->orderBy('blok')->pluck('blok'),
-            'tipe_unit'     => (clone $optionsQuery)->whereNotNull('tipe_unit')->where('tipe_unit', '!=', '')->distinct()->orderBy('tipe_unit')->pluck('tipe_unit'),
+            'tipe_unit'     => \App\Models\TipeUnitPreset::query()
+                ->when($activeProjectId, fn($q) => $q->where('project_id', $activeProjectId))
+                ->when(!$isGlobal && !$activeProjectId, fn($q) => $q->whereHas('project.users', fn($q2) => $q2->where('users.id', $user->id)))
+                ->orderBy('nama')->get(['id', 'nama']),
             'status_jual'   => collect(StatusJual::cases())->mapWithKeys(fn($s) => [$s->value => $s->label()]),
-            'status_bangun' => collect(StatusBangun::cases())->mapWithKeys(fn($s) => [$s->value => $s->label()]),
+            'status_bangun' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna']),
+            'status_penjualan' => collect([
+                'booking' => 'Booking', 'pemberkasan' => 'Pemberkasan', 'proses_bank' => 'Proses Bank / SLIK',
+                'sp3k' => 'SP3K', 'rencana_akad' => 'Rencana Akad', 'akad' => 'Akad', 'bast' => 'BAST', 'batal' => 'Batal',
+            ])->map(fn($label, $key) => ['key' => $key, 'label' => $label])->values(),
         ];
 
         if ($viewMode === 'unit') {
             $rows = KavlingKonsumen::query()
-                ->with(['konsumen', 'kavling.project', 'dokumens'])
+                ->with(['konsumen', 'kavling.project', 'kavling.tipeUnitPreset', 'kavling.statusBangunStage', 'dokumens'])
                 ->whereHas('kavling', function ($q) use ($unitFilter, $isGlobal, $projectScope) {
                     $unitFilter($q);
                     if (!$isGlobal) $projectScope($q);
                 })
+                ->when($request->status_penjualan, fn($q) => $q->where('status_penjualan', $request->status_penjualan))
                 ->when($request->search, fn($q) =>
                     $q->whereHas('konsumen', fn($q2) => $q2->where(fn($q3) => $q3
                         ->where('nama', 'like', "%{$request->search}%")
@@ -101,17 +112,19 @@ class KonsumenController extends Controller
                     'project_nama'      => $trx->kavling->project->nama,
                     'kluster'           => $trx->kavling->kluster,
                     'blok'              => $trx->kavling->blok,
-                    'tipe_unit'         => $trx->kavling->tipe_unit,
+                    'tipe_unit'         => $trx->kavling->tipeUnitPreset?->nama,
                     'status_jual'       => $trx->kavling->status_jual->value,
                     'status_jual_label' => $trx->kavling->status_jual_label,
-                    'status_bangun'       => $trx->kavling->status_bangun->value,
+                    'status_bangun_stage_id' => $trx->kavling->status_bangun_stage_id,
                     'status_bangun_label' => $trx->kavling->status_bangun_label,
                     'harga_deal'        => $trx->harga_deal,
                     'cara_bayar_label'  => $this->caraBayarLabel($trx->cara_bayar),
                     'bank_rekanan_kpr'  => $trx->bank_rekanan_kpr,
                     'status_penjualan'       => $trx->status_penjualan,
                     'status_penjualan_label' => $trx->status_penjualan_label,
+                    'pipeline_progress'      => $trx->pipeline_progress_info,
                     'progress_berkas'   => $trx->progress_berkas,
+                    'id_rumah'          => $trx->kavling->id_rumah,
                 ]);
         } else {
             $rows = Konsumen::query()
@@ -132,8 +145,10 @@ class KonsumenController extends Controller
                     )
                 )
                 ->when($hasUnitFilter, fn($q) => $q->whereHas('kavlingKonsumens.kavling', $unitFilter))
+                ->when($request->status_penjualan, fn($q) => $q->whereHas('kavlingKonsumens', fn($q2) => $q2->where('status_penjualan', $request->status_penjualan)))
                 ->with(['kavlingKonsumens' => fn($q) =>
                     $q->when($hasUnitFilter, fn($q2) => $q2->whereHas('kavling', $unitFilter))
+                      ->when($request->status_penjualan, fn($q2) => $q2->where('status_penjualan', $request->status_penjualan))
                       ->with('kavling.project')
                 ])
                 ->withCount('kavlingKonsumens as transaksi_count')
@@ -157,6 +172,7 @@ class KonsumenController extends Controller
                         'cara_bayar_label'       => $this->caraBayarLabel($trx->cara_bayar),
                         'status_penjualan'       => $trx->status_penjualan,
                         'status_penjualan_label' => $trx->status_penjualan_label,
+                        'pipeline_progress'      => $trx->pipeline_progress_info,
                     ]),
                 ]);
         }
@@ -165,38 +181,8 @@ class KonsumenController extends Controller
             'mode'          => $viewMode,
             'rows'          => $rows,
             'filterOptions' => $filterOptions,
-            'filters'       => $request->only(['search', 'kluster', 'blok', 'tipe_unit', 'status_jual', 'status_bangun', 'view']),
+            'filters'       => $request->only(['search', 'kluster', 'blok', 'tipe_unit_preset_id', 'status_jual', 'status_bangun_stage_id', 'status_penjualan', 'view']),
         ]);
-    }
-
-    public function create(): Response
-    {
-        $this->authorize('create', Konsumen::class);
-
-        return Inertia::render('Konsumens/Form', [
-            'konsumen' => null,
-        ]);
-    }
-
-    public function store(Request $request): RedirectResponse
-    {
-        $this->authorize('create', Konsumen::class);
-
-        $validated = $request->validate([
-            'nama'      => 'required|string|max:100',
-            'nik'       => 'nullable|string|max:20|unique:konsumens,nik',
-            'no_hp'     => 'nullable|string|max:20',
-            'email'     => 'nullable|email|max:100',
-            'alamat'    => 'nullable|string',
-            'pekerjaan' => 'nullable|string|max:100',
-            'catatan'   => 'nullable|string',
-            'drive_folder_link' => 'nullable|url|max:255',
-        ]);
-
-        $konsumen = Konsumen::create($validated);
-
-        return redirect()->route('konsumens.index')
-            ->with('success', "Konsumen {$konsumen->nama} berhasil ditambahkan.");
     }
 
     public function show(Request $request, Konsumen $konsumen): Response
@@ -205,7 +191,7 @@ class KonsumenController extends Controller
 
         $transaksis = $konsumen->kavlingKonsumens()
             ->with([
-                'kavling.project:id,nama', 'dokumens', 'pembayarans', 'biayaTambahans.pembayaran',
+                'kavling.project:id,nama', 'kavling.tipeUnitPreset', 'kavling.statusBangunStage', 'dokumens', 'pembayarans', 'biayaTambahans.pembayaran',
                 'promoPreset:id,nama', 'skemaDpPreset', 'biayaKelebihanTanahPembayaran',
                 'jadwalTagihans' => fn($q) => $q->orderBy('jenis')->orderBy('nomor_cicilan'),
                 'jadwalTagihans.pembayaran',
@@ -240,11 +226,13 @@ class KonsumenController extends Controller
                     'pending_request_type' => $pendingRequest?->type->value,
                     'kavling_nomor'    => $trx->kavling->nomor_lengkap,
                     'project_nama'     => $trx->kavling->project->nama,
-                    'luas_tanah'       => $trx->kavling->luas_tanah,
-                    'luas_bangunan'    => $trx->kavling->luas_bangunan,
-                    'tipe_unit'        => $trx->kavling->tipe_unit,
-                    'status_bangun'       => $trx->kavling->status_bangun->value,
+                    'luas_tanah'       => $trx->kavling->tipeUnitPreset?->luas_tanah,
+                    'luas_bangunan'    => $trx->kavling->tipeUnitPreset?->luas_bangunan,
+                    'tipe_unit'        => $trx->kavling->tipeUnitPreset?->nama,
+                    'status_bangun_stage_id' => $trx->kavling->status_bangun_stage_id,
                     'status_bangun_label' => $trx->kavling->status_bangun_label,
+                    'tanggal_booking'  => $trx->tanggal_booking?->format('d M Y'),
+                    'tanggal_akad'     => $trx->tanggal_akad?->format('d M Y'),
                     'cara_bayar'       => $trx->cara_bayar,
                     'cara_bayar_label' => $this->caraBayarLabel($trx->cara_bayar),
                     'bank_rekanan_kpr' => $trx->bank_rekanan_kpr,
@@ -278,12 +266,25 @@ class KonsumenController extends Controller
                     ] : null,
                     // ── Rincian Pemesanan: breakdown kalkulasi harga persis
                     // seperti di form booking (lihat BookingController::store).
-                    'biaya_kelebihan_tanah_aktif'   => $trx->biaya_kelebihan_tanah_aktif,
-                    'biaya_kelebihan_tanah_nominal' => $trx->biaya_kelebihan_tanah_nominal,
+                    // Field mentah (luas/mode/harga_per_m2/status, id & status per
+                    // item biaya tambahan) ikut disertakan supaya form "Edit Rincian
+                    // Pesanan" bisa tahu item mana yang masih boleh diubah (lihat
+                    // BookingController::updateRincianPesanan — cuma item yang belum
+                    // ada pembayaran/status "belum_bayar" yang boleh diedit/dihapus).
+                    'biaya_kelebihan_tanah_aktif'        => $trx->biaya_kelebihan_tanah_aktif,
+                    'biaya_kelebihan_tanah_luas'         => $trx->biaya_kelebihan_tanah_luas,
+                    'biaya_kelebihan_tanah_mode'         => $trx->biaya_kelebihan_tanah_mode,
+                    'biaya_kelebihan_tanah_harga_per_m2' => $trx->biaya_kelebihan_tanah_harga_per_m2,
+                    'biaya_kelebihan_tanah_nominal'      => $trx->biaya_kelebihan_tanah_nominal,
+                    'biaya_kelebihan_tanah_status'       => $trx->biaya_kelebihan_tanah_status,
                     'biaya_tambahan' => $trx->biayaTambahans->map(fn($bt) => [
-                        'nama'    => $bt->nama,
-                        'nominal' => $bt->nominal,
+                        'id'        => $bt->id,
+                        'preset_id' => $bt->biaya_tambahan_preset_id,
+                        'nama'      => $bt->nama,
+                        'nominal'   => $bt->nominal,
+                        'status'    => $bt->status,
                     ]),
+                    'promo_preset_id' => $trx->promo_preset_id,
                     'diskon_mode'    => $trx->diskon_mode,
                     'diskon_nilai'   => $trx->diskon_nilai,
                     'diskon_nominal' => $trx->diskon_nominal,
@@ -291,6 +292,7 @@ class KonsumenController extends Controller
                     'status_penjualan' => $trx->status_penjualan,
                     'is_locked'        => $trx->is_locked,
                     'progress_berkas'  => $trx->progress_berkas,
+                    'id_rumah'         => $trx->kavling->id_rumah,
                     'dokumens'         => $trx->dokumens->map(fn($d) => [
                         'id'           => $d->id,
                         'nama_dokumen' => $d->nama_dokumen,
@@ -336,13 +338,17 @@ class KonsumenController extends Controller
 
         return Inertia::render('Konsumens/Show', [
             'konsumen'  => [
-                'id'        => $konsumen->id,
-                'nama'      => $konsumen->nama,
-                'no_hp'     => $konsumen->no_hp,
-                'nik'       => $konsumen->nik,
-                'email'     => $konsumen->email,
-                'alamat'    => $konsumen->alamat,
-                'pekerjaan' => $konsumen->pekerjaan,
+                'id'                      => $konsumen->id,
+                'nama'                    => $konsumen->nama,
+                'no_hp'                   => $konsumen->no_hp,
+                'nik'                     => $konsumen->nik,
+                'email'                   => $konsumen->email,
+                'alamat'                  => $konsumen->alamat,
+                'pekerjaan'               => $konsumen->pekerjaan,
+                'pekerjaan_label'         => Konsumen::jenisPekerjaanLabel()[$konsumen->pekerjaan] ?? null,
+                'status_pernikahan'       => $konsumen->status_pernikahan,
+                'status_pernikahan_label' => Konsumen::statusPernikahanLabel()[$konsumen->status_pernikahan] ?? null,
+                'sumber_lead_nama'        => $konsumen->sumberLead?->nama,
                 'catatan'   => $konsumen->catatan,
                 'drive_folder_link' => $konsumen->drive_folder_link,
             ],
@@ -351,6 +357,9 @@ class KonsumenController extends Controller
             'dajamSbumPresets' => DajamSbumPreset::where('is_active', true)
                 ->orderBy('kategori')->orderBy('nama')
                 ->get(['id', 'nama', 'kategori']),
+            'statusBangunStages' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna']),
+            'biayaTambahanPresets' => BiayaTambahanPreset::where('is_active', true)->orderBy('nama')->get(['id', 'nama']),
+            'promoPresets' => PromoPreset::where('is_active', true)->orderBy('nama')->get(['id', 'nama']),
         ]);
     }
 
@@ -413,16 +422,21 @@ class KonsumenController extends Controller
 
         return Inertia::render('Konsumens/Form', [
             'konsumen' => [
-                'id'        => $konsumen->id,
-                'nama'      => $konsumen->nama,
-                'nik'       => $konsumen->nik,
-                'no_hp'     => $konsumen->no_hp,
-                'email'     => $konsumen->email,
-                'alamat'    => $konsumen->alamat,
-                'pekerjaan' => $konsumen->pekerjaan,
-                'catatan'   => $konsumen->catatan,
+                'id'                => $konsumen->id,
+                'nama'              => $konsumen->nama,
+                'nik'               => $konsumen->nik,
+                'no_hp'             => $konsumen->no_hp,
+                'email'             => $konsumen->email,
+                'alamat'            => $konsumen->alamat,
+                'pekerjaan'         => $konsumen->pekerjaan,
+                'status_pernikahan' => $konsumen->status_pernikahan,
+                'sumber_lead_id'    => $konsumen->sumber_lead_id,
+                'catatan'           => $konsumen->catatan,
                 'drive_folder_link' => $konsumen->drive_folder_link,
             ],
+            'jenisPekerjaanOptions'   => Konsumen::jenisPekerjaanLabel(),
+            'statusPernikahanOptions' => Konsumen::statusPernikahanLabel(),
+            'sumberLeadOptions'       => SumberLead::where('is_active', true)->orderBy('nama')->get(['id', 'nama']),
         ]);
     }
 
@@ -436,7 +450,9 @@ class KonsumenController extends Controller
             'no_hp'             => 'nullable|string|max:20',
             'email'             => 'nullable|email|max:100',
             'alamat'            => 'nullable|string',
-            'pekerjaan'         => 'nullable|string|max:100',
+            'pekerjaan'         => 'nullable|in:' . implode(',', array_keys(Konsumen::jenisPekerjaanLabel())),
+            'status_pernikahan' => 'nullable|in:' . implode(',', array_keys(Konsumen::statusPernikahanLabel())),
+            'sumber_lead_id'    => 'nullable|exists:sumber_leads,id',
             'catatan'           => 'nullable|string',
             'drive_folder_link' => 'nullable|url|max:255',
         ]);

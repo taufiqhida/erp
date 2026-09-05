@@ -13,6 +13,7 @@ use App\Http\Controllers\PengaturanController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\TipeUnitPresetController;
 use Illuminate\Support\Facades\Route;
 
 // Redirect root ke Halaman Utama (pilih proyek) jika login, ke halaman
@@ -70,10 +71,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('projects/{project}/import-kavling-mapped', [ProjectController::class, 'importKavlingMapped'])
         ->name('projects.import-kavling-mapped');
 
-    // Kavlings (nested under project)
+    // Kavlings (nested under project) — index dihapus, sudah digabung ke
+    // tabel di Projects/Show.vue (server-side paginated) supaya tidak ada
+    // 2 halaman terpisah untuk hal yang sama.
     Route::resource('projects.kavlings', KavlingController::class)
+        ->only(['store', 'update', 'destroy'])
+        ->shallow();
+
+    // Tipe Unit (master data preset, scoped per proyek)
+    Route::resource('projects.tipe-unit', TipeUnitPresetController::class)
         ->only(['index', 'store', 'update', 'destroy'])
         ->shallow();
+    Route::post('tipe-unit/{tipeUnitPreset}/upload-gambar', [TipeUnitPresetController::class, 'uploadGambar'])
+        ->name('tipe-unit.upload-gambar');
 
     // Kavling – toggle ketersediaan (Tersedia / Tidak Tersedia)
     Route::patch('kavlings/{kavling}/status-jual', [KavlingController::class, 'updateStatusJual'])
@@ -82,10 +92,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Kavling – update status bangun
     Route::patch('kavlings/{kavling}/status-bangun', [KavlingController::class, 'updateStatusBangun'])
         ->name('kavlings.status-bangun');
-
-    // Kavling – upload foto rumah / denah rumah
-    Route::post('kavlings/{kavling}/upload-gambar', [KavlingController::class, 'uploadGambar'])
-        ->name('kavlings.upload-gambar');
+    Route::patch('kavlings/{kavling}/id-rumah', [KavlingController::class, 'updateIdRumah'])
+        ->name('kavlings.id-rumah');
 
     // ── Penjualan (menu proyek untuk sales) ───────────────────────────
     Route::get('penjualan', [BookingController::class, 'projectList'])->name('penjualan.index');
@@ -106,6 +114,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('bookings.rencana-akad');
     Route::patch('kavling-konsumen/{kk}/bank-rekanan', [BookingController::class, 'updateBankRekanan'])
         ->name('bookings.bank-rekanan');
+    Route::patch('kavling-konsumen/{kk}/rincian-pesanan', [BookingController::class, 'updateRincianPesanan'])
+        ->name('bookings.rincian-pesanan');
 
     // ── BAST ──────────────────────────────────────────────────────────
     Route::patch('kavling-konsumen/{kk}/bast', [BastController::class, 'update'])->name('bast.update');
@@ -119,8 +129,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('dokumen/{dok}/upload', [DokumenKonsumenController::class, 'uploadFile'])
         ->name('dokumen.upload');
 
-    // ── Konsumens (CRUD) ───────────────────────────────────────────────
-    Route::resource('konsumens', KonsumenController::class);
+    // ── Konsumens (CRUD) — tanpa create/store: konsumen baru cuma dibuat
+    // lewat form booking, biar tidak ada row konsumen yatim tanpa transaksi.
+    Route::resource('konsumens', KonsumenController::class)->except(['create', 'store']);
 
     // ── Rincian Biaya Akad (Dajam/SBUM/Biaya Akad per transaksi) ────────
     Route::post('kavling-konsumen/{transaksi}/biaya-akad', [KonsumenController::class, 'storeRincianBiayaAkad'])
@@ -249,6 +260,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('biaya-tambahan/{biayaTambahan}', [PengaturanController::class, 'destroyBiayaTambahan'])
             ->name('biaya-tambahan.destroy');
 
+        // Master Sumber Lead
+        Route::get('sumber-lead', [PengaturanController::class, 'sumberLead'])
+            ->name('sumber-lead');
+        Route::post('sumber-lead', [PengaturanController::class, 'storeSumberLead'])
+            ->name('sumber-lead.store');
+        Route::patch('sumber-lead/{sumberLead}', [PengaturanController::class, 'updateSumberLead'])
+            ->name('sumber-lead.update');
+        Route::delete('sumber-lead/{sumberLead}', [PengaturanController::class, 'destroySumberLead'])
+            ->name('sumber-lead.destroy');
+
+        // Master Bank Rekanan KPR
+        Route::get('bank-rekanan', [PengaturanController::class, 'bankRekanan'])
+            ->name('bank-rekanan');
+        Route::post('bank-rekanan', [PengaturanController::class, 'storeBankRekanan'])
+            ->name('bank-rekanan.store');
+        Route::patch('bank-rekanan/{bankRekanan}', [PengaturanController::class, 'updateBankRekanan'])
+            ->name('bank-rekanan.update');
+        Route::delete('bank-rekanan/{bankRekanan}', [PengaturanController::class, 'destroyBankRekanan'])
+            ->name('bank-rekanan.destroy');
+
         // Preset Promo
         Route::get('promo', [PengaturanController::class, 'promo'])
             ->name('promo');
@@ -268,6 +299,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('skema-dp.update');
         Route::delete('skema-dp/{skemaDp}', [PengaturanController::class, 'destroySkemaDp'])
             ->name('skema-dp.destroy');
+
+        // Warna Status (global, hanya warna — status_jual & pipeline KPR)
+        Route::get('status-colors', [PengaturanController::class, 'statusColors'])
+            ->name('status-colors');
+        Route::patch('status-colors/{statusColor}', [PengaturanController::class, 'updateStatusColor'])
+            ->name('status-colors.update');
+
+        // Master Status Bangun (global, bobot custom per tahap)
+        Route::get('status-bangun', [PengaturanController::class, 'statusBangun'])
+            ->name('status-bangun');
+        Route::post('status-bangun', [PengaturanController::class, 'storeStatusBangunStage'])
+            ->name('status-bangun.store');
+        Route::patch('status-bangun/{statusBangunStage}', [PengaturanController::class, 'updateStatusBangunStage'])
+            ->name('status-bangun.update');
+        Route::delete('status-bangun/{statusBangunStage}', [PengaturanController::class, 'destroyStatusBangunStage'])
+            ->name('status-bangun.destroy');
+        Route::patch('status-bangun/{statusBangunStage}/move-up', [PengaturanController::class, 'moveUpStatusBangunStage'])
+            ->name('status-bangun.move-up');
+        Route::patch('status-bangun/{statusBangunStage}/move-down', [PengaturanController::class, 'moveDownStatusBangunStage'])
+            ->name('status-bangun.move-down');
 
         // Master Sales / Agent
         Route::get('sales-agents', [PengaturanController::class, 'salesAgents'])

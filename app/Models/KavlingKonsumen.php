@@ -57,7 +57,6 @@ class KavlingKonsumen extends Model
         'catatan_bank',
         'tanggal_sp3k',
         'tanggal_expired_sp3k',
-        'tanggal_disetujui_sp3k',
         'status_sp3k',
         'catatan_sp3k',
         'tanggal_bast',
@@ -75,7 +74,6 @@ class KavlingKonsumen extends Model
         'tanggal_keputusan_bank'               => 'date',
         'tanggal_sp3k'                         => 'date',
         'tanggal_expired_sp3k'                 => 'date',
-        'tanggal_disetujui_sp3k'               => 'date',
         'tanggal_bast'                         => 'date',
         'harga_deal'                           => 'decimal:2',
         'harga_dasar'                          => 'decimal:2',
@@ -245,6 +243,45 @@ class KavlingKonsumen extends Model
             'disetujui' => 'Disetujui',
             'ditolak'   => 'Ditolak',
             default     => null,
+        };
+    }
+
+    /**
+     * "Hari berjalan" per tahap pipeline saat ini — dipakai di tabel
+     * Konsumen supaya kelihatan mana transaksi yang sudah lama nyangkut.
+     * Beda tahap = beda tanggal acuan (kapan MASUK tahap itu, bukan cuma
+     * tanggal booking generik). Rencana Akad ditampilkan sebagai countdown
+     * (tanggal target + sisa/lewat berapa hari), bukan elapsed — cocok
+     * dengan sifatnya yang forward-looking (jadwal, bukan riwayat).
+     */
+    public function getPipelineProgressInfoAttribute(): ?array
+    {
+        $today = now()->startOfDay();
+
+        return match ($this->status_penjualan) {
+            'pemberkasan' => $this->tanggal_booking ? [
+                'type'  => 'elapsed',
+                'hari'  => (int) abs($today->diffInDays($this->tanggal_booking)),
+                'label' => 'hari sejak booking',
+            ] : null,
+            'proses_bank' => $this->tanggal_pengajuan_bank ? [
+                'type'  => 'elapsed',
+                'hari'  => (int) abs($today->diffInDays($this->tanggal_pengajuan_bank)),
+                'label' => 'hari sejak pengajuan bank',
+            ] : null,
+            'sp3k' => $this->tanggal_keputusan_bank ? [
+                'type'  => 'elapsed',
+                'hari'  => (int) abs($today->diffInDays($this->tanggal_keputusan_bank)),
+                'label' => 'hari sejak keputusan bank',
+            ] : null,
+            'rencana_akad' => $this->tanggal_rencana_akad ? [
+                'type'    => 'countdown',
+                'tanggal' => $this->tanggal_rencana_akad->format('d M Y'),
+                'hari'    => $this->tanggal_rencana_akad->gte($today)
+                    ? (int) abs($today->diffInDays($this->tanggal_rencana_akad))
+                    : -(int) abs($today->diffInDays($this->tanggal_rencana_akad)),
+            ] : null,
+            default => null,
         };
     }
 

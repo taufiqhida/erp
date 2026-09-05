@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Project;
+use App\Models\StatusColor;
 use App\Policies\ProjectPolicy;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -52,6 +53,7 @@ class HandleInertiaRequests extends Middleware
                 'importErrors' => $request->session()->get('importErrors'),
             ],
             'currentProject' => $this->resolveCurrentProject($request),
+            'statusColors'   => $request->user() ? StatusColor::allMapped() : null,
         ];
     }
 

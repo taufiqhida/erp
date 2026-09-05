@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\StatusBangun;
 use App\Enums\StatusJual;
 use App\Imports\KavlingImport;
 use App\Models\Kavling;
 use App\Models\Konsumen;
 use App\Models\Project;
+use App\Models\StatusBangunStage;
+use App\Models\TipeUnitPreset;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -61,6 +62,8 @@ class ProjectController extends Controller
                 'is_active'          => $p->is_active,
                 'siteplan_image'     => $p->siteplan_image
                     ? route('media.show', ['path' => $p->siteplan_image]) : null,
+                'foto_sampul'        => $p->foto_sampul
+                    ? route('media.show', ['path' => $p->foto_sampul]) : null,
                 'kavlings_count'     => $p->kavlings_count,
                 'kavlings_sold'      => $p->kavlings_sold_count,
                 'kavlings_available' => $p->kavlings_available_count,
@@ -106,6 +109,13 @@ class ProjectController extends Controller
             $validated['siteplan_image'] = $request->file('siteplan_image')->store('siteplan', 'public');
         }
 
+        // Handle foto sampul upload — foto cover yang tampil di kartu Beranda
+        // (alih-alih siteplan, yang isinya peta teknis bukan foto proyek).
+        if ($request->hasFile('foto_sampul')) {
+            $request->validate(['foto_sampul' => 'image|mimes:png,jpg,jpeg,webp|max:10240']);
+            $validated['foto_sampul'] = $request->file('foto_sampul')->store('sampul', 'public');
+        }
+
         $project = Project::create($validated);
 
         // Auto-assign creator sebagai anggota project
@@ -115,7 +125,7 @@ class ProjectController extends Controller
             ->with('success', "Proyek {$project->nama} berhasil dibuat.");
     }
 
-    public function show(Project $project): Response
+    public function show(Request $request, Project $project): Response
     {
         $this->authorize('view', $project);
 
@@ -132,46 +142,37 @@ class ProjectController extends Controller
             'kavlings as kavlings_booked_count'    => fn($q) => $q->where('status_jual', 'booked'),
         ]);
 
+        // Set lengkap TANPA paginasi — dipakai siteplan, yang perlu semua
+        // titik sekaligus untuk digambar di peta (tidak boleh terpotong
+        // halaman). Filter Tabel TIDAK berlaku di sini (lihat komputed
+        // kavlingsWithKoordinat di frontend).
         $kavlings = $project->kavlings()
-            ->with(['activeTransaction.konsumen'])
+            ->with(['activeTransaction.konsumen', 'tipeUnitPreset', 'statusBangunStage'])
             ->orderBy('blok')
             ->orderBy('nomor_kavling')
             ->get()
-            ->map(fn($k) => [
-                'id'                => $k->id,
-                'kluster'           => $k->kluster,
-                'nomor_kavling'     => $k->nomor_kavling,
-                'blok'              => $k->blok,
-                'nomor_lengkap'     => $k->nomor_lengkap,
-                'svg_id'            => $k->svg_id,
-                'luas_tanah'        => $k->luas_tanah,
-                'luas_bangunan'     => $k->luas_bangunan,
-                'harga'             => $k->harga,
-                'status_jual'       => $k->status_jual->value,
-                'status_jual_label' => $k->status_jual->label(),
-                'status_jual_color' => $k->status_jual->color(),
-                'status_bangun'     => $k->status_bangun->value,
-                'status_bangun_label' => $k->status_bangun->label(),
-                'status_bangun_color' => $k->status_bangun->color(),
-                'progress_bangun'   => $k->progress_bangun,
-                'status_unit'       => $k->status_unit,
-                'keterangan'        => $k->keterangan,
-                'koordinat_x'       => $k->koordinat_x,
-                'koordinat_y'       => $k->koordinat_y,
-                'konsumen_nama'     => $k->activeTransaction?->konsumen?->nama,
-                'foto_rumah'        => $k->foto_rumah ? route('media.show', ['path' => $k->foto_rumah]) : null,
-                'denah_rumah'       => $k->denah_rumah ? route('media.show', ['path' => $k->denah_rumah]) : null,
-                'tipe_unit'         => $k->tipe_unit,
-                'kamar_tidur'       => $k->kamar_tidur,
-                'kamar_mandi'       => $k->kamar_mandi,
-                'spek_atap'         => $k->spek_atap,
-                'spek_dinding'      => $k->spek_dinding,
-                'spek_lantai'       => $k->spek_lantai,
-                'spek_pondasi'      => $k->spek_pondasi,
-                'catatan'           => $k->catatan,
-            ]);
+            ->map(fn($k) => $this->formatKavlingRow($k));
 
-        $statusBangunSummary = \App\Enums\StatusBangun::cases();
+        // Set Tabel — dipaginasi & difilter server-side (mirip
+        // KavlingController::index(), sekarang jadi satu-satunya tabel unit
+        // sejak halaman "Semua Unit" terpisah dihapus).
+        $kavlingsPage = $project->kavlings()
+            ->when($request->kluster, fn($q) => $q->where('kluster', $request->kluster))
+            ->when($request->blok, fn($q) => $q->where('blok', $request->blok))
+            ->when($request->tipe_unit_preset_id, fn($q) => $q->where('tipe_unit_preset_id', $request->tipe_unit_preset_id))
+            ->when($request->status_jual, fn($q) => $q->where('status_jual', $request->status_jual))
+            ->when($request->status_bangun_stage_id, fn($q) => $q->where('status_bangun_stage_id', $request->status_bangun_stage_id))
+            ->with(['activeTransaction.konsumen', 'tipeUnitPreset', 'statusBangunStage'])
+            ->orderBy('blok')
+            ->orderBy('nomor_kavling')
+            ->paginate(20)
+            ->withQueryString()
+            ->through(fn($k) => $this->formatKavlingRow($k));
+
+        $tipeUnits = $project->tipeUnitPresets()->active()->orderBy('nama')->get(['id', 'nama'])
+            ->map(fn($t) => ['id' => $t->id, 'nama' => $t->nama]);
+
+        $statusBangunStages = StatusBangunStage::ordered()->get(['id', 'nama', 'bobot', 'urutan', 'warna']);
 
         $konsumens = Konsumen::orderBy('nama')
             ->get(['id', 'nama', 'no_hp']);
@@ -196,9 +197,58 @@ class ProjectController extends Controller
                 'kavlings_booked'          => $project->kavlings_booked_count,
                 'progress'                 => $project->progress_persentase,
             ],
-            'kavlings'  => $kavlings,
-            'konsumens' => $konsumens,
+            'kavlings'     => $kavlings,
+            'kavlingsPage' => $kavlingsPage,
+            'filters'      => $request->only(['kluster', 'blok', 'tipe_unit_preset_id', 'status_jual', 'status_bangun_stage_id']),
+            'tipeUnits'    => $tipeUnits,
+            'statusBangunStages' => $statusBangunStages,
+            'konsumens'    => $konsumens,
         ]);
+    }
+
+    /**
+     * Spek fisik (luas, kamar, material, foto fasad/denah) sepenuhnya
+     * berasal dari tipeUnitPreset — Kavling sendiri tidak punya kolom spek.
+     */
+    private function formatKavlingRow(Kavling $k): array
+    {
+        $tipe = $k->tipeUnitPreset;
+
+        return [
+            'id'                => $k->id,
+            'tipe_unit_preset_id' => $k->tipe_unit_preset_id,
+            'tipe_unit_nama'    => $tipe?->nama,
+            'kluster'           => $k->kluster,
+            'nomor_kavling'     => $k->nomor_kavling,
+            'blok'              => $k->blok,
+            'nomor_lengkap'     => $k->nomor_lengkap,
+            'svg_id'            => $k->svg_id,
+            'luas_tanah'        => $tipe?->luas_tanah,
+            'luas_bangunan'     => $tipe?->luas_bangunan,
+            'harga'             => $k->harga,
+            'status_jual'       => $k->status_jual->value,
+            'status_jual_label' => $k->status_jual->label(),
+            'status_bangun_stage_id' => $k->status_bangun_stage_id,
+            'status_bangun_label' => $k->statusBangunStage?->nama,
+            'status_bangun_color' => $k->statusBangunStage?->warna,
+            'progress_bangun'   => $k->progress_bangun,
+            'status_unit'       => $k->status_unit,
+            'keterangan'        => $k->keterangan,
+            'perlu_biaya_tambahan' => $k->perlu_biaya_tambahan,
+            'koordinat_x'       => $k->koordinat_x,
+            'koordinat_y'       => $k->koordinat_y,
+            'konsumen_nama'     => $k->activeTransaction?->konsumen?->nama,
+            'foto_rumah'        => $tipe?->foto_rumah ? route('media.show', ['path' => $tipe->foto_rumah]) : null,
+            'denah_rumah'       => $tipe?->denah_rumah ? route('media.show', ['path' => $tipe->denah_rumah]) : null,
+            'kamar_tidur'       => $tipe?->kamar_tidur,
+            'kamar_mandi'       => $tipe?->kamar_mandi,
+            'spek_atap'         => $tipe?->spek_atap,
+            'spek_dinding'      => $tipe?->spek_dinding,
+            'spek_lantai'       => $tipe?->spek_lantai,
+            'spek_pondasi'      => $tipe?->spek_pondasi,
+            'catatan'           => $k->catatan,
+            'id_rumah'          => $k->id_rumah,
+        ];
     }
 
     public function edit(Project $project): Response
@@ -215,6 +265,10 @@ class ProjectController extends Controller
                 'kota'             => $project->kota,
                 'luas_tanah_total' => $project->luas_tanah_total,
                 'is_active'        => $project->is_active,
+                'siteplan_image'   => $project->siteplan_image
+                    ? route('media.show', ['path' => $project->siteplan_image]) : null,
+                'foto_sampul'      => $project->foto_sampul
+                    ? route('media.show', ['path' => $project->foto_sampul]) : null,
             ],
         ]);
     }
@@ -240,6 +294,15 @@ class ProjectController extends Controller
                 Storage::disk('public')->delete($project->siteplan_image);
             }
             $validated['siteplan_image'] = $request->file('siteplan_image')->store('siteplan', 'public');
+        }
+
+        // Handle foto sampul upload
+        if ($request->hasFile('foto_sampul')) {
+            $request->validate(['foto_sampul' => 'image|mimes:png,jpg,jpeg,webp|max:10240']);
+            if ($project->foto_sampul) {
+                Storage::disk('public')->delete($project->foto_sampul);
+            }
+            $validated['foto_sampul'] = $request->file('foto_sampul')->store('sampul', 'public');
         }
 
         $project->update($validated);
@@ -328,27 +391,30 @@ class ProjectController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Kavling');
 
-        $headers = ['nomor_kavling', 'kluster', 'blok', 'tipe_unit', 'luas_tanah', 'luas_bangunan', 'harga', 'status', 'status_bangun', 'keterangan'];
+        $headers = ['nomor_kavling', 'kluster', 'blok', 'tipe_unit', 'harga', 'status', 'status_bangun', 'keterangan', 'id_rumah'];
         $sheet->fromArray($headers, null, 'A1');
-        $sheet->getStyle('A1:J1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
-        $sheet->getStyle('A1:J1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('7C3AED');
+        $sheet->getStyle('A1:I1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $sheet->getStyle('A1:I1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('7C3AED');
         $sheet->freezePane('A2');
 
-        $example = ['A-01', 'Kluster Melati', 'A', '36/72', 72, 36, 250000000, 'available', 'not_started', 'Contoh baris — boleh dihapus'];
+        $defaultStageName = StatusBangunStage::defaultStage()?->nama ?? 'Belum Mulai';
+        $example = ['A-01', 'Kluster Melati', 'A', '36/72', 250000000, 'available', $defaultStageName, 'Contoh baris — boleh dihapus', 'DMK0120062025T002A309'];
         $sheet->fromArray($example, null, 'A2');
-        $sheet->getStyle('A2:J2')->getFont()->setItalic(true)->getColor()->setRGB('999999');
+        $sheet->getStyle('A2:I2')->getFont()->setItalic(true)->getColor()->setRGB('999999');
 
-        foreach (range('A', 'J') as $col) {
+        foreach (range('A', 'I') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
         // Dropdown supaya status/status_bangun tidak salah ketik — nilainya
-        // harus persis sama dengan yang diterima KavlingImport.
+        // harus persis sama dengan yang diterima KavlingImport. status_bangun
+        // sumbernya nama tahap live dari master Kelola Status Bangun, BUKAN
+        // enum hardcode lagi.
         $statusListFormula = '"available,not_for_sale"';
-        $statusBangunListFormula = '"' . implode(',', StatusBangun::values()) . '"';
+        $statusBangunListFormula = '"' . StatusBangunStage::ordered()->pluck('nama')->implode(',') . '"';
 
         for ($row = 2; $row <= 500; $row++) {
-            $statusValidation = $sheet->getCell("H{$row}")->getDataValidation();
+            $statusValidation = $sheet->getCell("F{$row}")->getDataValidation();
             $statusValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
             $statusValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
             $statusValidation->setAllowBlank(true);
@@ -358,7 +424,7 @@ class ProjectController extends Controller
             $statusValidation->setError('Pilih salah satu dari daftar (available / not_for_sale).');
             $statusValidation->setFormula1($statusListFormula);
 
-            $bangunValidation = $sheet->getCell("I{$row}")->getDataValidation();
+            $bangunValidation = $sheet->getCell("G{$row}")->getDataValidation();
             $bangunValidation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
             $bangunValidation->setErrorStyle(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::STYLE_STOP);
             $bangunValidation->setAllowBlank(true);
@@ -381,13 +447,12 @@ class ProjectController extends Controller
             ['nomor_kavling', 'Ya', 'A-01', 'Harus unik per proyek — kalau sudah ada atau duplikat dalam file, baris dilewati.'],
             ['kluster', 'Tidak', 'Kluster Melati', 'Kosongkan jika proyek tidak punya kluster.'],
             ['blok', 'Tidak', 'A', ''],
-            ['tipe_unit', 'Tidak', '36/72', ''],
-            ['luas_tanah', 'Tidak', '72', 'Angka saja, satuan m².'],
-            ['luas_bangunan', 'Tidak', '36', 'Angka saja, satuan m².'],
+            ['tipe_unit', 'Ya', '36/72', 'Nama Tipe Unit — dicocokkan dengan Tipe Unit yang sudah ada di proyek ini (menu "Kelola Tipe Unit"). Kalau namanya belum ada, Tipe baru otomatis dibuat (spek kosong, lengkapi belakangan).'],
             ['harga', 'Tidak', '250000000', 'Angka saja, tanpa "Rp" atau titik ribuan.'],
             ['status', 'Tidak (default: available)', 'available / not_for_sale', 'available = tersedia dijual, not_for_sale = ditahan/belum dijual dulu.'],
-            ['status_bangun', 'Tidak (default: not_started)', implode(' / ', StatusBangun::values()), 'Isi kalau proyek sudah berjalan & sebagian unit progressnya bukan dari nol. Kosongkan untuk unit yang belum mulai dibangun.'],
+            ['status_bangun', "Tidak (default: {$defaultStageName})", StatusBangunStage::ordered()->pluck('nama')->implode(' / '), 'Isi kalau proyek sudah berjalan & sebagian unit progressnya bukan dari nol — harus persis sama dengan nama tahap di menu "Kelola Status Bangun". Kosongkan untuk unit yang belum mulai dibangun.'],
             ['keterangan', 'Tidak', 'teks bebas', ''],
+            ['id_rumah', 'Tidak', 'DMK0120062025T002A309', 'ID Rumah Tapera/SIKUMBANG — harus unik, kosongkan kalau belum ada.'],
         ];
         $help->fromArray($helpRows, null, 'A2');
         $help->getStyle('A1:D' . (count($helpRows) + 1))->getAlignment()->setWrapText(true)->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP);
@@ -447,7 +512,7 @@ class ProjectController extends Controller
             'rows.*.nomor_kavling'    => 'required|string|max:20',
             'rows.*.kluster'          => 'nullable|string|max:50',
             'rows.*.blok'             => 'nullable|string|max:10',
-            'rows.*.tipe_unit'        => 'nullable|string|max:150',
+            'rows.*.tipe_unit'        => 'required|string|max:150',
             'rows.*.luas_tanah'       => 'nullable|numeric|min:0',
             'rows.*.luas_bangunan'    => 'nullable|numeric|min:0',
             'rows.*.harga'            => 'nullable|numeric|min:0',
@@ -463,6 +528,7 @@ class ProjectController extends Controller
             // Cek duplikasi terhadap kavling existing SEKALI di awal, plus lacak
             // nomor yang baru dibuat dalam batch ini supaya tidak dobel dalam 1 file.
             $existing = $project->kavlings()->pluck('nomor_kavling')->flip();
+            $defaultStageId = StatusBangunStage::defaultStage()->id;
 
             foreach ($validated['rows'] as $i => $row) {
                 $rowNum = $i + 1;
@@ -475,20 +541,27 @@ class ProjectController extends Controller
                 }
 
                 $statusUnit = $row['status_unit'] ?? 'available';
+                $tipeNama = trim($row['tipe_unit']);
+
+                $tipePreset = TipeUnitPreset::firstOrCreate(
+                    ['project_id' => $project->id, 'nama' => $tipeNama],
+                    ['luas_tanah' => $row['luas_tanah'] ?: null, 'luas_bangunan' => $row['luas_bangunan'] ?: null]
+                );
+                if ($tipePreset->wasRecentlyCreated) {
+                    $errors[] = "Baris {$rowNum}: Tipe Unit '{$tipeNama}' belum ada di proyek ini, dibuat otomatis — lengkapi spek lengkapnya di halaman Kelola Tipe Unit.";
+                }
 
                 Kavling::create([
                     'project_id'    => $project->id,
                     'kluster'       => $row['kluster'] ?: null,
                     'nomor_kavling' => $noUnit,
                     'blok'          => $row['blok'] ?: null,
-                    'tipe_unit'     => $row['tipe_unit'] ?: null,
-                    'luas_tanah'    => $row['luas_tanah'] ?: null,
-                    'luas_bangunan' => $row['luas_bangunan'] ?: null,
+                    'tipe_unit_preset_id' => $tipePreset->id,
                     'harga'         => $row['harga'] ?: null,
                     'keterangan'    => $row['keterangan'] ?: null,
                     'status_unit'   => $statusUnit,
                     'status_jual'   => $statusUnit === 'not_for_sale' ? StatusJual::Hold : StatusJual::Available,
-                    'status_bangun' => StatusBangun::NotStarted,
+                    'status_bangun_stage_id' => $defaultStageId,
                 ]);
 
                 $existing[$noUnit] = true;

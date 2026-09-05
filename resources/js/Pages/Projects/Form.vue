@@ -18,15 +18,24 @@ const form = useForm({
     luas_tanah_total: props.project?.luas_tanah_total ?? '',
     is_active:        props.project?.is_active ?? true,
     siteplan_image:   null,
+    foto_sampul:      null,
 });
 
 const siteplanPreview = ref(props.project?.siteplan_image ?? null);
+const fotoSampulPreview = ref(props.project?.foto_sampul ?? null);
 
 const onSiteplanChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     form.siteplan_image = file;
     siteplanPreview.value = URL.createObjectURL(file);
+};
+
+const onFotoSampulChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    form.foto_sampul = file;
+    fotoSampulPreview.value = URL.createObjectURL(file);
 };
 
 const submit = () => {
@@ -117,6 +126,26 @@ const submit = () => {
                                 class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
                             />
                         </div>
+                    </div>
+                </div>
+
+                <!-- Foto Sampul -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                    <h2 class="text-slate-300 font-medium text-sm border-b border-slate-800 pb-3">Foto Sampul</h2>
+                    <p class="text-slate-500 text-xs -mt-2">Foto ini tampil sebagai sampul kartu proyek di halaman Beranda (mis. foto gerbang/tampak depan) — beda dari Siteplan yang isinya peta teknis unit.</p>
+                    <div>
+                        <label class="block text-slate-400 text-xs font-medium mb-1.5">Upload Foto Sampul</label>
+                        <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/jpg,image/webp"
+                            @change="onFotoSampulChange"
+                            class="block w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-slate-700 file:text-slate-300 hover:file:bg-slate-600 cursor-pointer"
+                        />
+                        <p class="text-slate-600 text-xs mt-1">PNG / JPG / WEBP, maks 10MB</p>
+                    </div>
+                    <div v-if="fotoSampulPreview" class="mt-2">
+                        <p class="text-slate-500 text-xs mb-2">Preview:</p>
+                        <img :src="fotoSampulPreview" class="max-h-40 rounded-lg border border-slate-700 object-cover" alt="Preview Foto Sampul" />
                     </div>
                 </div>
 

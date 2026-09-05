@@ -120,13 +120,13 @@ const deleteProject = (project) => {
                     class="group bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-violet-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-violet-500/10"
                 >
                     <Link :href="route('projects.show', project.id)" class="block">
-                        <!-- Siteplan preview or placeholder -->
+                        <!-- Foto sampul (fallback ke siteplan kalau belum diupload) or placeholder -->
                         <div class="relative h-36 bg-slate-800 overflow-hidden">
                             <img
-                                v-if="project.siteplan_image"
-                                :src="project.siteplan_image"
+                                v-if="project.foto_sampul || project.siteplan_image"
+                                :src="project.foto_sampul || project.siteplan_image"
                                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                alt="Siteplan"
+                                alt="Sampul Proyek"
                             />
                             <div v-else class="w-full h-full flex items-center justify-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1" stroke="currentColor" class="w-12 h-12 text-slate-600">

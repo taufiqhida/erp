@@ -16,6 +16,8 @@ use App\Models\Project;
 use App\Models\PromoPreset;
 use App\Models\SalesAgent;
 use App\Models\SkemaDpPreset;
+use App\Models\StatusBangunStage;
+use App\Models\SumberLead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -50,9 +52,17 @@ class BookingController extends Controller
 
         $kavlings = $project->kavlings()
             ->where('status_jual', StatusJual::Available)
+            ->with('tipeUnitPreset:id,nama')
             ->orderBy('blok')
             ->orderBy('nomor_kavling')
-            ->get(['id', 'nomor_lengkap', 'kluster', 'blok', 'tipe_unit']);
+            ->get(['id', 'kluster', 'blok', 'nomor_kavling', 'tipe_unit_preset_id'])
+            ->map(fn($k) => [
+                'id'            => $k->id,
+                'nomor_lengkap' => $k->nomor_lengkap,
+                'kluster'       => $k->kluster,
+                'blok'          => $k->blok,
+                'tipe_unit_nama' => $k->tipeUnitPreset?->nama,
+            ]);
 
         return response()->json($kavlings);
     }
@@ -72,7 +82,7 @@ class BookingController extends Controller
         ]);
 
         $kavlings = $project->kavlings()
-            ->with(['activeTransaction.konsumen'])
+            ->with(['activeTransaction.konsumen', 'tipeUnitPreset', 'statusBangunStage'])
             ->orderBy('blok')
             ->orderBy('nomor_kavling')
             ->get()
@@ -81,31 +91,33 @@ class BookingController extends Controller
                 'kluster'             => $k->kluster,
                 'nomor_kavling'       => $k->nomor_kavling,
                 'blok'                => $k->blok,
-                'tipe_unit'           => $k->tipe_unit,
+                'tipe_unit'           => $k->tipeUnitPreset?->nama,
                 'nomor_lengkap'       => $k->nomor_lengkap,
                 'svg_id'              => $k->svg_id,
-                'luas_tanah'          => $k->luas_tanah,
-                'luas_bangunan'       => $k->luas_bangunan,
+                'luas_tanah'          => $k->tipeUnitPreset?->luas_tanah,
+                'luas_bangunan'       => $k->tipeUnitPreset?->luas_bangunan,
                 'harga'               => $k->harga,
                 'status_jual'         => $k->status_jual->value,
                 'status_jual_label'   => $k->status_jual->label(),
-                'status_jual_color'   => $k->status_jual->color(),
-                'status_bangun'       => $k->status_bangun->value,
-                'status_bangun_label' => $k->status_bangun->label(),
+                'status_bangun_stage_id' => $k->status_bangun_stage_id,
+                'status_bangun_label' => $k->statusBangunStage?->nama,
+                'status_bangun_color' => $k->statusBangunStage?->warna,
                 'progress_bangun'     => $k->progress_bangun,
                 'status_unit'         => $k->status_unit,
                 'keterangan'          => $k->keterangan,
+                'perlu_biaya_tambahan' => $k->perlu_biaya_tambahan,
                 'catatan'             => $k->catatan,
                 'koordinat_x'         => $k->koordinat_x,
                 'koordinat_y'         => $k->koordinat_y,
-                'foto_rumah'          => $k->foto_rumah ? route('media.show', ['path' => $k->foto_rumah]) : null,
-                'denah_rumah'         => $k->denah_rumah ? route('media.show', ['path' => $k->denah_rumah]) : null,
-                'kamar_tidur'         => $k->kamar_tidur,
-                'kamar_mandi'         => $k->kamar_mandi,
-                'spek_atap'           => $k->spek_atap,
-                'spek_dinding'        => $k->spek_dinding,
-                'spek_lantai'         => $k->spek_lantai,
-                'spek_pondasi'        => $k->spek_pondasi,
+                'foto_rumah'          => $k->tipeUnitPreset?->foto_rumah ? route('media.show', ['path' => $k->tipeUnitPreset->foto_rumah]) : null,
+                'denah_rumah'         => $k->tipeUnitPreset?->denah_rumah ? route('media.show', ['path' => $k->tipeUnitPreset->denah_rumah]) : null,
+                'kamar_tidur'         => $k->tipeUnitPreset?->kamar_tidur,
+                'kamar_mandi'         => $k->tipeUnitPreset?->kamar_mandi,
+                'spek_atap'           => $k->tipeUnitPreset?->spek_atap,
+                'spek_dinding'        => $k->tipeUnitPreset?->spek_dinding,
+                'spek_lantai'         => $k->tipeUnitPreset?->spek_lantai,
+                'spek_pondasi'        => $k->tipeUnitPreset?->spek_pondasi,
+                'id_rumah'            => $k->id_rumah,
                 'konsumen_nama'       => $k->activeTransaction?->konsumen?->nama,
                 'konsumen_id'         => $k->activeTransaction?->konsumen_id,
                 'transaksi_id'        => $k->activeTransaction?->id,
@@ -147,6 +159,8 @@ class BookingController extends Controller
                 'booking_fee_aktif', 'booking_fee_tipe', 'booking_fee_nilai', 'booking_fee_basis',
                 'dp_aktif', 'dp_tipe', 'dp_nilai', 'dp_basis',
             ]),
+            'statusBangunStages' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna', 'urutan']),
+            'sumberLeadPresets' => SumberLead::where('is_active', true)->orderBy('nama')->get(['id', 'nama']),
         ]);
     }
 
@@ -166,6 +180,9 @@ class BookingController extends Controller
             'konsumen_no_hp'      => 'nullable|string|max:20',
             'konsumen_nik'        => 'nullable|string|max:20',
             'konsumen_email'      => 'nullable|email|max:100',
+            'konsumen_pekerjaan'         => 'nullable|in:' . implode(',', array_keys(Konsumen::jenisPekerjaanLabel())),
+            'konsumen_status_pernikahan' => 'nullable|in:' . implode(',', array_keys(Konsumen::statusPernikahanLabel())),
+            'konsumen_sumber_lead_id'    => 'nullable|exists:sumber_leads,id',
             'sales_agent_id'      => 'nullable|exists:sales_agents,id',
             // Booking detail — booking_fee & skema_dp dihitung ulang di server
             // dari preset skema_dp_preset_id (lihat bawah), nilai dari client
@@ -226,6 +243,9 @@ class BookingController extends Controller
                     'no_hp' => $validated['konsumen_no_hp'] ?? null,
                     'nik'   => $validated['konsumen_nik'] ?? null,
                     'email' => $validated['konsumen_email'] ?? null,
+                    'pekerjaan'         => $validated['konsumen_pekerjaan'] ?? null,
+                    'status_pernikahan' => $validated['konsumen_status_pernikahan'] ?? null,
+                    'sumber_lead_id'    => $validated['konsumen_sumber_lead_id'] ?? null,
                 ]);
             }
 
@@ -437,9 +457,16 @@ class BookingController extends Controller
         abort_unless(Auth::user()->can('update status penjualan'), 403);
 
         $validated = $request->validate([
-            'status_penjualan'     => 'required|in:booking,pemberkasan,proses_bank,rencana_akad,akad,batal',
-            'catatan'              => 'nullable|string',
+            'status_penjualan'       => 'required|in:booking,pemberkasan,proses_bank,rencana_akad,akad,batal',
+            'catatan'                => 'nullable|string',
+            'tanggal_pengajuan_bank' => 'nullable|date',
         ]);
+
+        // Jangan biarkan field ini numpang ke $kk->update() di transisi lain
+        // (advanceForm selalu mengirim key ini walau kosong) — cuma relevan
+        // & dipakai eksplisit di cabang 'proses_bank' di bawah.
+        $tanggalPengajuanInput = $validated['tanggal_pengajuan_bank'] ?? null;
+        unset($validated['tanggal_pengajuan_bank']);
 
         $isBankFlow = in_array($kk->cara_bayar, ['kpr_subsidi', 'kpr_komersil']);
 
@@ -457,7 +484,13 @@ class BookingController extends Controller
                 422,
                 'Bank Rekanan KPR harus diisi terlebih dahulu sebelum lanjut ke Proses Bank.'
             );
-            $validated['tanggal_pengajuan_bank'] = now();
+            // Prioritas tanggal pengajuan: input eksplisit dari modal >
+            // tanggal pengajuan sebelumnya (kasus kembali dari Proses Bank ke
+            // Pemberkasan buat revisi lalu lanjut lagi — jangan ketimpa now())
+            // > hari ini (submit baru pertama kali).
+            $validated['tanggal_pengajuan_bank'] = $tanggalPengajuanInput
+                ?? $kk->tanggal_pengajuan_bank?->format('Y-m-d')
+                ?? now();
             $validated['status_bank'] = 'diajukan';
         }
 
@@ -510,9 +543,14 @@ class BookingController extends Controller
     }
 
     /**
-     * Simpan keputusan Proses Bank/SLIK. Kalau disetujui, otomatis lanjut
-     * ke tahap SP3K. Kalau ditolak, transaksi tetap di Proses Bank sampai
-     * staff KPR memilih langkah berikutnya (kembali ke Pemberkasan / batalkan).
+     * Simpan keputusan Proses Bank/SLIK. `tanggal_pengajuan_bank` sudah
+     * auto-stamp saat masuk tahap ini (lihat updateStatus()), tapi tetap
+     * bisa dikoreksi manual di sini — field terpisah dari keputusan, bukan
+     * salah satu opsi di dropdown yang sama (pengajuan bukan "keputusan",
+     * cuma dropdown Keputusan yang punya 2 opsi: Disetujui/Ditolak). Kalau
+     * disetujui, otomatis lanjut ke tahap SP3K. Kalau ditolak, transaksi
+     * tetap di Proses Bank sampai staff KPR memilih langkah berikutnya
+     * (kembali ke Pemberkasan / batalkan).
      */
     public function updateBankDecision(Request $request, KavlingKonsumen $kk): RedirectResponse
     {
@@ -521,7 +559,8 @@ class BookingController extends Controller
         abort_unless($kk->status_penjualan === 'proses_bank', 422, 'Transaksi tidak sedang di tahap Proses Bank.');
 
         $validated = $request->validate([
-            'status_bank'           => 'required|in:diajukan,disetujui,ditolak',
+            'tanggal_pengajuan_bank' => 'nullable|date',
+            'status_bank'           => 'required|in:disetujui,ditolak',
             'tanggal_keputusan_bank' => 'nullable|date',
             'catatan_bank'          => 'nullable|string',
         ]);
@@ -552,7 +591,6 @@ class BookingController extends Controller
             'tanggal_sp3k'           => 'nullable|date',
             'tanggal_expired_sp3k'   => 'nullable|date',
             'status_sp3k'            => 'required|in:approved,turun_plafon',
-            'tanggal_disetujui_sp3k' => 'nullable|date',
             'catatan_sp3k'           => 'nullable|string',
             'plafon_baru'            => 'required_if:status_sp3k,turun_plafon|nullable|numeric|min:0',
         ]);
@@ -561,7 +599,6 @@ class BookingController extends Controller
             'tanggal_sp3k'           => $validated['tanggal_sp3k'] ?? $kk->tanggal_sp3k,
             'tanggal_expired_sp3k'   => $validated['tanggal_expired_sp3k'] ?? $kk->tanggal_expired_sp3k,
             'status_sp3k'            => $validated['status_sp3k'],
-            'tanggal_disetujui_sp3k' => $validated['tanggal_disetujui_sp3k'] ?? null,
             'catatan_sp3k'           => $validated['catatan_sp3k'] ?? null,
             'status_penjualan'       => 'rencana_akad',
         ];
@@ -662,5 +699,134 @@ class BookingController extends Controller
         $kk->update($validated);
 
         return back()->with('success', 'Bank Rekanan KPR berhasil disimpan.');
+    }
+
+    /**
+     * Edit Rincian Pesanan pasca-booking — sengaja dibatasi cuma boleh
+     * mengubah komponen yang BELUM ada pembayaran tercatat (Biaya Kelebihan
+     * Tanah, Biaya Tambahan per-item, Diskon/Promo). Cara Bayar & Skema DP
+     * TIDAK bisa diganti di sini sama sekali — itu mengubah seluruh pipeline
+     * & checklist dokumen, jadi kalau memang perlu ganti, transaksi harus
+     * dibatalkan & booking ulang dari awal.
+     *
+     * Booking Fee & DP yang sudah digenerate ke jadwal_tagihan TIDAK ikut
+     * dihitung ulang di sini (sengaja) — nominalnya tetap sesuai skema yang
+     * dikunci saat booking, walau harga_deal berubah karena revisi ini.
+     * Hanya harga_dasar/total_biaya_tambahan/diskon/harga_deal (dipakai untuk
+     * tampilan Kartu Piutang & estimasi plafon KPR) yang di-refresh.
+     */
+    public function updateRincianPesanan(Request $request, KavlingKonsumen $kk): RedirectResponse
+    {
+        $this->authorizeProjectAccess($kk->kavling->project);
+        abort_unless(Auth::user()->can('book kavling'), 403);
+        $this->assertTransactionEditable($kk, 'Edit rincian pesanan');
+
+        $validated = $request->validate([
+            'biaya_kelebihan_tanah_aktif'        => 'boolean',
+            'biaya_kelebihan_tanah_luas'         => [
+                'nullable', 'numeric', 'min:0',
+                Rule::requiredIf(fn () => $request->boolean('biaya_kelebihan_tanah_aktif') && $request->input('biaya_kelebihan_tanah_mode') === 'per_m2'),
+            ],
+            'biaya_kelebihan_tanah_mode'         => 'required_if:biaya_kelebihan_tanah_aktif,true|nullable|in:per_m2,nominal',
+            'biaya_kelebihan_tanah_harga_per_m2' => [
+                'nullable', 'numeric', 'min:0',
+                Rule::requiredIf(fn () => $request->boolean('biaya_kelebihan_tanah_aktif') && $request->input('biaya_kelebihan_tanah_mode') === 'per_m2'),
+            ],
+            'biaya_kelebihan_tanah_nominal_input' => [
+                'nullable', 'numeric', 'min:0',
+                Rule::requiredIf(fn () => $request->boolean('biaya_kelebihan_tanah_aktif') && $request->input('biaya_kelebihan_tanah_mode') === 'nominal'),
+            ],
+            'biaya_tambahan'                     => 'nullable|array',
+            'biaya_tambahan.*.id'                => 'nullable|integer|exists:kavling_konsumen_biaya_tambahan,id',
+            'biaya_tambahan.*.preset_id'         => 'required|exists:biaya_tambahan_presets,id',
+            'biaya_tambahan.*.nominal'           => 'required|numeric|min:0',
+            'promo_preset_id'     => 'nullable|exists:promo_presets,id',
+            'diskon_mode'         => 'nullable|in:persen,nominal',
+            'diskon_nilai'        => 'required_with:diskon_mode|nullable|numeric|min:0',
+        ]);
+
+        DB::transaction(function () use ($kk, $validated) {
+            $kk->loadMissing('biayaTambahans');
+
+            // ── Biaya Kelebihan Tanah: cuma boleh diubah kalau belum ada
+            // pembayaran tercatat. Kalau sudah ('sebagian'/'lunas'), abaikan
+            // input & pertahankan nilai lama apa adanya.
+            $biayaKelebihanLocked = $kk->biaya_kelebihan_tanah_status !== 'belum_bayar';
+            if ($biayaKelebihanLocked) {
+                $biayaKelebihanNominal = (float) $kk->biaya_kelebihan_tanah_nominal;
+            } else {
+                $biayaKelebihanNominal = 0;
+                if ($validated['biaya_kelebihan_tanah_aktif'] ?? false) {
+                    $biayaKelebihanNominal = $validated['biaya_kelebihan_tanah_mode'] === 'per_m2'
+                        ? round($validated['biaya_kelebihan_tanah_luas'] * $validated['biaya_kelebihan_tanah_harga_per_m2'], 2)
+                        : (float) $validated['biaya_kelebihan_tanah_nominal_input'];
+                }
+                $kk->biaya_kelebihan_tanah_aktif        = $validated['biaya_kelebihan_tanah_aktif'] ?? false;
+                $kk->biaya_kelebihan_tanah_luas         = $validated['biaya_kelebihan_tanah_luas'] ?? null;
+                $kk->biaya_kelebihan_tanah_mode         = $validated['biaya_kelebihan_tanah_mode'] ?? null;
+                $kk->biaya_kelebihan_tanah_harga_per_m2 = $validated['biaya_kelebihan_tanah_harga_per_m2'] ?? null;
+                $kk->biaya_kelebihan_tanah_nominal      = $biayaKelebihanNominal;
+            }
+
+            // ── Biaya Tambahan: item dengan status selain 'belum_bayar' tetap
+            // dipertahankan apa adanya (tidak boleh dihapus/diubah lewat sini);
+            // item unpaid boleh dihapus/diubah, dan item baru boleh ditambah.
+            $submitted = collect($validated['biaya_tambahan'] ?? []);
+            $existingLocked = $kk->biayaTambahans->where('status', '!=', 'belum_bayar');
+            $existingUnpaid = $kk->biayaTambahans->where('status', 'belum_bayar');
+
+            $submittedIds = $submitted->pluck('id')->filter()->all();
+            $lockedTouched = $existingLocked->pluck('id')->intersect($submittedIds)->isNotEmpty();
+            abort_if($lockedTouched, 422, 'Ada item Biaya Tambahan yang sudah ada pembayaran — tidak bisa diubah.');
+
+            // Hapus item unpaid lama yang tidak lagi disertakan di submission.
+            $existingUnpaid->whereNotIn('id', $submittedIds)->each->delete();
+
+            foreach ($submitted as $item) {
+                if (!empty($item['id'])) {
+                    $row = $existingUnpaid->firstWhere('id', $item['id']);
+                    abort_if(!$row, 422, 'Item Biaya Tambahan tidak valid.');
+                    $preset = BiayaTambahanPreset::find($item['preset_id']);
+                    $row->update([
+                        'biaya_tambahan_preset_id' => $item['preset_id'],
+                        'nama'                     => $preset?->nama ?? $row->nama,
+                        'nominal'                  => (float) $item['nominal'],
+                    ]);
+                } else {
+                    $preset = BiayaTambahanPreset::find($item['preset_id']);
+                    $kk->biayaTambahans()->create([
+                        'biaya_tambahan_preset_id' => $item['preset_id'],
+                        'nama'                     => $preset?->nama ?? 'Biaya Tambahan',
+                        'nominal'                  => (float) $item['nominal'],
+                        'status'                   => 'belum_bayar',
+                    ]);
+                }
+            }
+
+            $biayaTambahanTotal = (float) $kk->biayaTambahans()->sum('nominal');
+            $totalBiayaTambahan = $biayaKelebihanNominal + $biayaTambahanTotal;
+
+            // ── Diskon / Promo — boleh selalu diubah, cuma mempengaruhi
+            // total tampilan (harga_deal), tidak menyentuh Booking Fee/DP
+            // yang sudah digenerate.
+            $subtotal = (float) $kk->harga_dasar + $totalBiayaTambahan;
+            $diskonNominal = 0;
+            if (!empty($validated['diskon_mode'])) {
+                $diskonNominal = $validated['diskon_mode'] === 'persen'
+                    ? round($subtotal * ((float) $validated['diskon_nilai'] / 100), 2)
+                    : (float) $validated['diskon_nilai'];
+            }
+            $hargaJualNetto = $subtotal - $diskonNominal;
+
+            $kk->promo_preset_id     = $validated['promo_preset_id'] ?? null;
+            $kk->diskon_mode         = $validated['diskon_mode'] ?? null;
+            $kk->diskon_nilai        = $validated['diskon_nilai'] ?? null;
+            $kk->diskon_nominal      = $diskonNominal;
+            $kk->total_biaya_tambahan = $totalBiayaTambahan;
+            $kk->harga_deal          = $hargaJualNetto;
+            $kk->save();
+        });
+
+        return back()->with('success', 'Rincian pesanan berhasil diperbarui. Catatan: Booking Fee/DP yang sudah digenerate tidak ikut berubah.');
     }
 }

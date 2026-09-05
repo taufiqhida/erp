@@ -2,10 +2,11 @@
 
 namespace App\Imports;
 
-use App\Enums\StatusBangun;
 use App\Enums\StatusJual;
 use App\Models\Kavling;
 use App\Models\Project;
+use App\Models\StatusBangunStage;
+use App\Models\TipeUnitPreset;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -39,7 +40,11 @@ class KavlingImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
     public function collection(Collection $rows): void
     {
         $statusJualValues = ['available', 'not_for_sale'];
-        $statusBangunValues = StatusBangun::values();
+        // Nama tahap status_bangun dicocokkan case-insensitive terhadap
+        // master Kelola Status Bangun — bukan enum hardcode lagi.
+        $stagesByName = StatusBangunStage::ordered()->get()->keyBy(fn($s) => strtolower($s->nama));
+        $defaultStageId = StatusBangunStage::defaultStage()?->id;
+        $stageNamesForError = $stagesByName->pluck('nama')->implode(', ');
 
         foreach ($rows as $index => $row) {
             $rowNum = $index + 2; // +2 karena baris 1 adalah header
@@ -52,6 +57,12 @@ class KavlingImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
 
             if (empty($noUnit)) {
                 $this->errors[] = "Baris {$rowNum}: No Unit kosong, dilewati.";
+                $this->skipped++;
+                continue;
+            }
+
+            if (empty($tipe)) {
+                $this->errors[] = "Baris {$rowNum}: Tipe Unit kosong (wajib diisi), dilewati.";
                 $this->skipped++;
                 continue;
             }
@@ -83,18 +94,18 @@ class KavlingImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 continue;
             }
 
-            // Status progress bangun — opsional, default 'not_started' kalau
-            // kosong (unit baru), tapi kalau diisi harus salah satu nilai
-            // enum StatusBangun yang valid. Mengakomodasi proyek yang saat
-            // diimport sudah berjalan setengah jalan (sebagian unit progress
-            // bangunnya bukan dari nol).
-            $statusBangunRaw = strtolower(trim((string) ($row['status_bangun'] ?? '')));
+            // Status progress bangun — opsional, default tahap "Belum Mulai"
+            // kalau kosong (unit baru), tapi kalau diisi harus persis sama
+            // nama salah satu tahap di master Kelola Status Bangun (case-
+            // insensitive). Mengakomodasi proyek yang saat diimport sudah
+            // berjalan setengah jalan (sebagian unit progressnya bukan dari nol).
+            $statusBangunRaw = trim((string) ($row['status_bangun'] ?? ''));
             if ($statusBangunRaw === '') {
-                $statusBangun = StatusBangun::NotStarted;
-            } elseif (in_array($statusBangunRaw, $statusBangunValues, true)) {
-                $statusBangun = StatusBangun::from($statusBangunRaw);
+                $statusBangunStageId = $defaultStageId;
+            } elseif ($stage = $stagesByName->get(strtolower($statusBangunRaw))) {
+                $statusBangunStageId = $stage->id;
             } else {
-                $this->errors[] = "Baris {$rowNum}: Status Bangun '{$row['status_bangun']}' tidak dikenal (harus salah satu: " . implode(', ', $statusBangunValues) . '), dilewati.';
+                $this->errors[] = "Baris {$rowNum}: Status Bangun '{$statusBangunRaw}' tidak dikenal (harus salah satu: {$stageNamesForError}), dilewati.";
                 $this->skipped++;
                 continue;
             }
@@ -103,20 +114,34 @@ class KavlingImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             $lb    = $this->parseAngka($row['lb'] ?? $row['luas_bangunan'] ?? 0);
             $lt    = $this->parseAngka($row['lt'] ?? $row['luas_tanah'] ?? 0);
 
+            $idRumah = trim((string) ($row['id_rumah'] ?? ''));
+            if ($idRumah !== '' && Kavling::where('id_rumah', $idRumah)->exists()) {
+                $this->errors[] = "Baris {$rowNum}: ID Rumah '{$idRumah}' sudah dipakai kavling lain, dilewati.";
+                $this->skipped++;
+                continue;
+            }
+
             try {
+                $tipePreset = TipeUnitPreset::firstOrCreate(
+                    ['project_id' => $this->project->id, 'nama' => $tipe],
+                    ['luas_tanah' => $lt ?: null, 'luas_bangunan' => $lb ?: null]
+                );
+                if ($tipePreset->wasRecentlyCreated) {
+                    $this->errors[] = "Baris {$rowNum}: Tipe Unit '{$tipe}' belum ada di proyek ini, dibuat otomatis — lengkapi spek lengkapnya di halaman Kelola Tipe Unit.";
+                }
+
                 Kavling::create([
                     'project_id'    => $this->project->id,
                     'kluster'       => $kluster ?: null,
                     'nomor_kavling' => $noUnit,
                     'blok'          => $blok ?: null,
-                    'tipe_unit'     => $tipe ?: null,
-                    'luas_bangunan' => $lb ?: null,
-                    'luas_tanah'    => $lt ?: null,
+                    'tipe_unit_preset_id' => $tipePreset->id,
                     'harga'         => $harga ?: null,
                     'keterangan'    => $keterangan ?: null,
                     'status_unit'   => $statusRaw,
                     'status_jual'   => $statusRaw === 'not_for_sale' ? StatusJual::Hold : StatusJual::Available,
-                    'status_bangun' => $statusBangun,
+                    'status_bangun_stage_id' => $statusBangunStageId,
+                    'id_rumah'      => $idRumah ?: null,
                 ]);
                 $this->seenInBatch[$noUnit] = $rowNum;
                 $this->imported++;

@@ -44,7 +44,7 @@ const applyColorsAndListeners = () => {
         }
 
         el.style.fill = props.statusColors[k.status_jual] ?? '#94a3b8';
-        el.style.stroke = props.statusBangunColors[k.status_bangun] ?? 'none';
+        el.style.stroke = props.statusBangunColors[k.status_bangun_stage_id] ?? 'none';
         el.style.strokeWidth = '2px';
         el.style.transition = 'opacity 0.15s ease';
         el.classList.add('siteplan-svg-unit');
@@ -57,7 +57,7 @@ const applyColorsAndListeners = () => {
             titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
             el.prepend(titleEl);
         }
-        titleEl.textContent = `${k.nomor_lengkap} — ${k.status_jual_label ?? k.status_jual} · ${k.status_bangun_label ?? k.status_bangun}`;
+        titleEl.textContent = `${k.nomor_lengkap} — ${k.status_jual_label ?? k.status_jual} · ${k.status_bangun_label ?? ''}`;
 
         if (props.interactive) {
             const handler = () => emit('select', k);

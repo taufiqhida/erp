@@ -1,7 +1,9 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { ref, watch, computed } from 'vue';
+
+const page = usePage();
 
 const props = defineProps({
     mode:          String, // 'unit' | 'konsumen'
@@ -13,9 +15,10 @@ const props = defineProps({
 const search      = ref(props.filters?.search ?? '');
 const kluster     = ref(props.filters?.kluster ?? '');
 const blok        = ref(props.filters?.blok ?? '');
-const tipeUnit    = ref(props.filters?.tipe_unit ?? '');
+const tipeUnit    = ref(props.filters?.tipe_unit_preset_id ?? '');
 const statusJual  = ref(props.filters?.status_jual ?? '');
-const statusBangun = ref(props.filters?.status_bangun ?? '');
+const statusBangun = ref(props.filters?.status_bangun_stage_id ?? '');
+const statusPenjualan = ref(props.filters?.status_penjualan ?? '');
 
 const applyFilter = () => {
     router.get(
@@ -25,9 +28,10 @@ const applyFilter = () => {
             search: search.value || undefined,
             kluster: kluster.value || undefined,
             blok: blok.value || undefined,
-            tipe_unit: tipeUnit.value || undefined,
+            tipe_unit_preset_id: tipeUnit.value || undefined,
             status_jual: statusJual.value || undefined,
-            status_bangun: statusBangun.value || undefined,
+            status_bangun_stage_id: statusBangun.value || undefined,
+            status_penjualan: statusPenjualan.value || undefined,
         },
         { preserveState: true, replace: true }
     );
@@ -38,7 +42,7 @@ watch(search, () => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(applyFilter, 400);
 });
-watch([kluster, blok, tipeUnit, statusJual, statusBangun], applyFilter);
+watch([kluster, blok, tipeUnit, statusJual, statusBangun, statusPenjualan], applyFilter);
 
 const resetFilters = () => {
     kluster.value = '';
@@ -46,6 +50,15 @@ const resetFilters = () => {
     tipeUnit.value = '';
     statusJual.value = '';
     statusBangun.value = '';
+    statusPenjualan.value = '';
+};
+
+// "Hari berjalan" / countdown pipeline (dari KavlingKonsumen::pipeline_progress_info)
+const formatPipelineProgress = (p) => {
+    if (!p) return '';
+    if (p.type === 'elapsed') return `${p.hari} ${p.label}`;
+    if (p.type === 'countdown') return p.hari >= 0 ? `${p.tanggal} (${p.hari} hari lagi)` : `${p.tanggal} (lewat ${Math.abs(p.hari)} hari)`;
+    return '';
 };
 
 const switchMode = (mode) => {
@@ -69,43 +82,39 @@ const initials = (nama) => nama
     ? nama.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()
     : '?';
 
-// Warna badge Status Jual, Status Bangun & Pipeline — HARUS konsisten dengan
-// Penjualan/Project.vue & Konsumens/Show.vue (dipakai berdampingan).
-const statusJualBadge = {
-    available:              'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30',
-    hold:                   'bg-yellow-500/15 text-yellow-400 ring-1 ring-yellow-500/30',
-    booked:                 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30',
-    sold:                   'bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30',
-    cancellation_requested: 'bg-orange-500/15 text-orange-400 ring-1 ring-orange-500/30',
+// Warna Status Jual & Pipeline — sumbernya master "Warna Status" (Pengaturan),
+// nama status tetap system-driven, cuma warnanya dinamis (page.props.statusColors).
+const STATUS_JUAL_LABELS = {
+    available: 'Tersedia', hold: 'Tidak Tersedia', booked: 'Dipesan',
+    sold: 'Terjual', cancellation_requested: 'Proses Pembatalan',
 };
+const STATUS_PENJUALAN_LABELS = {
+    booking: 'Booking', pemberkasan: 'Pemberkasan', proses_bank: 'Proses Bank/SLIK',
+    sp3k: 'SP3K', rencana_akad: 'Rencana Akad', akad: 'Akad', bast: 'BAST / Selesai', batal: 'Batal',
+};
+const statusJualBadgeStyle = computed(() => {
+    const colors = page.props.statusColors?.status_jual ?? {};
+    return Object.fromEntries(Object.keys(STATUS_JUAL_LABELS).map(k => [k, `background:${colors[k] ?? '#94a3b8'}26; color:${colors[k] ?? '#94a3b8'}`]));
+});
+const statusJualLegend = computed(() => {
+    const colors = page.props.statusColors?.status_jual ?? {};
+    return Object.fromEntries(Object.entries(STATUS_JUAL_LABELS).map(([k, label]) => [k, { label, dotStyle: `background:${colors[k] ?? '#94a3b8'}` }]));
+});
 
-const statusBangunConfig = {
-    not_started:    { label: 'Belum Mulai',       cls: 'bg-slate-700/50 text-slate-400 ring-1 ring-slate-600' },
-    foundation:     { label: 'Pondasi',           cls: 'bg-orange-500/15 text-orange-400 ring-1 ring-orange-500/30' },
-    structure:      { label: 'Struktur',          cls: 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30' },
-    roofing:        { label: 'Atap',              cls: 'bg-indigo-500/15 text-indigo-400 ring-1 ring-indigo-500/30' },
-    finishing:      { label: 'Finishing',         cls: 'bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/30' },
-    handover_ready: { label: 'Siap Serah Terima', cls: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30' },
-};
+// Status Bangun — sumbernya master preset live (filterOptions.status_bangun,
+// dikirim dari Pengaturan > Status Bangun via KonsumenController), warna
+// badge dibentuk inline dari hex `warna` masing2 tahap, bukan class hardcode.
+const statusBangunColorHex = computed(() =>
+    Object.fromEntries((props.filterOptions?.status_bangun ?? []).map(s => [s.id, s.warna]))
+);
 
-const statusPenjualanConfig = {
-    booking:      { label: 'Booking',            cls: 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30' },
-    pemberkasan:  { label: 'Pemberkasan',         cls: 'bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30' },
-    proses_bank:  { label: 'Proses Bank/SLIK',    cls: 'bg-orange-500/15 text-orange-400 ring-1 ring-orange-500/30' },
-    sp3k:         { label: 'SP3K',                cls: 'bg-indigo-500/15 text-indigo-400 ring-1 ring-indigo-500/30' },
-    rencana_akad: { label: 'Rencana Akad',        cls: 'bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/30' },
-    akad:         { label: 'Akad',                cls: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30' },
-    bast:         { label: 'BAST / Selesai',      cls: 'bg-teal-500/15 text-teal-400 ring-1 ring-teal-500/30' },
-    batal:        { label: 'Batal',               cls: 'bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30' },
-};
-
-const statusJualLegend = {
-    available:              { label: 'Tersedia',          dot: 'bg-emerald-400' },
-    hold:                   { label: 'Tidak Tersedia',    dot: 'bg-yellow-400' },
-    booked:                 { label: 'Dipesan',           dot: 'bg-blue-400' },
-    sold:                   { label: 'Terjual',           dot: 'bg-rose-400' },
-    cancellation_requested: { label: 'Proses Pembatalan', dot: 'bg-orange-400' },
-};
+const statusPenjualanConfig = computed(() => {
+    const colors = page.props.statusColors?.status_penjualan ?? {};
+    return Object.fromEntries(Object.entries(STATUS_PENJUALAN_LABELS).map(([k, label]) => {
+        const hex = colors[k] ?? '#94a3b8';
+        return [k, { label, style: `background:${hex}26; color:${hex}` }];
+    }));
+});
 
 const showLegend = ref(false);
 
@@ -126,17 +135,8 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                     <h1 class="text-white font-bold text-xl">Data Konsumen</h1>
-                    <p class="text-slate-400 text-sm mt-0.5">Daftar semua konsumen &amp; unit properti</p>
+                    <p class="text-slate-400 text-sm mt-0.5">Daftar semua konsumen &amp; unit properti — konsumen baru ditambahkan lewat form Booking di halaman Penjualan.</p>
                 </div>
-                <Link
-                    :href="route('konsumens.create')"
-                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-violet-500/20"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-                        <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                    </svg>
-                    Tambah Konsumen
-                </Link>
             </div>
 
             <!-- View Mode Toggle -->
@@ -177,7 +177,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                     </select>
                     <select v-model="tipeUnit" class="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">
                         <option value="">Semua Tipe</option>
-                        <option v-for="t in filterOptions.tipe_unit" :key="t" :value="t">{{ t }}</option>
+                        <option v-for="t in filterOptions.tipe_unit" :key="t.id" :value="t.id">{{ t.nama }}</option>
                     </select>
                     <select v-model="statusJual" class="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">
                         <option value="">Semua Status Jual</option>
@@ -185,9 +185,13 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                     </select>
                     <select v-model="statusBangun" class="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">
                         <option value="">Semua Status Bangun</option>
-                        <option v-for="(label, key) in filterOptions.status_bangun" :key="key" :value="key">{{ label }}</option>
+                        <option v-for="s in filterOptions.status_bangun" :key="s.id" :value="s.id">{{ s.nama }}</option>
                     </select>
-                    <button v-if="kluster || blok || tipeUnit || statusJual || statusBangun" @click="resetFilters"
+                    <select v-model="statusPenjualan" class="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">
+                        <option value="">Semua Pipeline</option>
+                        <option v-for="s in filterOptions.status_penjualan" :key="s.key" :value="s.key">{{ s.label }}</option>
+                    </select>
+                    <button v-if="kluster || blok || tipeUnit || statusJual || statusBangun || statusPenjualan" @click="resetFilters"
                         class="px-3 py-1.5 text-slate-500 hover:text-slate-300 text-xs transition-colors">
                         ✕ Reset filter unit
                     </button>
@@ -202,20 +206,20 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                         <span class="text-slate-500 font-medium w-28 flex-shrink-0">Status Jual</span>
                         <span v-for="(cfg, key) in statusJualLegend" :key="key" class="flex items-center gap-1.5 text-slate-400">
-                            <span :class="['w-2 h-2 rounded-full', cfg.dot]" />
+                            <span class="w-2 h-2 rounded-full" :style="cfg.dotStyle" />
                             {{ cfg.label }}
                         </span>
                     </div>
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                         <span class="text-slate-500 font-medium w-28 flex-shrink-0">Status Bangun</span>
-                        <span v-for="(cfg, key) in statusBangunConfig" :key="key" class="flex items-center gap-1.5 text-slate-400">
-                            <span :class="['px-1.5 py-0.5 rounded-full text-[10px] font-medium', cfg.cls]">{{ cfg.label }}</span>
+                        <span v-for="s in filterOptions.status_bangun" :key="s.id" class="flex items-center gap-1.5 text-slate-400">
+                            <span :style="`background:${s.warna}25; color:${s.warna}`" class="px-1.5 py-0.5 rounded-full text-[10px] font-medium">{{ s.nama }}</span>
                         </span>
                     </div>
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                         <span class="text-slate-500 font-medium w-28 flex-shrink-0">Pipeline</span>
                         <span v-for="(cfg, key) in statusPenjualanConfig" :key="key" class="flex items-center gap-1.5 text-slate-400">
-                            <span :class="['px-1.5 py-0.5 rounded-full text-[10px] font-medium', cfg.cls]">{{ cfg.label }}</span>
+                            <span class="px-1.5 py-0.5 rounded-full text-[10px] font-medium" :style="cfg.style">{{ cfg.label }}</span>
                         </span>
                     </div>
                 </div>
@@ -233,6 +237,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                 <th class="px-4 py-3 text-left font-medium">Cara Bayar</th>
                                 <th class="px-4 py-3 text-left font-medium">Bank</th>
                                 <th class="px-4 py-3 text-left font-medium">Status Bangun</th>
+                                <th class="px-4 py-3 text-left font-medium">ID Rumah</th>
                                 <th class="px-4 py-3 text-left font-medium">Pemberkasan</th>
                                 <th class="px-4 py-3 text-left font-medium">Pipeline</th>
                                 <th class="px-4 py-3"></th>
@@ -253,9 +258,13 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                 <td class="px-4 py-3 text-slate-400">{{ row.cara_bayar_label }}</td>
                                 <td class="px-4 py-3 text-slate-400 text-xs">{{ row.bank_rekanan_kpr ?? '-' }}</td>
                                 <td class="px-4 py-3">
-                                    <span :class="['px-2 py-0.5 text-xs rounded-full font-medium', statusBangunConfig[row.status_bangun]?.cls]">
-                                        {{ statusBangunConfig[row.status_bangun]?.label ?? row.status_bangun_label }}
+                                    <span :style="`background:${statusBangunColorHex[row.status_bangun_stage_id]}25; color:${statusBangunColorHex[row.status_bangun_stage_id]}`"
+                                        class="px-2 py-0.5 text-xs rounded-full font-medium">
+                                        {{ row.status_bangun_label }}
                                     </span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span class="text-slate-400 text-xs font-mono">{{ row.id_rumah ?? '-' }}</span>
                                 </td>
                                 <td class="px-4 py-3">
                                     <div class="flex items-center gap-2">
@@ -266,9 +275,10 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                     </div>
                                 </td>
                                 <td class="px-4 py-3">
-                                    <span :class="['px-2 py-0.5 text-xs rounded-full font-medium', statusPenjualanConfig[row.status_penjualan]?.cls]">
+                                    <span class="px-2 py-0.5 text-xs rounded-full font-medium" :style="statusPenjualanConfig[row.status_penjualan]?.style">
                                         {{ statusPenjualanConfig[row.status_penjualan]?.label ?? row.status_penjualan_label }}
                                     </span>
+                                    <div v-if="row.pipeline_progress" class="text-slate-500 text-[11px] mt-1">{{ formatPipelineProgress(row.pipeline_progress) }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     <Link :href="`${route('konsumens.show', row.konsumen_id)}?transaksi=${row.id}`"
@@ -278,7 +288,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                 </td>
                             </tr>
                             <tr v-if="!rows.data.length">
-                                <td colspan="9" class="px-4 py-12 text-center text-slate-600">Tidak ada unit konsumen ditemukan.</td>
+                                <td colspan="10" class="px-4 py-12 text-center text-slate-600">Tidak ada unit konsumen ditemukan.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -349,8 +359,8 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                                 <span class="text-slate-600 ml-2">{{ unit.project_nama }} · {{ unit.cara_bayar_label }}</span>
                                             </div>
                                             <div class="flex items-center gap-2">
-                                                <span :class="['px-2 py-0.5 rounded-full text-[10px] font-medium', statusJualBadge[unit.status_jual]]">{{ unit.status_jual_label }}</span>
-                                                <span :class="['px-2 py-0.5 rounded-full text-[10px] font-medium', statusPenjualanConfig[unit.status_penjualan]?.cls]">
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-medium" :style="statusJualBadgeStyle[unit.status_jual]">{{ unit.status_jual_label }}</span>
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-medium" :style="statusPenjualanConfig[unit.status_penjualan]?.style">
                                                     {{ statusPenjualanConfig[unit.status_penjualan]?.label ?? unit.status_penjualan_label }}
                                                 </span>
                                                 <Link :href="`${route('konsumens.show', k.id)}?transaksi=${unit.id}`"

@@ -23,18 +23,6 @@ enum StatusJual: string
         };
     }
 
-    public function color(): string
-    {
-        return match($this) {
-            self::Available             => 'green',
-            self::Hold                  => 'yellow',
-            self::Booked                => 'blue',
-            self::Sold                  => 'red',
-            self::CancellationRequested => 'orange',
-            self::SwapRequested         => 'purple',
-        };
-    }
-
     /**
      * Status yang diizinkan untuk transisi. Available <-> Hold hanya toggle
      * ketersediaan oleh admin proyek (lihat KavlingController::updateStatusJual);

@@ -24,6 +24,7 @@ class Project extends Model
         'luas_tanah_total',
         'siteplan_image',
         'siteplan_marker_size',
+        'foto_sampul',
         'is_active',
         'created_by',
     ];
@@ -44,6 +45,11 @@ class Project extends Model
     public function kavlings(): HasMany
     {
         return $this->hasMany(Kavling::class);
+    }
+
+    public function tipeUnitPresets(): HasMany
+    {
+        return $this->hasMany(TipeUnitPreset::class);
     }
 
     public function users(): BelongsToMany

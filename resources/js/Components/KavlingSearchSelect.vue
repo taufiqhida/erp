@@ -20,7 +20,7 @@ const selected = computed(() =>
 );
 
 const searchableText = (k) =>
-    [k.nomor_lengkap, k.nomor_kavling, k.blok, k.kluster, k.tipe_unit]
+    [k.nomor_lengkap, k.nomor_kavling, k.blok, k.kluster, k.tipe_unit_nama]
         .filter(Boolean).join(' ').toLowerCase();
 
 const filtered = computed(() => {
@@ -76,7 +76,7 @@ const onBlur = () => {
                 class="w-full flex items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-700 transition-colors"
                 :class="k.id === modelValue ? 'bg-violet-600/20 text-violet-300' : 'text-slate-200'">
                 <span>{{ k.nomor_lengkap }}</span>
-                <span class="text-slate-500 text-xs">{{ optionHint ? optionHint(k) : [k.kluster, k.tipe_unit].filter(Boolean).join(' · ') }}</span>
+                <span class="text-slate-500 text-xs">{{ optionHint ? optionHint(k) : [k.kluster, k.tipe_unit_nama].filter(Boolean).join(' · ') }}</span>
             </button>
             <div v-if="!filtered.length" class="px-3 py-3 text-slate-500 text-xs text-center">
                 Tidak ada kavling yang cocok.

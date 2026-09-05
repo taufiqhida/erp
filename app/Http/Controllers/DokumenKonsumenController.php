@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AuthorizesProjectAccess;
 use App\Http\Controllers\Concerns\ChecksTransactionLock;
+use App\Models\BankRekananPreset;
 use App\Models\CancellationRequest;
 use App\Models\DokumenKonsumen;
 use App\Models\KavlingKonsumen;
@@ -25,7 +26,7 @@ class DokumenKonsumenController extends Controller
     {
         $this->authorizeProjectAccess($kk->kavling->project);
 
-        $kk->load(['konsumen', 'kavling.project', 'dokumens.verifiedBy', 'bastRecord', 'jadwalTagihans']);
+        $kk->load(['konsumen', 'kavling.project', 'kavling.statusBangunStage', 'dokumens.verifiedBy', 'bastRecord', 'jadwalTagihans']);
 
         $pendingRequest = CancellationRequest::where('kavling_konsumen_id', $kk->id)->pending()->first();
 
@@ -44,6 +45,7 @@ class DokumenKonsumenController extends Controller
                 },
                 'harga_deal'       => $kk->harga_deal,
                 'progress_berkas'  => $kk->progress_berkas,
+                'tanggal_booking'      => $kk->tanggal_booking?->format('Y-m-d'),
                 'tanggal_rencana_akad' => $kk->tanggal_rencana_akad?->format('Y-m-d'),
                 'tanggal_sp3k'         => $kk->tanggal_sp3k?->format('Y-m-d'),
                 'tanggal_expired_sp3k' => $kk->tanggal_expired_sp3k?->format('Y-m-d'),
@@ -63,7 +65,8 @@ class DokumenKonsumenController extends Controller
                 'status_bank_label'      => $kk->status_bank_label,
                 'catatan_bank'           => $kk->catatan_bank,
                 // SP3K
-                'tanggal_disetujui_sp3k' => $kk->tanggal_disetujui_sp3k?->format('Y-m-d'),
+                'tanggal_sp3k'           => $kk->tanggal_sp3k?->format('Y-m-d'),
+                'tanggal_expired_sp3k'   => $kk->tanggal_expired_sp3k?->format('Y-m-d'),
                 'status_sp3k'            => $kk->status_sp3k,
                 'status_sp3k_label'      => $kk->status_sp3k_label,
                 'catatan_sp3k'           => $kk->catatan_sp3k,
@@ -81,8 +84,9 @@ class DokumenKonsumenController extends Controller
                 'project_id'          => $kk->kavling->project_id,
                 'nomor_lengkap'       => $kk->kavling->nomor_lengkap,
                 'project_nama'        => $kk->kavling->project->nama,
-                'status_bangun'       => $kk->kavling->status_bangun->value,
-                'status_bangun_label' => $kk->kavling->status_bangun->label(),
+                'status_bangun_stage_id' => $kk->kavling->status_bangun_stage_id,
+                'status_bangun_label' => $kk->kavling->status_bangun_label,
+                'status_bangun_is_final' => $kk->kavling->statusBangunStage?->isFinalStage() ?? false,
             ],
             'dokumens'   => $kk->dokumens->map(fn($d) => [
                 'id'           => $d->id,
@@ -104,6 +108,7 @@ class DokumenKonsumenController extends Controller
                 'catatan'      => $kk->bastRecord->catatan,
                 'status_ttd'   => $kk->bastRecord->status_ttd,
             ] : null,
+            'bankRekananPresets' => BankRekananPreset::where('is_active', true)->orderBy('nama')->get(['id', 'nama']),
         ]);
     }
 

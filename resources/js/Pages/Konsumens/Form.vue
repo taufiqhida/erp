@@ -4,9 +4,10 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     konsumen: Object,
+    jenisPekerjaanOptions: { type: Object, default: () => ({}) },
+    statusPernikahanOptions: { type: Object, default: () => ({}) },
+    sumberLeadOptions: { type: Array, default: () => [] },
 });
-
-const isEdit = !!props.konsumen?.id;
 
 const form = useForm({
     nama:      props.konsumen?.nama ?? '',
@@ -15,33 +16,31 @@ const form = useForm({
     email:     props.konsumen?.email ?? '',
     alamat:    props.konsumen?.alamat ?? '',
     pekerjaan: props.konsumen?.pekerjaan ?? '',
+    status_pernikahan: props.konsumen?.status_pernikahan ?? '',
+    sumber_lead_id:    props.konsumen?.sumber_lead_id ?? '',
     catatan:   props.konsumen?.catatan ?? '',
     drive_folder_link: props.konsumen?.drive_folder_link ?? '',
 });
 
 const submit = () => {
-    if (isEdit) {
-        form.put(route('konsumens.update', props.konsumen.id));
-    } else {
-        form.post(route('konsumens.store'));
-    }
+    form.put(route('konsumens.update', props.konsumen.id));
 };
 </script>
 
 <template>
-    <Head :title="isEdit ? 'Edit Konsumen' : 'Tambah Konsumen'" />
+    <Head title="Edit Konsumen" />
     <AuthenticatedLayout>
         <template #header>
             <div class="flex items-center gap-2 text-slate-400 text-sm">
                 <Link :href="route('konsumens.index')" class="hover:text-slate-200 transition-colors">Konsumen</Link>
                 <span>/</span>
-                <span class="text-slate-200 font-medium">{{ isEdit ? 'Edit' : 'Tambah' }}</span>
+                <span class="text-slate-200 font-medium">Edit</span>
             </div>
         </template>
 
         <div class="p-6 max-w-2xl mx-auto">
             <div class="mb-6">
-                <h1 class="text-white font-bold text-xl">{{ isEdit ? 'Edit Konsumen' : 'Tambah Konsumen Baru' }}</h1>
+                <h1 class="text-white font-bold text-xl">Edit Konsumen</h1>
                 <p class="text-slate-400 text-sm mt-0.5">Data identitas konsumen</p>
             </div>
 
@@ -69,8 +68,25 @@ const submit = () => {
                             <p v-if="form.errors.email" class="text-rose-400 text-xs mt-1">{{ form.errors.email }}</p>
                         </div>
                         <div>
-                            <label class="block text-slate-400 text-xs font-medium mb-1.5">Pekerjaan</label>
-                            <input v-model="form.pekerjaan" type="text" placeholder="Pegawai Swasta" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                            <label class="block text-slate-400 text-xs font-medium mb-1.5">Jenis Pekerjaan</label>
+                            <select v-model="form.pekerjaan" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                <option value="">— Pilih —</option>
+                                <option v-for="(label, key) in jenisPekerjaanOptions" :key="key" :value="key">{{ label }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-xs font-medium mb-1.5">Status Pernikahan</label>
+                            <select v-model="form.status_pernikahan" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                <option value="">— Pilih —</option>
+                                <option v-for="(label, key) in statusPernikahanOptions" :key="key" :value="key">{{ label }}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-xs font-medium mb-1.5">Sumber Lead</label>
+                            <select v-model="form.sumber_lead_id" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                <option value="">— Pilih —</option>
+                                <option v-for="s in sumberLeadOptions" :key="s.id" :value="s.id">{{ s.nama }}</option>
+                            </select>
                         </div>
                     </div>
                     <div>
@@ -91,7 +107,7 @@ const submit = () => {
                 <div class="flex items-center justify-end gap-3">
                     <Link :href="route('konsumens.index')" class="px-4 py-2.5 text-slate-400 hover:text-slate-200 text-sm font-medium transition-colors">Batal</Link>
                     <button type="submit" :disabled="form.processing" class="px-5 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-violet-500/20">
-                        {{ form.processing ? 'Menyimpan...' : (isEdit ? 'Simpan Perubahan' : 'Tambah Konsumen') }}
+                        {{ form.processing ? 'Menyimpan...' : 'Simpan Perubahan' }}
                     </button>
                 </div>
             </form>

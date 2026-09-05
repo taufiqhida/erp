@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\StatusBangun;
 use App\Enums\StatusJual;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -19,38 +18,28 @@ class Kavling extends Model
 
     protected $fillable = [
         'project_id',
+        'tipe_unit_preset_id',
         'kluster',
         'nomor_kavling',
         'blok',
-        'luas_tanah',
-        'luas_bangunan',
         'harga',
         'status_jual',
-        'status_bangun',
+        'status_bangun_stage_id',
         'status_unit',
-        'foto_rumah',
-        'denah_rumah',
-        'tipe_unit',
-        'kamar_tidur',
-        'kamar_mandi',
-        'spek_atap',
-        'spek_dinding',
-        'spek_lantai',
-        'spek_pondasi',
         'keterangan',
+        'perlu_biaya_tambahan',
         'koordinat_x',
         'koordinat_y',
         'catatan',
+        'id_rumah',
     ];
 
     protected $casts = [
-        'luas_tanah'    => 'decimal:2',
-        'luas_bangunan' => 'decimal:2',
-        'harga'         => 'decimal:2',
-        'koordinat_x'   => 'decimal:3',
-        'koordinat_y'   => 'decimal:3',
-        'status_jual'   => StatusJual::class,
-        'status_bangun' => StatusBangun::class,
+        'harga'                 => 'decimal:2',
+        'koordinat_x'           => 'decimal:3',
+        'koordinat_y'           => 'decimal:3',
+        'status_jual'           => StatusJual::class,
+        'perlu_biaya_tambahan'  => 'boolean',
     ];
 
     public function getActivitylogOptions(): LogOptions
@@ -75,6 +64,16 @@ class Kavling extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function tipeUnitPreset(): BelongsTo
+    {
+        return $this->belongsTo(TipeUnitPreset::class);
+    }
+
+    public function statusBangunStage(): BelongsTo
+    {
+        return $this->belongsTo(StatusBangunStage::class);
     }
 
     public function kavlingKonsumens(): HasMany
@@ -138,11 +137,11 @@ class Kavling extends Model
 
     public function getStatusBangunLabelAttribute(): string
     {
-        return $this->status_bangun->label();
+        return $this->statusBangunStage?->nama ?? '-';
     }
 
-    public function getProgressBangunAttribute(): int
+    public function getProgressBangunAttribute(): float
     {
-        return $this->status_bangun->progressPercent();
+        return $this->statusBangunStage?->progressPercent() ?? 0;
     }
 }

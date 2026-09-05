@@ -2,13 +2,14 @@
 
 namespace Database\Seeders;
 
-use App\Enums\StatusBangun;
 use App\Enums\StatusJual;
 use App\Models\DeveloperProfile;
 use App\Models\DokumenTemplate;
 use App\Models\Kavling;
 use App\Models\Konsumen;
 use App\Models\Project;
+use App\Models\StatusBangunStage;
+use App\Models\TipeUnitPreset;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -87,40 +88,53 @@ class DatabaseSeeder extends Seeder
         $project2->users()->syncWithoutDetaching([$admin->id, $manajer->id]);
 
         // 4. Kavlings
+        $stageByNama = StatusBangunStage::ordered()->get()->keyBy('nama');
+        $defaultStageId = $stageByNama->firstWhere('is_default', true)?->id ?? StatusBangunStage::defaultStage()->id;
+
         // Nomor kavling harus unik per project (bukan per blok)
         $kavlingData = [
-            ['blok' => 'A', 'nomor' => 'A01', 'luas_t' => 120, 'luas_b' => 72, 'harga' => 850_000_000, 'status_jual' => StatusJual::Sold, 'status_bangun' => StatusBangun::Finishing],
-            ['blok' => 'A', 'nomor' => 'A02', 'luas_t' => 110, 'luas_b' => 60, 'harga' => 780_000_000, 'status_jual' => StatusJual::Booked, 'status_bangun' => StatusBangun::Structure],
-            ['blok' => 'A', 'nomor' => 'A03', 'luas_t' => 115, 'luas_b' => 72, 'harga' => 820_000_000, 'status_jual' => StatusJual::Available, 'status_bangun' => StatusBangun::Foundation],
-            ['blok' => 'B', 'nomor' => 'B01', 'luas_t' => 130, 'luas_b' => 80, 'harga' => 920_000_000, 'status_jual' => StatusJual::Available, 'status_bangun' => StatusBangun::NotStarted],
-            ['blok' => 'B', 'nomor' => 'B02', 'luas_t' => 125, 'luas_b' => 75, 'harga' => 880_000_000, 'status_jual' => StatusJual::Hold, 'status_bangun' => StatusBangun::NotStarted],
-            ['blok' => 'B', 'nomor' => 'B03', 'luas_t' => 120, 'luas_b' => 72, 'harga' => 860_000_000, 'status_jual' => StatusJual::Available, 'status_bangun' => StatusBangun::NotStarted],
+            ['blok' => 'A', 'nomor' => 'A01', 'luas_t' => 120, 'luas_b' => 72, 'harga' => 850_000_000, 'status_jual' => StatusJual::Sold, 'status_bangun' => 'Finishing'],
+            ['blok' => 'A', 'nomor' => 'A02', 'luas_t' => 110, 'luas_b' => 60, 'harga' => 780_000_000, 'status_jual' => StatusJual::Booked, 'status_bangun' => 'Struktur'],
+            ['blok' => 'A', 'nomor' => 'A03', 'luas_t' => 115, 'luas_b' => 72, 'harga' => 820_000_000, 'status_jual' => StatusJual::Available, 'status_bangun' => 'Pondasi'],
+            ['blok' => 'B', 'nomor' => 'B01', 'luas_t' => 130, 'luas_b' => 80, 'harga' => 920_000_000, 'status_jual' => StatusJual::Available, 'status_bangun' => 'Belum Mulai'],
+            ['blok' => 'B', 'nomor' => 'B02', 'luas_t' => 125, 'luas_b' => 75, 'harga' => 880_000_000, 'status_jual' => StatusJual::Hold, 'status_bangun' => 'Belum Mulai'],
+            ['blok' => 'B', 'nomor' => 'B03', 'luas_t' => 120, 'luas_b' => 72, 'harga' => 860_000_000, 'status_jual' => StatusJual::Available, 'status_bangun' => 'Belum Mulai'],
         ];
 
         foreach ($kavlingData as $kd) {
+            $tipe = TipeUnitPreset::firstOrCreate(
+                ['project_id' => $project1->id, 'nama' => "{$kd['luas_b']}/{$kd['luas_t']}"],
+                ['luas_tanah' => $kd['luas_t'], 'luas_bangunan' => $kd['luas_b']]
+            );
+
             Kavling::firstOrCreate(
                 ['project_id' => $project1->id, 'nomor_kavling' => $kd['nomor']],
                 [
-                    'blok'          => $kd['blok'],
-                    'luas_tanah'    => $kd['luas_t'],
-                    'luas_bangunan' => $kd['luas_b'],
-                    'harga'         => $kd['harga'],
-                    'status_jual'   => $kd['status_jual'],
-                    'status_bangun' => $kd['status_bangun'],
+                    'blok'                   => $kd['blok'],
+                    'tipe_unit_preset_id'    => $tipe->id,
+                    'harga'                  => $kd['harga'],
+                    'status_jual'            => $kd['status_jual'],
+                    'status_bangun_stage_id' => $stageByNama[$kd['status_bangun']]->id ?? $defaultStageId,
                 ]
             );
         }
 
         // Project 2 kavlings
         for ($i = 1; $i <= 4; $i++) {
+            $luasTanah = 100 + ($i * 5);
+            $luasBangunan = 60 + ($i * 3);
+            $tipe = TipeUnitPreset::firstOrCreate(
+                ['project_id' => $project2->id, 'nama' => "{$luasBangunan}/{$luasTanah}"],
+                ['luas_tanah' => $luasTanah, 'luas_bangunan' => $luasBangunan]
+            );
+
             Kavling::firstOrCreate(
                 ['project_id' => $project2->id, 'nomor_kavling' => str_pad($i, 2, '0', STR_PAD_LEFT), 'blok' => 'A'],
                 [
-                    'luas_tanah'    => 100 + ($i * 5),
-                    'luas_bangunan' => 60 + ($i * 3),
-                    'harga'         => 700_000_000 + ($i * 50_000_000),
-                    'status_jual'   => StatusJual::Available,
-                    'status_bangun' => StatusBangun::NotStarted,
+                    'tipe_unit_preset_id'    => $tipe->id,
+                    'harga'                  => 700_000_000 + ($i * 50_000_000),
+                    'status_jual'            => StatusJual::Available,
+                    'status_bangun_stage_id' => $defaultStageId,
                 ]
             );
         }

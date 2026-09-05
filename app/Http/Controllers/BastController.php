@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\StatusBangun;
 use App\Http\Controllers\Concerns\AuthorizesProjectAccess;
 use App\Models\BastRecord;
 use App\Models\KavlingKonsumen;
@@ -54,7 +53,7 @@ class BastController extends Controller
 
         $bast = $kk->bastRecord;
         abort_unless(
-            $kk->kavling->status_bangun === StatusBangun::HandoverReady,
+            $kk->kavling->statusBangunStage?->isFinalStage(),
             422,
             'Bangunan belum berstatus "Siap Serah Terima".'
         );
