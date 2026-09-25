@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AuthorizesProjectAccess;
+use App\Http\Controllers\Concerns\BuildsKeuanganLists;
 use App\Http\Controllers\Concerns\ChecksTransactionLock;
 use App\Models\JadwalTagihan;
 use App\Models\Kavling;
@@ -19,7 +20,7 @@ use Inertia\Response;
 
 class KeuanganController extends Controller
 {
-    use AuthorizesProjectAccess, ChecksTransactionLock;
+    use AuthorizesProjectAccess, ChecksTransactionLock, BuildsKeuanganLists;
 
     private function caraBayarLabel(?string $caraBayar): string
     {
@@ -59,96 +60,174 @@ class KeuanganController extends Controller
     }
 
     /**
-     * Halaman Keuangan — monitoring & pencatatan pembayaran konsumen +
-     * pencairan KPR/bank dalam satu tabel (Tab Pembayaran Konsumen, Pencairan
-     * KPR, & Klaim SBUM lama digabung — SBUM sekarang dilacak per-item lewat
-     * Rincian Biaya Akad, bukan SbumRecord terpisah lagi).
+     * Piutang Konsumen — pantauan piutang konsumen semua cara bayar. Dipaginasi &
+     * disort di SQL dari total keuangan tersimpan (kolom fin_*, lihat HasFinanceTotals),
+     * default: yang belum lunas, sisa piutang terbesar di atas.
      */
     public function index(Request $request): Response
     {
         abort_unless(Auth::user()->can('view keuangan'), 403);
 
-        $user = Auth::user();
-        $isGlobal = $user->hasAnyRole(['superadmin', 'manajer']);
-        // Proyek aktif (Halaman Utama Pilih Proyek) — bukan lagi filter
-        // dropdown di halaman ini. Kosong berarti mode "Semua Proyek".
-        $projectId = session('current_project_id');
-        $projectScope = fn($q) => $q->whereHas('project.users', fn($q2) => $q2->where('users.id', $user->id));
+        // Pencarian tidak dibatasi filter default: konsumen lama yang sudah lunas/selesai tetap ketemu.
+        $tampil = in_array($request->tampil, ['belum_lunas', 'siap_selesai', 'selesai', 'semua'], true)
+            ? $request->tampil
+            : ($request->search ? 'semua' : 'belum_lunas');
 
-        $optionsQuery = Kavling::query()
-            ->when(!$isGlobal, $projectScope)
-            ->when($projectId, fn($q) => $q->where('project_id', $projectId));
-        $filterOptions = [
-            'kluster'          => (clone $optionsQuery)->whereNotNull('kluster')->where('kluster', '!=', '')->distinct()->orderBy('kluster')->pluck('kluster'),
-            'blok'             => (clone $optionsQuery)->whereNotNull('blok')->where('blok', '!=', '')->distinct()->orderBy('blok')->pluck('blok'),
-            'status_penjualan' => $this->statusPenjualanLabelMap(),
-            'cara_bayar'       => [
-                'cash' => 'Cash', 'cash_bertahap' => 'Cash Bertahap',
-                'kpr_subsidi' => 'KPR Subsidi', 'kpr_komersil' => 'KPR Komersil',
-            ],
-            'bank' => KavlingKonsumen::whereNotNull('bank_rekanan_kpr')->where('bank_rekanan_kpr', '!=', '')
-                ->distinct()->orderBy('bank_rekanan_kpr')->pluck('bank_rekanan_kpr'),
-        ];
+        $eps = self::SISA_EPS;
+        $query = $this->keuanganBaseQuery($request)
+            ->when($request->status_penjualan, fn ($q) => $q->where('kavling_konsumen.status_penjualan', $request->status_penjualan))
+            ->when($request->cara_bayar, fn ($q) => $q->where('kavling_konsumen.cara_bayar', $request->cara_bayar))
+            ->when($request->bank, fn ($q) => $q->where('kavling_konsumen.bank_rekanan_kpr', $request->bank))
+            ->when($tampil === 'belum_lunas', fn ($q) => $q->where('kavling_konsumen.fin_sisa_konsumen', '>', $eps))
+            ->when($tampil === 'siap_selesai', fn ($q) => $q
+                ->where('kavling_konsumen.status', 'active')
+                ->where('kavling_konsumen.fin_piutang_konsumen', '>', 0)
+                ->where('kavling_konsumen.fin_sisa_konsumen', '<=', $eps)
+                ->where('kavling_konsumen.fin_sisa_bank', '<=', $eps))
+            ->when($tampil === 'selesai', fn ($q) => $q->where('kavling_konsumen.status', 'completed'));
 
-        $rows = KavlingKonsumen::query()
-            ->with([
-                'konsumen:id,nama', 'kavling.project:id,nama', 'skemaDpPreset', 'pembayarans',
-                'jadwalTagihans.pembayaran', 'biayaTambahans.pembayaran',
-                'biayaKelebihanTanahPembayaran', 'rincianBiayaAkad.pembayaran',
-                'pencairanKprTahaps', 'tambahanUmPembayaran',
-            ])
-            ->whereHas('kavling', function ($q) use ($projectId, $isGlobal, $projectScope, $request) {
-                if ($projectId) $q->where('project_id', $projectId);
-                if ($request->kluster) $q->where('kluster', $request->kluster);
-                if ($request->blok) $q->where('blok', $request->blok);
-                if (!$isGlobal) $projectScope($q);
-            })
-            ->when($request->status_penjualan, fn($q) => $q->where('status_penjualan', $request->status_penjualan))
-            ->when($request->cara_bayar, fn($q) => $q->where('cara_bayar', $request->cara_bayar))
-            ->when($request->bank, fn($q) => $q->where('bank_rekanan_kpr', $request->bank))
-            // Search bebas: nama/NIK/No. HP konsumen atau nomor unit (blok+nomor).
-            ->when($request->search, function ($q) use ($request) {
-                $keyword = $request->search;
-                $q->where(function ($sub) use ($keyword) {
-                    $sub->whereHas('konsumen', fn($k) => $k->search($keyword))
-                        ->orWhereHas('kavling', fn($kv) => $kv->where('nomor_kavling', 'like', "%{$keyword}%")
-                            ->orWhere('blok', 'like', "%{$keyword}%"));
-                });
-            })
-            // Transaksi 'completed' (sudah ditandai Selesai) TETAP tampil di
-            // sini — cuma yang batal (cancelled) yang disaring keluar.
-            ->where('status', '!=', 'cancelled')
-            ->orderByDesc('created_at')
-            ->get()
-            ->map(function ($kk) {
-                $breakdown = $kk->kartuPiutangBreakdown();
-                $isKpr = in_array($kk->cara_bayar, ['kpr_subsidi', 'kpr_komersil']);
+        $summary = (clone $query)->toBase()->cloneWithout(['columns', 'orders'])->selectRaw(
+            'COUNT(*) as jumlah,
+             COALESCE(SUM(CASE WHEN kavling_konsumen.fin_sisa_konsumen > 0 THEN kavling_konsumen.fin_sisa_konsumen ELSE 0 END), 0) as total_sisa,
+             COALESCE(SUM(CASE WHEN kavling_konsumen.fin_sisa_konsumen > ? AND kavling_konsumen.fin_jatuh_tempo_berikutnya < CURDATE() THEN 1 ELSE 0 END), 0) as terlambat,
+             COALESCE(SUM(CASE WHEN kavling_konsumen.fin_sisa_konsumen < ? THEN 1 ELSE 0 END), 0) as kelebihan',
+            [$eps, -$eps]
+        )->first();
+
+        [$sort, $dir] = $this->applyKeuanganSort($query, $request, [
+            'sisa'        => fn ($q, $d) => $q->orderBy('kavling_konsumen.fin_sisa_konsumen', $d),
+            'jatuh_tempo' => fn ($q, $d) => $this->orderNullsLast($q, 'kavling_konsumen.fin_jatuh_tempo_berikutnya', $d),
+            'persen'      => fn ($q, $d) => $this->orderNullsLast($q, 'kavling_konsumen.fin_terbayar_konsumen / NULLIF(kavling_konsumen.fin_piutang_konsumen, 0)', $d),
+            'akad'        => fn ($q, $d) => $this->orderNullsLast($q, 'kavling_konsumen.tanggal_akad', $d),
+            'booking'     => fn ($q, $d) => $q->orderBy('kavling_konsumen.tanggal_booking', $d),
+            'harga'       => fn ($q, $d) => $q->orderBy('kavling_konsumen.harga_deal', $d),
+            'nama'        => fn ($q, $d) => $q->orderBy('konsumens.nama', $d),
+            'unit'        => fn ($q, $d) => Kavling::applyUnitOrder($q, $d),
+        ], 'sisa');
+
+        $rows = $query
+            ->with(['konsumen:id,nama', 'kavling.project:id,nama', 'skemaDpPreset', 'biayaTambahans'])
+            ->paginate(50)
+            ->withQueryString()
+            ->through(function ($kk) {
+                $kategori = $kk->kategoriPendapatan();
+                $sisa = (float) $kk->fin_sisa_konsumen;
+                $tempo = $kk->fin_jatuh_tempo_berikutnya ? \Carbon\Carbon::parse($kk->fin_jatuh_tempo_berikutnya) : null;
+                $terlambat = $sisa > self::SISA_EPS && $tempo && $tempo->isPast();
 
                 return [
                     'id'                     => $kk->id,
-                    'konsumen_id'            => $kk->konsumen_id,
                     'konsumen_nama'          => $kk->konsumen->nama,
                     'kavling_nomor'          => $kk->kavling->nomor_lengkap,
                     'project_nama'           => $kk->kavling->project->nama,
                     'status'                 => $kk->status,
                     'status_penjualan'       => $kk->status_penjualan,
                     'status_penjualan_label' => $this->statusPenjualanLabelMap()[$kk->status_penjualan] ?? $kk->status_penjualan_label,
-                    'harga_deal'             => $kk->harga_deal,
-                    'cara_bayar'             => $kk->cara_bayar,
+                    'kategori_resmi'         => $kategori['resmi_total'],
+                    'kategori_titipan'       => $kategori['titipan_total'],
                     'cara_bayar_label'       => $this->caraBayarLabel($kk->cara_bayar),
                     'bank_rekanan_kpr'       => $kk->bank_rekanan_kpr,
-                    'total_piutang_konsumen'  => $breakdown['total_piutang_konsumen'],
-                    'total_terbayar_konsumen' => $breakdown['total_terbayar_konsumen'],
-                    'is_kpr'                 => $isKpr,
-                    'total_piutang_bank'      => $breakdown['total_piutang_bank'],
-                    'total_terbayar_bank'     => $breakdown['total_terbayar_bank'],
+                    'tanggal_akad'           => $kk->tanggal_akad?->format('d M Y'),
+                    'total_piutang'          => (float) $kk->fin_piutang_konsumen,
+                    'total_terbayar'         => (float) $kk->fin_terbayar_konsumen,
+                    'sisa'                   => $sisa,
+                    'jatuh_tempo'            => $tempo?->format('d M Y'),
+                    'terlambat'              => $terlambat,
+                    'hari_terlambat'         => $terlambat ? (int) $tempo->diffInDays(now()->startOfDay()) : 0,
+                    'siap_selesai'           => $kk->status === 'active' && (float) $kk->fin_piutang_konsumen > 0
+                        && $sisa <= self::SISA_EPS && (float) $kk->fin_sisa_bank <= self::SISA_EPS,
                 ];
             });
 
         return Inertia::render('Keuangan/Index', [
             'rows'          => $rows,
-            'filterOptions' => $filterOptions,
-            'filters'       => $request->only(['search', 'kluster', 'blok', 'status_penjualan', 'cara_bayar', 'bank']),
+            'summary'       => $summary,
+            'filterOptions' => $this->keuanganFilterOptions() + [
+                'status_penjualan' => $this->statusPenjualanLabelMap(),
+                'cara_bayar'       => ['cash' => 'Cash', 'cash_bertahap' => 'Cash Bertahap', 'kpr_subsidi' => 'KPR Subsidi', 'kpr_komersil' => 'KPR Komersil'],
+                'bank'             => KavlingKonsumen::whereNotNull('bank_rekanan_kpr')->where('bank_rekanan_kpr', '!=', '')->distinct()->orderBy('bank_rekanan_kpr')->pluck('bank_rekanan_kpr'),
+            ],
+            'filters'       => $request->only(['search', 'kluster', 'blok', 'status_penjualan', 'cara_bayar', 'bank']) + [
+                'tampil' => $tampil, 'sort' => $sort, 'dir' => $dir,
+            ],
+        ]);
+    }
+
+    /**
+     * Pencairan KPR — dana bank/pemerintah yang belum cair, khusus KPR. Default: tahap
+     * Akad/BAST dengan sisa pencairan masih ada (sebelum akad tidak ada dana yang bisa cair).
+     */
+    public function pencairan(Request $request): Response
+    {
+        abort_unless(Auth::user()->can('view keuangan'), 403);
+
+        $tampil = in_array($request->tampil, ['belum_cair', 'cair_penuh', 'semua'], true)
+            ? $request->tampil
+            : ($request->search ? 'semua' : 'belum_cair');
+        $sertakanBelumAkad = $request->boolean('belum_akad') || $request->search;
+
+        $eps = self::SISA_EPS;
+        $query = $this->keuanganBaseQuery($request)
+            ->whereIn('kavling_konsumen.cara_bayar', ['kpr_subsidi', 'kpr_komersil'])
+            ->when(!$sertakanBelumAkad, fn ($q) => $q->whereIn('kavling_konsumen.status_penjualan', ['akad', 'bast']))
+            ->when($request->bank, fn ($q) => $q->where('kavling_konsumen.bank_rekanan_kpr', $request->bank))
+            ->when($request->cara_bayar, fn ($q) => $q->where('kavling_konsumen.cara_bayar', $request->cara_bayar))
+            ->when($tampil === 'belum_cair', fn ($q) => $q->where('kavling_konsumen.fin_sisa_bank', '>', $eps))
+            ->when($tampil === 'cair_penuh', fn ($q) => $q
+                ->where('kavling_konsumen.fin_piutang_bank', '>', 0)
+                ->where('kavling_konsumen.fin_sisa_bank', '<=', $eps));
+
+        $summary = (clone $query)->toBase()->cloneWithout(['columns', 'orders'])->selectRaw(
+            'COUNT(*) as jumlah,
+             COALESCE(SUM(CASE WHEN kavling_konsumen.fin_sisa_bank > 0 THEN kavling_konsumen.fin_sisa_bank ELSE 0 END), 0) as total_sisa,
+             COALESCE(SUM(CASE WHEN kavling_konsumen.fin_sisa_bank > ? AND kavling_konsumen.tanggal_akad IS NOT NULL AND DATEDIFF(CURDATE(), kavling_konsumen.tanggal_akad) > 30 THEN 1 ELSE 0 END), 0) as lewat_30_hari',
+            [$eps]
+        )->first();
+
+        [$sort, $dir] = $this->applyKeuanganSort($query, $request, [
+            'sisa'   => fn ($q, $d) => $q->orderBy('kavling_konsumen.fin_sisa_bank', $d),
+            'akad'   => fn ($q, $d) => $this->orderNullsLast($q, 'kavling_konsumen.tanggal_akad', $d),
+            'persen' => fn ($q, $d) => $this->orderNullsLast($q, 'kavling_konsumen.fin_terbayar_bank / NULLIF(kavling_konsumen.fin_piutang_bank, 0)', $d),
+            'plafon' => fn ($q, $d) => $this->orderNullsLast($q, 'kavling_konsumen.plafon_kpr', $d),
+            'bank'   => fn ($q, $d) => $this->orderNullsLast($q, 'kavling_konsumen.bank_rekanan_kpr', $d),
+            'nama'   => fn ($q, $d) => $q->orderBy('konsumens.nama', $d),
+            'unit'   => fn ($q, $d) => Kavling::applyUnitOrder($q, $d),
+        ], 'sisa');
+
+        $rows = $query
+            ->with(['konsumen:id,nama', 'kavling.project:id,nama'])
+            ->paginate(50)
+            ->withQueryString()
+            ->through(function ($kk) {
+                return [
+                    'id'                     => $kk->id,
+                    'konsumen_nama'          => $kk->konsumen->nama,
+                    'kavling_nomor'          => $kk->kavling->nomor_lengkap,
+                    'project_nama'           => $kk->kavling->project->nama,
+                    'status'                 => $kk->status,
+                    'status_penjualan'       => $kk->status_penjualan,
+                    'status_penjualan_label' => $this->statusPenjualanLabelMap()[$kk->status_penjualan] ?? $kk->status_penjualan_label,
+                    'cara_bayar_label'       => $this->caraBayarLabel($kk->cara_bayar),
+                    'bank_rekanan_kpr'       => $kk->bank_rekanan_kpr,
+                    'plafon_kpr'             => $kk->plafon_kpr !== null ? (float) $kk->plafon_kpr : null,
+                    'tanggal_akad'           => $kk->tanggal_akad?->format('d M Y'),
+                    'hari_sejak_akad'        => $kk->tanggal_akad ? (int) $kk->tanggal_akad->diffInDays(now()->startOfDay()) : null,
+                    'total_piutang'          => (float) $kk->fin_piutang_bank,
+                    'total_terbayar'         => (float) $kk->fin_terbayar_bank,
+                    'sisa'                   => (float) $kk->fin_sisa_bank,
+                ];
+            });
+
+        return Inertia::render('Keuangan/Pencairan', [
+            'rows'          => $rows,
+            'summary'       => $summary,
+            'filterOptions' => $this->keuanganFilterOptions() + [
+                'cara_bayar' => ['kpr_subsidi' => 'KPR Subsidi', 'kpr_komersil' => 'KPR Komersil'],
+                'bank'       => KavlingKonsumen::whereNotNull('bank_rekanan_kpr')->where('bank_rekanan_kpr', '!=', '')->distinct()->orderBy('bank_rekanan_kpr')->pluck('bank_rekanan_kpr'),
+            ],
+            'filters'       => $request->only(['search', 'kluster', 'blok', 'cara_bayar', 'bank']) + [
+                'tampil' => $tampil, 'belum_akad' => $request->boolean('belum_akad') ? '1' : '', 'sort' => $sort, 'dir' => $dir,
+            ],
         ]);
     }
 
@@ -163,15 +242,13 @@ class KeuanganController extends Controller
         $this->authorizeProjectAccess($kk->kavling->project);
 
         $kk->load([
-            'konsumen:id,nama,no_hp', 'kavling.project:id,nama', 'skemaDpPreset', 'promoPreset:id,nama', 'pembayarans',
+            'konsumen:id,nama,no_hp', 'kavling.project:id,nama', 'skemaDpPreset', 'promoPreset:id,nama', 'programAllInPreset:id,nama', 'pembayarans',
             'jadwalTagihans' => fn($q) => $q->orderBy('jenis')->orderBy('nomor_cicilan'),
             'jadwalTagihans.pembayaran',
-            'biayaTambahans.pembayaran',
-            'biayaKelebihanTanahPembayaran',
+            'biayaTambahans.pembayarans',
             'rincianBiayaAkad' => fn($q) => $q->orderBy('kategori')->orderBy('nama'),
             'rincianBiayaAkad.pembayaran',
             'pencairanKprTahaps' => fn($q) => $q->orderBy('tanggal_cair'),
-            'tambahanUmPembayaran',
         ]);
 
         $breakdown = $kk->kartuPiutangBreakdown();
@@ -208,6 +285,8 @@ class KeuanganController extends Controller
                 'diskon_nilai'   => $kk->diskon_nilai,
                 'diskon_nominal' => $kk->diskon_nominal,
                 'promo_nama'     => $kk->promoPreset?->nama,
+                'program_all_in_nama'        => $kk->programAllInPreset?->nama,
+                'titipan_biaya_akad_nominal' => $kk->titipan_biaya_akad_nominal,
                 'skema_dp_preset' => $kk->skemaDpPreset ? [
                     'nama'                         => $kk->skemaDpPreset->nama,
                     'booking_fee_aktif'            => $kk->skemaDpPreset->booking_fee_aktif,
@@ -288,9 +367,9 @@ class KeuanganController extends Controller
         $this->authorizeProjectAccess($kk->kavling->project);
 
         $kk->load([
-            'jadwalTagihans.pembayaran', 'biayaTambahans.pembayaran',
-            'biayaKelebihanTanahPembayaran', 'rincianBiayaAkad.pembayaran',
-            'skemaDpPreset', 'pembayarans', 'pencairanKprTahaps', 'tambahanUmPembayaran',
+            'jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans',
+            'rincianBiayaAkad.pembayaran',
+            'skemaDpPreset', 'pembayarans', 'pencairanKprTahaps',
         ]);
         $breakdown = $kk->kartuPiutangBreakdown();
 
@@ -524,133 +603,68 @@ class KeuanganController extends Controller
     }
 
     /**
-     * Catat/edit pembayaran Biaya Penambahan Tanah (field tunggal, bukan
-     * relasi tersendiri, jadi statusnya disimpan langsung di
-     * kavling_konsumen). Submit berikutnya kalau sudah ada pembayaran =
-     * edit baris yang sama, status sebagian/lunas dari perbandingan nominal.
+     * Catat satu cicilan Biaya Penambahan Tanah/Tambahan Uang Muka/Titipan
+     * Biaya Akad — ketiganya bisa dibayar berkali-kali kapan saja (bukan
+     * tenor pre-generate seperti Booking Fee/DP), jadi tiap submit SELALU
+     * bikin baris pembayaran_konsumens baru, tidak menimpa yang lama. Status
+     * (belum_bayar/sebagian/lunas) dihitung on-the-fly di
+     * KavlingKonsumen::kartuPiutangBreakdown() dari SUM seluruh cicilan
+     * berjenis sama, bukan disimpan.
      */
-    public function payBiayaTanah(Request $request, KavlingKonsumen $kk): RedirectResponse
+    private function storeCicilanKonsumen(Request $request, KavlingKonsumen $kk, string $jenis, string $labelDefault): RedirectResponse
     {
         $this->authorizeProjectAccess($kk->kavling->project);
         abort_unless(Auth::user()->can('manage pembayaran'), 403);
+        $this->assertTransactionEditable($kk, "Catat cicilan {$labelDefault}");
+
+        $validated = $request->validate([
+            'jumlah'        => 'required|numeric|min:1',
+            'tanggal_bayar' => 'required|date',
+            'keterangan'    => 'nullable|string|max:500',
+        ]);
+
+        $kk->pembayarans()->create([
+            'jenis'         => $jenis,
+            'jumlah'        => $validated['jumlah'],
+            'tanggal_bayar' => $validated['tanggal_bayar'],
+            'keterangan'    => $validated['keterangan'] ?? $labelDefault,
+            'created_by'    => Auth::id(),
+        ]);
+
+        return back()->with('success', "Cicilan {$labelDefault} berhasil dicatat.");
+    }
+
+    public function storeBiayaTanahCicilan(Request $request, KavlingKonsumen $kk): RedirectResponse
+    {
         abort_unless($kk->biaya_kelebihan_tanah_aktif, 422, 'Transaksi ini tidak punya Biaya Penambahan Tanah.');
-        $this->assertTransactionEditable($kk, 'Catat pembayaran biaya tanah');
-
-        $validated = $request->validate([
-            'jumlah'        => 'required|numeric|min:1',
-            'tanggal_bayar' => 'required|date',
-            'keterangan'    => 'nullable|string|max:500',
-        ]);
-
-        if ($kk->biayaKelebihanTanahPembayaran) {
-            $kk->biayaKelebihanTanahPembayaran->update([
-                'jumlah'        => $validated['jumlah'],
-                'tanggal_bayar' => $validated['tanggal_bayar'],
-                'keterangan'    => $validated['keterangan'] ?? $kk->biayaKelebihanTanahPembayaran->keterangan,
-            ]);
-        } else {
-            $pembayaran = $kk->pembayarans()->create([
-                'jenis'         => 'biaya_tanah',
-                'jumlah'        => $validated['jumlah'],
-                'tanggal_bayar' => $validated['tanggal_bayar'],
-                'keterangan'    => $validated['keterangan'] ?? 'Biaya Penambahan Tanah',
-                'created_by'    => Auth::id(),
-            ]);
-            $kk->biaya_kelebihan_tanah_pembayaran_id = $pembayaran->id;
-        }
-
-        $kk->biaya_kelebihan_tanah_status = $this->resolveItemStatus((float) $validated['jumlah'], (float) $kk->biaya_kelebihan_tanah_nominal);
-        $kk->save();
-
-        return back()->with('success', 'Pembayaran Biaya Penambahan Tanah berhasil dicatat.');
+        return $this->storeCicilanKonsumen($request, $kk, 'biaya_tanah', 'Biaya Penambahan Tanah');
     }
 
-    /**
-     * Batalkan pencatatan pembayaran Biaya Penambahan Tanah.
-     */
-    public function destroyBiayaTanahPembayaran(KavlingKonsumen $kk): RedirectResponse
+    public function storeTambahanUmCicilan(Request $request, KavlingKonsumen $kk): RedirectResponse
     {
-        $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('manage pembayaran'), 403);
-        $this->assertTransactionEditable($kk, 'Hapus pembayaran biaya tanah');
-
-        $pembayaran = $kk->biayaKelebihanTanahPembayaran;
-        $kk->update(['biaya_kelebihan_tanah_status' => 'belum_bayar', 'biaya_kelebihan_tanah_pembayaran_id' => null]);
-        $pembayaran?->delete();
-
-        return back()->with('success', 'Pencatatan pembayaran biaya tanah dibatalkan.');
-    }
-
-    /**
-     * Catat/edit pembayaran Tambahan Uang Muka (muncul kalau bank turun
-     * plafon) — nominalnya dihitung ulang dari kartuPiutangBreakdown()
-     * (bukan disimpan sebagai kolom terpisah), field tunggal di
-     * kavling_konsumen sama seperti Biaya Penambahan Tanah.
-     */
-    public function payTambahanUm(Request $request, KavlingKonsumen $kk): RedirectResponse
-    {
-        $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('manage pembayaran'), 403);
-        $this->assertTransactionEditable($kk, 'Catat pembayaran tambahan uang muka');
-
-        $validated = $request->validate([
-            'jumlah'        => 'required|numeric|min:1',
-            'tanggal_bayar' => 'required|date',
-            'keterangan'    => 'nullable|string|max:500',
-        ]);
-
         $kk->load(['jadwalTagihans', 'skemaDpPreset', 'rincianBiayaAkad']);
         $tambahanUm = (float) ($kk->kartuPiutangBreakdown()['pencairan_kpr']['tambahan_um'] ?? 0);
         abort_if($tambahanUm <= 0, 422, 'Transaksi ini tidak punya Tambahan Uang Muka yang perlu dibayar.');
+        return $this->storeCicilanKonsumen($request, $kk, 'tambahan_um', 'Tambahan Uang Muka');
+    }
 
-        if ($kk->tambahanUmPembayaran) {
-            $kk->tambahanUmPembayaran->update([
-                'jumlah'        => $validated['jumlah'],
-                'tanggal_bayar' => $validated['tanggal_bayar'],
-                'keterangan'    => $validated['keterangan'] ?? $kk->tambahanUmPembayaran->keterangan,
-            ]);
-        } else {
-            $pembayaran = $kk->pembayarans()->create([
-                'jenis'         => 'tambahan_um',
-                'jumlah'        => $validated['jumlah'],
-                'tanggal_bayar' => $validated['tanggal_bayar'],
-                'keterangan'    => $validated['keterangan'] ?? 'Tambahan Uang Muka',
-                'created_by'    => Auth::id(),
-            ]);
-            $kk->tambahan_um_pembayaran_id = $pembayaran->id;
-        }
-
-        $kk->tambahan_um_status = $this->resolveItemStatus((float) $validated['jumlah'], $tambahanUm);
-        $kk->save();
-
-        return back()->with('success', 'Pembayaran Tambahan Uang Muka berhasil dicatat.');
+    public function storeTitipanBiayaAkadCicilan(Request $request, KavlingKonsumen $kk): RedirectResponse
+    {
+        abort_unless((float) $kk->titipan_biaya_akad_nominal > 0, 422, 'Transaksi ini tidak punya Titipan Biaya Akad.');
+        return $this->storeCicilanKonsumen($request, $kk, 'titipan_biaya_akad', 'Titipan Biaya Akad');
     }
 
     /**
-     * Batalkan pencatatan pembayaran Tambahan Uang Muka.
+     * Ubah satu baris cicilan (koreksi human error) — berlaku generik untuk
+     * ketiga jenis di atas, karena baris cicilannya sendiri cuma baris biasa
+     * di pembayaran_konsumens (bukan model terpisah per jenis).
      */
-    public function destroyTambahanUmPembayaran(KavlingKonsumen $kk): RedirectResponse
+    public function updateCicilanKonsumen(Request $request, PembayaranKonsumen $pembayaran): RedirectResponse
     {
+        $kk = $pembayaran->transaksi;
         $this->authorizeProjectAccess($kk->kavling->project);
         abort_unless(Auth::user()->can('manage pembayaran'), 403);
-        $this->assertTransactionEditable($kk, 'Hapus pembayaran tambahan uang muka');
-
-        $pembayaran = $kk->tambahanUmPembayaran;
-        $kk->update(['tambahan_um_status' => 'belum_bayar', 'tambahan_um_pembayaran_id' => null]);
-        $pembayaran?->delete();
-
-        return back()->with('success', 'Pencatatan pembayaran tambahan uang muka dibatalkan.');
-    }
-
-    /**
-     * Catat/edit pembayaran satu item Biaya Tambahan Lain.
-     */
-    public function payBiayaTambahan(Request $request, KavlingKonsumenBiayaTambahan $item): RedirectResponse
-    {
-        $kk = $item->kavlingKonsumen;
-        $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('manage pembayaran'), 403);
-        $this->assertTransactionEditable($kk, 'Catat pembayaran biaya tambahan');
+        $this->assertTransactionEditable($kk, 'Ubah cicilan pembayaran');
 
         $validated = $request->validate([
             'jumlah'        => 'required|numeric|min:1',
@@ -658,44 +672,60 @@ class KeuanganController extends Controller
             'keterangan'    => 'nullable|string|max:500',
         ]);
 
-        if ($item->pembayaran) {
-            $item->pembayaran->update([
-                'jumlah'        => $validated['jumlah'],
-                'tanggal_bayar' => $validated['tanggal_bayar'],
-                'keterangan'    => $validated['keterangan'] ?? $item->pembayaran->keterangan,
-            ]);
-        } else {
-            $pembayaran = $kk->pembayarans()->create([
-                'jenis'         => 'biaya_tambahan',
-                'jumlah'        => $validated['jumlah'],
-                'tanggal_bayar' => $validated['tanggal_bayar'],
-                'keterangan'    => $validated['keterangan'] ?? $item->nama,
-                'created_by'    => Auth::id(),
-            ]);
-            $item->pembayaran_konsumen_id = $pembayaran->id;
-        }
+        $pembayaran->update($validated);
 
-        $item->status = $this->resolveItemStatus((float) $validated['jumlah'], (float) $item->nominal);
-        $item->save();
-
-        return back()->with('success', 'Pembayaran biaya tambahan berhasil dicatat.');
+        return back()->with('success', 'Cicilan berhasil diperbarui.');
     }
 
     /**
-     * Batalkan pencatatan pembayaran satu item Biaya Tambahan.
+     * Hapus satu baris cicilan (salah catat) — generik untuk ketiga jenis.
      */
-    public function destroyBiayaTambahanPembayaran(KavlingKonsumenBiayaTambahan $item): RedirectResponse
+    public function destroyCicilanKonsumen(PembayaranKonsumen $pembayaran): RedirectResponse
+    {
+        $kk = $pembayaran->transaksi;
+        $this->authorizeProjectAccess($kk->kavling->project);
+        abort_unless(Auth::user()->can('manage pembayaran'), 403);
+        $this->assertTransactionEditable($kk, 'Hapus cicilan pembayaran');
+
+        $pembayaran->delete();
+
+        return back()->with('success', 'Cicilan berhasil dihapus.');
+    }
+
+    /**
+     * Catat cicilan satu item Biaya Tambahan Lain — pola sama persis Biaya
+     * Tanah/Tambahan UM/Titipan Biaya Akad (baris pembayaran_konsumens baru
+     * tiap submit, status dihitung on-the-fly dari SUM), bedanya di sini
+     * satu transaksi bisa punya banyak item Biaya Tambahan berbeda sekaligus
+     * (multi-preset), jadi tiap cicilan perlu ditandai dia punya item yang
+     * mana lewat kavling_konsumen_biaya_tambahan_id — bukan cuma `jenis`.
+     * Edit/hapus cicilannya reuse updateCicilanKonsumen/destroyCicilanKonsumen
+     * di atas (generik, tidak peduli jenis/item).
+     */
+    public function storeBiayaTambahanCicilan(Request $request, KavlingKonsumenBiayaTambahan $item): RedirectResponse
     {
         $kk = $item->kavlingKonsumen;
         $this->authorizeProjectAccess($kk->kavling->project);
         abort_unless(Auth::user()->can('manage pembayaran'), 403);
-        $this->assertTransactionEditable($kk, 'Hapus pembayaran biaya tambahan');
+        $this->assertTransactionEditable($kk, "Catat cicilan {$item->nama}");
 
-        $pembayaran = $item->pembayaran;
-        $item->update(['status' => 'belum_bayar', 'pembayaran_konsumen_id' => null]);
-        $pembayaran?->delete();
+        $validated = $request->validate([
+            'jumlah'        => 'required|numeric|min:1',
+            'tanggal_bayar' => 'required|date',
+            'keterangan'    => 'nullable|string|max:500',
+        ]);
 
-        return back()->with('success', 'Pencatatan pembayaran biaya tambahan dibatalkan.');
+        PembayaranKonsumen::create([
+            'kavling_konsumen_id'                 => $kk->id,
+            'kavling_konsumen_biaya_tambahan_id'   => $item->id,
+            'jenis'         => 'biaya_tambahan',
+            'jumlah'        => $validated['jumlah'],
+            'tanggal_bayar' => $validated['tanggal_bayar'],
+            'keterangan'    => $validated['keterangan'] ?? $item->nama,
+            'created_by'    => Auth::id(),
+        ]);
+
+        return back()->with('success', "Cicilan {$item->nama} berhasil dicatat.");
     }
 
     /**

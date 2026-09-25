@@ -94,6 +94,12 @@ const pct = (paid, total) => total > 0 ? Math.min(100, Math.round((Number(paid) 
 const expandedFinansial = ref({ nilai: false, konsumen: false, bank: false });
 const toggleFinansial = (key) => { expandedFinansial.value[key] = !expandedFinansial.value[key]; };
 
+// Total per kategori (Kategori 1 Resmi / Kategori 2 Titipan) — jumlah dari
+// rincian per item, bukan field terpisah dari backend.
+const sumRincian = (obj) => Object.values(obj ?? {}).reduce((s, v) => s + Number(v || 0), 0);
+const kategoriResmiTotal = computed(() => sumRincian(props.financials?.nilai_transaksi_rincian?.resmi));
+const kategoriTitipanTotal = computed(() => sumRincian(props.financials?.nilai_transaksi_rincian?.titipan));
+
 // ═══════════════════════════════════════════════════════════════════════
 // Laporan Periode — date-range terpisah dari "kondisi sekarang" di atas.
 // Pipeline Penjualan & Cara Pembayaran bersifat dual-mode: live kalau
@@ -234,22 +240,50 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                         </div>
                         <div class="text-white font-bold text-xl">{{ formatRp(financials?.total_pendapatan) }}</div>
                         <div class="text-slate-600 text-xs mt-1">Harga deal, semua transaksi berjalan</div>
-                        <div v-if="expandedFinansial.nilai" class="mt-3 pt-3 border-t border-slate-800 space-y-1.5">
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-slate-400">Harga Dasar</span>
-                                <span class="text-slate-300">{{ formatRp(financials?.nilai_transaksi_rincian?.harga_dasar) }}</span>
+                        <div v-if="expandedFinansial.nilai" class="mt-3 pt-3 border-t border-slate-800 space-y-3">
+                            <div>
+                                <div class="flex items-center justify-between text-[11px] text-slate-500 uppercase tracking-wide mb-1">
+                                    <span>Kategori 1 — Pendapatan Resmi</span>
+                                    <span class="text-slate-400 normal-case">{{ formatRp(kategoriResmiTotal) }}</span>
+                                </div>
+                                <div class="space-y-1 pl-2">
+                                    <div class="flex items-center justify-between text-xs">
+                                        <span class="text-slate-400">Harga Dasar</span>
+                                        <span class="text-slate-300">{{ formatRp(financials?.nilai_transaksi_rincian?.resmi?.harga_dasar) }}</span>
+                                    </div>
+                                    <div v-if="financials?.nilai_transaksi_rincian?.resmi?.booking_fee > 0" class="flex items-center justify-between text-xs">
+                                        <span class="text-slate-400">Booking Fee</span>
+                                        <span class="text-slate-300">{{ formatRp(financials?.nilai_transaksi_rincian?.resmi?.booking_fee) }}</span>
+                                    </div>
+                                    <div v-if="financials?.nilai_transaksi_rincian?.resmi?.diskon < 0" class="flex items-center justify-between text-xs">
+                                        <span class="text-slate-400">Diskon/Promo</span>
+                                        <span class="text-rose-400">{{ formatRp(financials?.nilai_transaksi_rincian?.resmi?.diskon) }}</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-slate-400">Biaya Tambahan Tanah</span>
-                                <span class="text-slate-300">{{ formatRp(financials?.nilai_transaksi_rincian?.biaya_tanah) }}</span>
-                            </div>
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-slate-400">Biaya Tambahan Lainnya</span>
-                                <span class="text-slate-300">{{ formatRp(financials?.nilai_transaksi_rincian?.biaya_tambahan_lain) }}</span>
-                            </div>
-                            <div v-if="financials?.nilai_transaksi_rincian?.diskon > 0" class="flex items-center justify-between text-xs">
-                                <span class="text-slate-400">Diskon/Promo</span>
-                                <span class="text-rose-400">-{{ formatRp(financials?.nilai_transaksi_rincian?.diskon) }}</span>
+                            <div>
+                                <div class="flex items-center justify-between text-[11px] text-slate-500 uppercase tracking-wide mb-1">
+                                    <span>Kategori 2 — Dana Rekening Titipan</span>
+                                    <span class="text-slate-400 normal-case">{{ formatRp(kategoriTitipanTotal) }}</span>
+                                </div>
+                                <div class="space-y-1 pl-2">
+                                    <div class="flex items-center justify-between text-xs">
+                                        <span class="text-slate-400">Biaya Tambahan Tanah</span>
+                                        <span class="text-slate-300">{{ formatRp(financials?.nilai_transaksi_rincian?.titipan?.biaya_tanah) }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between text-xs">
+                                        <span class="text-slate-400">Biaya Tambahan Lainnya</span>
+                                        <span class="text-slate-300">{{ formatRp(financials?.nilai_transaksi_rincian?.titipan?.biaya_tambahan_lain) }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between text-xs">
+                                        <span class="text-slate-400">Titipan Biaya Akad</span>
+                                        <span class="text-slate-300">{{ formatRp(financials?.nilai_transaksi_rincian?.titipan?.titipan_biaya_akad) }}</span>
+                                    </div>
+                                    <div v-if="financials?.nilai_transaksi_rincian?.titipan?.booking_fee > 0" class="flex items-center justify-between text-xs">
+                                        <span class="text-slate-400">Booking Fee</span>
+                                        <span class="text-slate-300">{{ formatRp(financials?.nilai_transaksi_rincian?.titipan?.booking_fee) }}</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -554,7 +588,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                         </thead>
                         <tbody class="divide-y divide-slate-800/60">
                             <tr v-for="s in performaSales" :key="s.sales_agent_id">
-                                <td class="px-5 py-2.5 text-slate-200">{{ s.nama }} <span v-if="s.agency_nama" class="text-slate-500 text-xs">· {{ s.agency_nama }}</span></td>
+                                <td class="px-5 py-2.5 text-slate-200">{{ s.nama }} <span v-if="s.tipe_label" class="text-slate-500 text-xs">· {{ s.tipe_label }}</span></td>
                                 <td class="px-4 py-2.5 text-right text-slate-300 font-medium">{{ s.jumlah_booking }}</td>
                                 <td class="px-5 py-2.5 text-right text-slate-300">{{ s.conversion_rate }}%</td>
                             </tr>

@@ -14,6 +14,8 @@ const props = defineProps({
     statusBangunStages: Array,
     biayaTambahanPresets: { type: Array, default: () => [] },
     promoPresets: { type: Array, default: () => [] },
+    programAllInPresets: { type: Array, default: () => [] },
+    suratTemplates: { type: Array, default: () => [] },
 });
 
 const canManageKpr = computed(() => usePage().props.auth.user?.permissions?.includes('manage kpr'));
@@ -42,7 +44,8 @@ const canEditBiayaAkad = (trx) => canManageKpr.value && (!trx.is_locked || isMan
 // sama sekali (lihat BookingController::updateRincianPesanan).
 const canBookKavling = computed(() => usePage().props.auth.user?.permissions?.includes('book kavling'));
 const canEditRincian = (trx) => canBookKavling.value && (!trx.is_locked || isManajerOrAdmin.value);
-const biayaKelebihanLocked = (trx) => trx.biaya_kelebihan_tanah_status && trx.biaya_kelebihan_tanah_status !== 'belum_bayar';
+const biayaKelebihanLocked = (trx) => !!trx.biaya_kelebihan_tanah_locked;
+const titipanBiayaAkadLocked = (trx) => !!trx.titipan_biaya_akad_locked;
 
 const editingRincian = reactive({});
 const rincianForms = reactive({});
@@ -59,6 +62,7 @@ const getRincianForm = (trx) => {
             promo_preset_id: trx.promo_preset_id ?? '',
             diskon_mode: trx.diskon_mode ?? '',
             diskon_nilai: trx.diskon_nilai ?? '',
+            program_all_in_preset_id: trx.program_all_in_preset_id ?? '',
             processing: false,
             errors: {},
         };
@@ -74,7 +78,7 @@ const openEditRincian = (trx) => {
 const cancelEditRincian = (trxId) => { editingRincian[trxId] = false; };
 
 const addRincianBiayaTambahan = (trx) => {
-    getRincianForm(trx).biaya_tambahan.push({ id: null, preset_id: '', nama: '', nominal: '', status: 'belum_bayar' });
+    getRincianForm(trx).biaya_tambahan.push({ id: null, preset_id: '', nama: '', nominal: '', locked: false });
 };
 const removeRincianBiayaTambahan = (trx, idx) => {
     getRincianForm(trx).biaya_tambahan.splice(idx, 1);
@@ -94,6 +98,7 @@ const submitRincianPesanan = (trx) => {
         promo_preset_id: form.promo_preset_id || null,
         diskon_mode: form.diskon_mode || null,
         diskon_nilai: form.diskon_nilai || null,
+        program_all_in_preset_id: form.program_all_in_preset_id || null,
     }, {
         preserveScroll: true,
         onSuccess: () => { editingRincian[trx.id] = false; delete rincianForms[trx.id]; },
@@ -108,10 +113,9 @@ const submitRincianPesanan = (trx) => {
 const canPayItem = () => false;
 const canPayDajamSbum = () => false;
 
-// Rincian Biaya Akad (dajam/sbum/biaya_akad) sekarang tampil di 2 tempat
-// berbeda: dajam & sbum jadi baris di Kartu Piutang, biaya_akad jadi baris
-// di Kartu Piutang Titipan — masing-masing dengan form tambah sendiri
-// (form di-key per section biar gak tabrakan).
+// Rincian Biaya Akad (dajam/sbum) — dajam & sbum jadi baris di Pencairan
+// KPR, masing-masing dengan form tambah sendiri (form di-key per section
+// biar gak tabrakan).
 const biayaAkadForms = reactive({});
 const getBiayaAkadForm = (trxId, section) => {
     const key = `${trxId}:${section}`;
@@ -121,16 +125,13 @@ const getBiayaAkadForm = (trxId, section) => {
 
 const sbumItems = (trx) => (trx.rincian_biaya_akad || []).filter(i => i.kategori === 'sbum');
 const dajamItems = (trx) => (trx.rincian_biaya_akad || []).filter(i => i.kategori === 'dajam');
-const biayaAkadTitipanItems = (trx) => (trx.rincian_biaya_akad || []).filter(i => i.kategori === 'biaya_akad');
 
 // SBUM cuma relevan untuk KPR Subsidi — di luar itu opsi tambah SBUM
 // disembunyikan (tapi item SBUM lama yang sudah ada tetap ditampilkan apa adanya).
 const sbumPresetOptions = computed(() => props.dajamSbumPresets.filter(p => p.kategori === 'sbum'));
 const dajamPresetOptions = computed(() => props.dajamSbumPresets.filter(p => p.kategori === 'dajam'));
-const biayaAkadPresetOptions = computed(() => props.dajamSbumPresets.filter(p => p.kategori === 'biaya_akad'));
 
 const totalKartuPiutang = (trx) => (trx.kartu_piutang_static || []).reduce((sum, i) => sum + Number(i.nominal), 0);
-const totalTitipan = (trx) => biayaAkadTitipanItems(trx).reduce((sum, i) => sum + Number(i.nominal), 0);
 
 const addBiayaAkad = (trx, section) => {
     const form = getBiayaAkadForm(trx.id, section);
@@ -159,12 +160,27 @@ const removeBiayaAkad = (item) => {
 // dirender sebagai grup — klik row utk expand/collapse lihat detail per
 // cicilan inline, tidak ada lagi section "lihat detail cicilan" terpisah.
 const rowJenisMap = { booking_fee_group: 'booking_fee', dp_group: 'dp', pelunasan_group: 'pelunasan' };
-const isGroupRow = (row) => !!rowJenisMap[row.type];
+// Biaya Tanah/Tambahan UM/Titipan Biaya Akad/Biaya Tambahan — cicilan bebas,
+// datanya sudah dikirim langsung di row.cicilan (bukan difilter dari
+// jadwal_tagihan). Halaman ini murni read-only, jadi cuma perlu expand utk
+// lihat, tanpa aksi. Biaya Tambahan beda dari 3 lainnya: satu transaksi bisa
+// punya banyak baris bertipe sama (multi-preset), jadi expand-state harus
+// discope per row.id juga, bukan cuma row.type.
+const cicilanLainGroupTypes = ['biaya_tanah_group', 'tambahan_um_group', 'titipan_biaya_akad_group', 'biaya_tambahan_group'];
+const isGroupRow = (row) => !!rowJenisMap[row.type] || cicilanLainGroupTypes.includes(row.type);
 const cicilanForRow = (trx, row) => (trx.jadwal_tagihan || []).filter(j => j.jenis === rowJenisMap[row.type]);
 const expandedRows = reactive({});
-const rowKey = (trxId, type) => `${trxId}:${type}`;
-const isRowExpanded = (trxId, type) => !!expandedRows[rowKey(trxId, type)];
-const toggleRowExpand = (trxId, type) => { const k = rowKey(trxId, type); expandedRows[k] = !expandedRows[k]; };
+const rowKey = (trxId, row) => `${trxId}:${row.type}:${row.id ?? ''}`;
+const isRowExpanded = (trxId, row) => !!expandedRows[rowKey(trxId, row)];
+const toggleRowExpand = (trxId, row) => { const k = rowKey(trxId, row); expandedRows[k] = !expandedRows[k]; };
+
+// ── Cetak Dokumen — 1 form per transaksi, template dipilih lewat dropdown
+// (bukan expand-list per template) supaya tidak menuh-menuhin layar makin
+// banyak Template Surat ditambahkan. Native form (GET) karena generate-nya
+// murni export file, tidak ubah data — lihat SuratGenerateController.
+const cetakTemplateId = reactive({});
+const selectedTemplateId = (trxId) => cetakTemplateId[trxId] ?? props.suratTemplates[0]?.id;
+const setCetakTemplateId = (trxId, val) => { cetakTemplateId[trxId] = val; };
 
 // Tambahan Uang Muka sekarang baris Kartu Piutang sungguhan — ambil dari
 // kartu_piutang_static biar status/jumlah_dibayar konsisten. Pencairan KPR
@@ -243,11 +259,6 @@ onMounted(() => {
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
-                        <a v-if="konsumen.drive_folder_link"
-                            :href="konsumen.drive_folder_link" target="_blank" rel="noopener noreferrer"
-                            class="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-sm rounded-lg transition-colors border border-emerald-500/20">
-                            📁 Buka Folder Google Drive
-                        </a>
                         <Link :href="route('konsumens.edit', konsumen.id)"
                             class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm rounded-lg transition-colors border border-slate-700">
                             ✏️ Edit
@@ -381,6 +392,10 @@ onMounted(() => {
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.nik ?? '-' }}</div>
                             </div>
                             <div>
+                                <div class="text-slate-500 text-[11px]">NPWP</div>
+                                <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.npwp ?? '-' }}</div>
+                            </div>
+                            <div>
                                 <div class="text-slate-500 text-[11px]">Email</div>
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.email ?? '-' }}</div>
                             </div>
@@ -394,7 +409,7 @@ onMounted(() => {
                             </div>
                             <div>
                                 <div class="text-slate-500 text-[11px]">Sumber Lead</div>
-                                <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.sumber_lead_nama ?? '-' }}</div>
+                                <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.sumber_lead_nama ?? '-' }}<span v-if="konsumen.referral_keterangan" class="text-slate-400"> — {{ konsumen.referral_keterangan }}</span></div>
                             </div>
                             <div>
                                 <div class="text-slate-500 text-[11px]">Alamat</div>
@@ -440,6 +455,7 @@ onMounted(() => {
                                 <div class="text-slate-500 text-[11px] uppercase tracking-wide mb-1">
                                     Cara Pembayaran: {{ trx.cara_bayar_label }}
                                     <span v-if="trx.skema_dp_preset" class="text-slate-600 normal-case">· Skema: {{ trx.skema_dp_preset.nama }}</span>
+                                    <span v-if="trx.program_all_in_nama" class="text-slate-600 normal-case">· Program All In: {{ trx.program_all_in_nama }}</span>
                                 </div>
                                 <div v-if="trx.booking_fee > 0" class="flex justify-between text-slate-400">
                                     <span>
@@ -463,7 +479,11 @@ onMounted(() => {
                                     </span>
                                     <span class="text-slate-300">{{ formatRp(trx.dp_nominal) }}</span>
                                 </div>
-                                <div v-if="!(trx.booking_fee > 0) && !(trx.dp_nominal > 0)" class="text-slate-600 text-xs">Tidak ada booking fee maupun DP.</div>
+                                <div v-if="trx.titipan_biaya_akad_nominal > 0" class="flex justify-between text-slate-400">
+                                    <span>Titipan Biaya Akad<span class="text-slate-600 text-xs ml-1">(dari Program All In)</span></span>
+                                    <span class="text-slate-300">{{ formatRp(trx.titipan_biaya_akad_nominal) }}</span>
+                                </div>
+                                <div v-if="!(trx.booking_fee > 0) && !(trx.dp_nominal > 0) && !(trx.titipan_biaya_akad_nominal > 0)" class="text-slate-600 text-xs">Tidak ada booking fee maupun DP.</div>
                             </div>
                         </div>
 
@@ -498,10 +518,10 @@ onMounted(() => {
                                     <div v-if="getRincianForm(trx).biaya_kelebihan_tanah_mode === 'per_m2'" class="grid grid-cols-2 gap-2">
                                         <input v-model="getRincianForm(trx).biaya_kelebihan_tanah_luas" type="number" min="0" step="0.01" placeholder="Luas (m²)"
                                             class="px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                                        <input v-model="getRincianForm(trx).biaya_kelebihan_tanah_harga_per_m2" type="number" min="0" placeholder="Harga/m²"
+                                        <MoneyInput v-model="getRincianForm(trx).biaya_kelebihan_tanah_harga_per_m2" placeholder="Harga/m²"
                                             class="px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                     </div>
-                                    <input v-else v-model="getRincianForm(trx).biaya_kelebihan_tanah_nominal_input" type="number" min="0" placeholder="Nominal"
+                                    <MoneyInput v-else v-model="getRincianForm(trx).biaya_kelebihan_tanah_nominal_input" placeholder="Nominal"
                                         class="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                 </div>
                             </div>
@@ -509,7 +529,7 @@ onMounted(() => {
                             <div>
                                 <div class="text-slate-300 font-medium mb-2">Biaya Tambahan</div>
                                 <div v-for="(bt, idx) in getRincianForm(trx).biaya_tambahan" :key="idx" class="flex items-center gap-2 mb-1.5">
-                                    <template v-if="bt.status && bt.status !== 'belum_bayar'">
+                                    <template v-if="bt.locked">
                                         <span class="flex-1 text-slate-500 text-xs">🔒 {{ bt.nama }}</span>
                                         <span class="text-slate-500 text-xs">{{ formatRp(bt.nominal) }} (terkunci)</span>
                                     </template>
@@ -518,7 +538,7 @@ onMounted(() => {
                                             <option value="" disabled>Pilih item...</option>
                                             <option v-for="p in biayaTambahanPresets" :key="p.id" :value="p.id">{{ p.nama }}</option>
                                         </select>
-                                        <input v-model="bt.nominal" type="number" min="0" placeholder="Nominal"
+                                        <MoneyInput v-model="bt.nominal" placeholder="Nominal"
                                             class="w-28 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                         <button type="button" @click="removeRincianBiayaTambahan(trx, idx)"
                                             class="text-rose-400 hover:bg-rose-500/10 rounded p-1.5 flex-shrink-0">
@@ -545,9 +565,24 @@ onMounted(() => {
                                         <input type="radio" v-model="getRincianForm(trx).diskon_mode" value="nominal" class="accent-violet-500" /> Nominal
                                     </label>
                                 </div>
-                                <input v-model="getRincianForm(trx).diskon_nilai" type="number" min="0"
+                                <MoneyInput :plain="getRincianForm(trx).diskon_mode === 'persen'" v-model="getRincianForm(trx).diskon_nilai"
                                     :placeholder="getRincianForm(trx).diskon_mode === 'persen' ? '%' : 'Rp'"
                                     class="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                            </div>
+
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-slate-300 font-medium">Program All In</span>
+                                    <span v-if="titipanBiayaAkadLocked(trx)" class="text-amber-400 text-xs">🔒 Titipan Biaya Akad sudah ada pembayaran</span>
+                                </div>
+                                <div v-if="titipanBiayaAkadLocked(trx)" class="text-slate-500 text-xs">
+                                    {{ formatRp(trx.titipan_biaya_akad_nominal) }} (terkunci, sudah ada pembayaran)
+                                </div>
+                                <select v-else v-model="getRincianForm(trx).program_all_in_preset_id"
+                                    class="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                    <option value="">Tidak ikut Program All In</option>
+                                    <option v-for="p in programAllInPresets" :key="p.id" :value="p.id">{{ p.nama }} — {{ formatRp(p.nominal) }}</option>
+                                </select>
                             </div>
 
                             <p v-if="Object.keys(getRincianForm(trx).errors).length" class="text-rose-400 text-xs space-y-0.5">
@@ -607,6 +642,30 @@ onMounted(() => {
                         <div v-else class="text-slate-600 text-xs px-1">Belum ada template dokumen untuk cara bayar ini.</div>
                     </div>
 
+                    <!-- ═══ Cetak Dokumen (generate dari Template Surat) ═══ -->
+                    <div v-if="suratTemplates.length" class="space-y-2">
+                        <h3 class="text-slate-300 text-sm font-semibold flex items-center gap-1.5">📄 Cetak Dokumen</h3>
+                        <form :action="route('surat.generate', [trx.id, selectedTemplateId(trx.id)])" method="GET" target="_blank"
+                            class="rounded-lg border border-slate-800 p-3 flex flex-wrap items-end gap-2">
+                            <div class="min-w-[160px]">
+                                <label class="block text-slate-500 text-xs mb-1">Template</label>
+                                <select :value="selectedTemplateId(trx.id)" @change="setCetakTemplateId(trx.id, $event.target.value)"
+                                    class="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                    <option v-for="tmpl in suratTemplates" :key="tmpl.id" :value="tmpl.id">{{ tmpl.nama }}</option>
+                                </select>
+                            </div>
+                            <div class="flex-1 min-w-[180px]">
+                                <label class="block text-slate-500 text-xs mb-1">Nomor Surat</label>
+                                <input name="nomor_surat" type="text" placeholder="mis. 124/GP3/SPPR/VIII/2026"
+                                    class="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                            </div>
+                            <button type="submit"
+                                class="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap">
+                                Unduh .docx
+                            </button>
+                        </form>
+                    </div>
+
                     <!-- ═══ Kategori 3: Pembayaran ═══ -->
                     <div class="space-y-4">
                         <div class="flex items-center justify-between">
@@ -636,10 +695,10 @@ onMounted(() => {
                                     <div
                                         class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-slate-800/60 text-sm"
                                         :class="isGroupRow(row) ? 'cursor-pointer hover:bg-slate-800/40 transition-colors' : ''"
-                                        @click="isGroupRow(row) && toggleRowExpand(trx.id, row.type)">
+                                        @click="isGroupRow(row) && toggleRowExpand(trx.id, row)">
                                         <div class="min-w-[160px] flex items-center gap-1.5 flex-1">
                                             <svg v-if="isGroupRow(row)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
-                                                :class="['w-3 h-3 text-slate-500 transition-transform flex-shrink-0', isRowExpanded(trx.id, row.type) ? 'rotate-90' : '']">
+                                                :class="['w-3 h-3 text-slate-500 transition-transform flex-shrink-0', isRowExpanded(trx.id, row) ? 'rotate-90' : '']">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                                             </svg>
                                             <span class="text-slate-300">{{ row.nama }}</span>
@@ -649,20 +708,10 @@ onMounted(() => {
                                         <div class="flex items-center gap-3 flex-shrink-0">
                                             <span class="text-slate-200 font-medium min-w-[110px] text-right">{{ nominalLabel(row.nominal, row.jumlah_dibayar, row.status) }}</span>
                                             <span class="w-20 flex justify-center"><StatusPembayaranBadge :status="row.status" /></span>
-                                            <span class="w-28 flex justify-end" @click.stop>
-                                                <CatatPembayaran v-if="row.type === 'biaya_tanah'"
-                                                    :url="route('biaya-tanah.bayar', trx.id)"
-                                                    :status="row.status" :tanggal-bayar="row.tanggal_bayar"
-                                                    :default-jumlah="row.nominal" :can-manage="canPayItem(trx)" />
-                                                <CatatPembayaran v-else-if="row.type === 'biaya_tambahan'"
-                                                    :url="route('biaya-tambahan.bayar', row.id)"
-                                                    :status="row.status" :tanggal-bayar="row.tanggal_bayar"
-                                                    :default-jumlah="row.nominal" :can-manage="canPayItem(trx)" />
-                                            </span>
                                         </div>
                                     </div>
 
-                                    <div v-if="isGroupRow(row) && isRowExpanded(trx.id, row.type)" class="bg-slate-950/40 border-t border-slate-800/60">
+                                    <div v-if="isGroupRow(row) && isRowExpanded(trx.id, row)" class="bg-slate-950/40 border-t border-slate-800/60">
                                         <div v-if="row.legacy_pembayaran"
                                             class="flex flex-wrap items-center justify-between gap-2 pl-8 pr-3 py-2 text-sm border-b border-slate-800/40">
                                             <span class="text-slate-400 flex-1">Pelunasan (tercatat sebelum jadwal cicilan)</span>
@@ -688,6 +737,21 @@ onMounted(() => {
                                                         :default-jumlah="j.jumlah" :can-manage="canPayItem(trx)" />
                                                 </span>
                                             </div>
+                                        </div>
+
+                                        <!-- Cicilan Biaya Tanah/Tambahan UM/Titipan Biaya Akad/Biaya
+                                             Tambahan — halaman ini read-only, cuma tampilkan riwayat,
+                                             tidak ada aksi. -->
+                                        <div v-if="cicilanLainGroupTypes.includes(row.type)">
+                                            <div v-for="c in row.cicilan" :key="c.id"
+                                                class="flex flex-wrap items-center justify-between gap-2 pl-8 pr-3 py-2 text-sm border-b border-slate-800/40 last:border-b-0">
+                                                <div class="flex-1">
+                                                    <span class="text-slate-300 font-medium">{{ formatRp(c.jumlah) }}</span>
+                                                    <span class="text-slate-600 text-xs ml-2">dibayar {{ c.tanggal_bayar }}</span>
+                                                    <span v-if="c.keterangan" class="text-slate-600 text-xs ml-2">· {{ c.keterangan }}</span>
+                                                </div>
+                                            </div>
+                                            <div v-if="!row.cicilan?.length" class="pl-8 pr-3 py-2 text-slate-600 text-xs">Belum ada cicilan tercatat.</div>
                                         </div>
                                     </div>
                                 </template>
@@ -723,8 +787,8 @@ onMounted(() => {
                                         </div>
                                         <div class="flex items-center gap-1.5">
                                             <template v-if="item.status !== 'lunas' && canEditBiayaAkad(trx)">
-                                                <input type="number" :value="item.nominal"
-                                                    @change="updateBiayaAkadNominal(item, $event.target.value)"
+                                                <MoneyInput :model-value="item.nominal"
+                                                    @commit="updateBiayaAkadNominal(item, $event)"
                                                     class="w-24 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-right text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                                 <button @click="removeBiayaAkad(item)"
                                                     class="opacity-0 group-hover:opacity-100 text-rose-400 hover:bg-rose-500/10 rounded p-1 transition-all flex-shrink-0">
@@ -746,7 +810,7 @@ onMounted(() => {
                                             <option value="" disabled>Pilih item SBUM...</option>
                                             <option v-for="preset in sbumPresetOptions" :key="preset.id" :value="preset.id">{{ preset.nama }}</option>
                                         </select>
-                                        <input v-model="getBiayaAkadForm(trx.id, 'sbum').nominal" type="number" placeholder="Nominal"
+                                        <MoneyInput v-model="getBiayaAkadForm(trx.id, 'sbum').nominal" placeholder="Nominal"
                                             @keyup.enter="addBiayaAkad(trx, 'sbum')"
                                             class="w-28 px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                         <button @click="addBiayaAkad(trx, 'sbum')"
@@ -776,8 +840,8 @@ onMounted(() => {
                                     </div>
                                     <div class="flex items-center gap-1.5">
                                         <template v-if="item.status !== 'lunas' && canEditBiayaAkad(trx)">
-                                            <input type="number" :value="item.nominal"
-                                                @change="updateBiayaAkadNominal(item, $event.target.value)"
+                                            <MoneyInput :model-value="item.nominal"
+                                                @commit="updateBiayaAkadNominal(item, $event)"
                                                 class="w-24 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-right text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                             <button @click="removeBiayaAkad(item)"
                                                 class="opacity-0 group-hover:opacity-100 text-rose-400 hover:bg-rose-500/10 rounded p-1 transition-all flex-shrink-0">
@@ -800,7 +864,7 @@ onMounted(() => {
                                         <option value="" disabled>Pilih item Dana Jaminan...</option>
                                         <option v-for="preset in dajamPresetOptions" :key="preset.id" :value="preset.id">{{ preset.nama }}</option>
                                     </select>
-                                    <input v-model="getBiayaAkadForm(trx.id, 'dajam').nominal" type="number" placeholder="Nominal"
+                                    <MoneyInput v-model="getBiayaAkadForm(trx.id, 'dajam').nominal" placeholder="Nominal"
                                         @keyup.enter="addBiayaAkad(trx, 'dajam')"
                                         class="w-28 px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                     <button @click="addBiayaAkad(trx, 'dajam')"
@@ -841,69 +905,6 @@ onMounted(() => {
                                     </div>
                                     <div v-if="!trx.pencairan_kpr_tahaps?.length" class="pl-8 pr-3 py-2 text-slate-600 text-xs">Belum ada pencairan tercatat.</div>
                                 </div>
-                            </div>
-                        </div>
-
-                        <!-- Kartu Piutang Titipan: Biaya Akad -->
-                        <div class="space-y-2">
-                            <div class="flex justify-between items-center">
-                                <h4 class="text-slate-400 text-xs font-semibold uppercase tracking-wider">Kartu Piutang Titipan</h4>
-                                <div class="flex items-center gap-2">
-                                    <span v-if="trx.is_locked" class="text-amber-400 text-xs flex items-center gap-1" title="Terkunci sejak ditandai Selesai di Keuangan">
-                                        🔒 Terkunci
-                                    </span>
-                                    <span v-if="biayaAkadTitipanItems(trx).length" class="text-slate-500 text-xs">
-                                        Total: {{ formatRp(totalTitipan(trx)) }}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div v-if="biayaAkadTitipanItems(trx).length" class="space-y-1.5">
-                                <div v-for="item in biayaAkadTitipanItems(trx)" :key="item.id"
-                                    class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-800/60 rounded-lg text-sm group">
-                                    <div>
-                                        <span class="text-slate-300">{{ item.nama }}</span>
-                                        <span class="text-slate-600 text-xs ml-2">Biaya Akad</span>
-                                    </div>
-                                    <div class="flex items-center gap-2">
-                                        <template v-if="item.status !== 'lunas' && canEditBiayaAkad(trx)">
-                                            <input type="number" :value="item.nominal"
-                                                @change="updateBiayaAkadNominal(item, $event.target.value)"
-                                                class="w-32 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-right text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                                            <button @click="removeBiayaAkad(item)"
-                                                class="opacity-0 group-hover:opacity-100 text-rose-400 hover:bg-rose-500/10 rounded p-1.5 transition-all">
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                </svg>
-                                            </button>
-                                        </template>
-                                        <span v-else class="text-slate-300 font-medium">{{ nominalLabel(item.nominal, item.jumlah_dibayar, item.status) }}</span>
-                                        <StatusPembayaranBadge :status="item.status" />
-                                        <CatatPembayaran
-                                            :url="route('rincian-biaya-akad.bayar', item.id)"
-                                            :status="item.status" :tanggal-bayar="item.tanggal_bayar"
-                                            :default-jumlah="item.nominal" :can-manage="canPayDajamSbum(trx)" />
-                                    </div>
-                                </div>
-                            </div>
-                            <div v-else class="text-slate-600 text-xs px-1">Belum ada biaya akad.</div>
-
-                            <div v-if="canEditBiayaAkad(trx)" class="flex gap-2 pt-1">
-                                <select v-model="getBiayaAkadForm(trx.id, 'titipan').dajam_sbum_preset_id"
-                                    class="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
-                                    <option value="" disabled>Pilih item Biaya Akad...</option>
-                                    <option v-for="preset in biayaAkadPresetOptions" :key="preset.id" :value="preset.id">
-                                        {{ preset.nama }}
-                                    </option>
-                                </select>
-                                <input v-model="getBiayaAkadForm(trx.id, 'titipan').nominal" type="number" placeholder="Nominal"
-                                    @keyup.enter="addBiayaAkad(trx, 'titipan')"
-                                    class="w-36 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                                <button @click="addBiayaAkad(trx, 'titipan')"
-                                    :disabled="!getBiayaAkadForm(trx.id, 'titipan').dajam_sbum_preset_id || !getBiayaAkadForm(trx.id, 'titipan').nominal"
-                                    class="px-3 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap">
-                                    + Tambah
-                                </button>
                             </div>
                         </div>
 

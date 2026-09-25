@@ -216,9 +216,8 @@ const statusBadgeClass = {
                                 </div>
                                 <div>
                                     <label class="block text-slate-400 text-xs font-medium mb-1.5">Nominal Dikembalikan ke Konsumen <span class="text-rose-400">*</span></label>
-                                    <input
-                                        v-model="reviewForm.nominal_dikembalikan"
-                                        type="number" min="0" :max="selectedRequest.total_terbayar" placeholder="0"
+                                    <MoneyInput
+                                        v-model="reviewForm.nominal_dikembalikan" placeholder="0"
                                         class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
                                         :class="{ 'border-rose-500': reviewForm.errors.nominal_dikembalikan }"
                                     />

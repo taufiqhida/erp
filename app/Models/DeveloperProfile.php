@@ -13,6 +13,8 @@ class DeveloperProfile extends Model
         'telepon',
         'email',
         'npwp',
+        'nama_penandatangan',
+        'jabatan_penandatangan',
         'logo_path',
         'kop_surat_path',
     ];

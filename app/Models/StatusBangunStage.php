@@ -42,13 +42,46 @@ class StatusBangunStage extends Model
         return $query->orderBy('urutan');
     }
 
-    /**
-     * Progress kumulatif (%) sampai & termasuk tahap ini — jumlah bobot
-     * semua tahap dengan urutan <= tahap ini.
-     */
-    public function progressPercent(): float
+    /** @var array<int, array{sebelum: float, bobot: float}>|null */
+    private static ?array $progressMap = null;
+
+    protected static function booted(): void
     {
-        return (float) static::query()->where('urutan', '<=', $this->urutan)->sum('bobot');
+        // Bobot/urutan berubah → peta progres harus dihitung ulang.
+        static::saved(fn () => static::$progressMap = null);
+        static::deleted(fn () => static::$progressMap = null);
+    }
+
+    /**
+     * Per tahap: total bobot tahap-tahap SEBELUMNYA dan bobot tahap itu sendiri.
+     * Dimuat sekali per request (bukan satu query per kavling).
+     */
+    private static function progressMap(): array
+    {
+        if (static::$progressMap === null) {
+            static::$progressMap = [];
+            $sebelum = 0.0;
+            foreach (static::query()->orderBy('urutan')->get(['id', 'bobot']) as $stage) {
+                static::$progressMap[$stage->id] = ['sebelum' => $sebelum, 'bobot' => (float) $stage->bobot];
+                $sebelum += (float) $stage->bobot;
+            }
+        }
+
+        return static::$progressMap;
+    }
+
+    /**
+     * Progress unit (%) = bobot tahap-tahap sebelumnya + bobot tahap yang sedang
+     * dikerjakan x persen penyelesaian tahap itu / 100.
+     */
+    public static function progressFor(?int $stageId, float $persen): float
+    {
+        $entry = $stageId ? (static::progressMap()[$stageId] ?? null) : null;
+        if (!$entry) return 0.0;
+
+        $persen = max(0.0, min(100.0, $persen));
+
+        return round($entry['sebelum'] + $entry['bobot'] * $persen / 100, 2);
     }
 
     /**

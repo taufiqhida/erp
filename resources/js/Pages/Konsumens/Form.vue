@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
 const props = defineProps({
     konsumen: Object,
@@ -12,15 +13,20 @@ const props = defineProps({
 const form = useForm({
     nama:      props.konsumen?.nama ?? '',
     nik:       props.konsumen?.nik ?? '',
+    npwp:      props.konsumen?.npwp ?? '',
     no_hp:     props.konsumen?.no_hp ?? '',
     email:     props.konsumen?.email ?? '',
     alamat:    props.konsumen?.alamat ?? '',
     pekerjaan: props.konsumen?.pekerjaan ?? '',
     status_pernikahan: props.konsumen?.status_pernikahan ?? '',
     sumber_lead_id:    props.konsumen?.sumber_lead_id ?? '',
+    referral_keterangan: props.konsumen?.referral_keterangan ?? '',
     catatan:   props.konsumen?.catatan ?? '',
-    drive_folder_link: props.konsumen?.drive_folder_link ?? '',
 });
+
+const isReferralLead = computed(() =>
+    !!props.sumberLeadOptions.find(s => s.id === form.sumber_lead_id)?.is_referral
+);
 
 const submit = () => {
     form.put(route('konsumens.update', props.konsumen.id));
@@ -59,6 +65,11 @@ const submit = () => {
                             <p v-if="form.errors.nik" class="text-rose-400 text-xs mt-1">{{ form.errors.nik }}</p>
                         </div>
                         <div>
+                            <label class="block text-slate-400 text-xs font-medium mb-1.5">NPWP</label>
+                            <input v-model="form.npwp" type="text" maxlength="30" placeholder="15 atau 16 digit (opsional)" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': form.errors.npwp }" />
+                            <p v-if="form.errors.npwp" class="text-rose-400 text-xs mt-1">{{ form.errors.npwp }}</p>
+                        </div>
+                        <div>
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">No. HP / WhatsApp</label>
                             <input v-model="form.no_hp" type="text" placeholder="08123456789" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500" />
                         </div>
@@ -88,6 +99,13 @@ const submit = () => {
                                 <option v-for="s in sumberLeadOptions" :key="s.id" :value="s.id">{{ s.nama }}</option>
                             </select>
                         </div>
+                        <div v-if="isReferralLead">
+                            <label class="block text-slate-400 text-xs font-medium mb-1.5">Keterangan Referral <span class="text-rose-400">*</span></label>
+                            <input v-model="form.referral_keterangan" type="text" maxlength="150" placeholder="Direferensikan oleh siapa?"
+                                class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                :class="{ 'border-rose-500': form.errors.referral_keterangan }" />
+                            <p v-if="form.errors.referral_keterangan" class="text-rose-400 text-xs mt-1">{{ form.errors.referral_keterangan }}</p>
+                        </div>
                     </div>
                     <div>
                         <label class="block text-slate-400 text-xs font-medium mb-1.5">Alamat</label>
@@ -96,11 +114,6 @@ const submit = () => {
                     <div>
                         <label class="block text-slate-400 text-xs font-medium mb-1.5">Catatan</label>
                         <textarea v-model="form.catatan" rows="2" placeholder="Catatan tambahan..." class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none" />
-                    </div>
-                    <div>
-                        <label class="block text-slate-400 text-xs font-medium mb-1.5">📁 Link Folder Google Drive</label>
-                        <input v-model="form.drive_folder_link" type="url" placeholder="https://drive.google.com/drive/folders/..." class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': form.errors.drive_folder_link }" />
-                        <p v-if="form.errors.drive_folder_link" class="text-rose-400 text-xs mt-1">{{ form.errors.drive_folder_link }}</p>
                     </div>
                 </div>
 

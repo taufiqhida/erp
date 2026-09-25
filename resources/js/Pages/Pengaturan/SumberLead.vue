@@ -1,5 +1,6 @@
 <script setup>
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
+import UrutanButtons from '@/Components/UrutanButtons.vue';
 import { useForm, router } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -9,6 +10,7 @@ const props = defineProps({
 const addForm = useForm({
     nama: '',
     keterangan: '',
+    is_referral: false,
 });
 
 const addPreset = () => {
@@ -21,7 +23,17 @@ const toggleActive = (preset) => {
     router.patch(route('pengaturan.sumber-lead.update', preset.id), {
         nama: preset.nama,
         keterangan: preset.keterangan,
+        is_referral: preset.is_referral,
         is_active: !preset.is_active,
+    }, { preserveScroll: true });
+};
+
+const toggleReferral = (preset) => {
+    router.patch(route('pengaturan.sumber-lead.update', preset.id), {
+        nama: preset.nama,
+        keterangan: preset.keterangan,
+        is_referral: !preset.is_referral,
+        is_active: preset.is_active,
     }, { preserveScroll: true });
 };
 
@@ -42,14 +54,21 @@ const destroy = (preset) => {
 
             <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 <div v-if="presets.length">
-                    <div v-for="preset in presets" :key="preset.id"
+                    <div v-for="(preset, idx) in presets" :key="preset.id"
                         class="flex items-center justify-between px-5 py-3 border-b border-slate-800 hover:bg-slate-800/30 transition-colors group"
                         :class="{ 'opacity-50': !preset.is_active }">
                         <div>
-                            <div class="text-slate-200 text-sm font-medium">{{ preset.nama }}</div>
+                            <div class="text-slate-200 text-sm font-medium">{{ preset.nama }}
+                                <span v-if="preset.is_referral" class="ml-1.5 px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 text-[10px] font-medium">Minta keterangan referral</span>
+                            </div>
                             <div class="text-slate-500 text-xs mt-0.5">{{ preset.keterangan ?? '-' }}</div>
                         </div>
                         <div class="flex items-center gap-3">
+                            <UrutanButtons type="sumber-lead" :id="preset.id" :first="idx === 0" :last="idx === presets.length - 1" />
+                            <button @click="toggleReferral(preset)"
+                                class="opacity-0 group-hover:opacity-100 px-2 py-1 text-violet-400 hover:bg-violet-500/10 rounded-lg text-xs transition-all">
+                                {{ preset.is_referral ? 'Bukan referral' : 'Tandai referral' }}
+                            </button>
                             <button @click="toggleActive(preset)"
                                 :class="preset.is_active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-700 text-slate-400'"
                                 class="px-2 py-1 rounded-lg text-xs font-medium transition-colors">
@@ -81,6 +100,10 @@ const destroy = (preset) => {
                             + Tambah
                         </button>
                     </div>
+                    <label class="mt-2.5 inline-flex items-center gap-2 text-slate-400 text-xs cursor-pointer">
+                        <input v-model="addForm.is_referral" type="checkbox" class="rounded border-slate-600 bg-slate-800 text-violet-500 focus:ring-violet-500" />
+                        Minta keterangan referral (dari siapa) saat booking dengan sumber ini
+                    </label>
                 </div>
             </div>
     </PengaturanLayout>

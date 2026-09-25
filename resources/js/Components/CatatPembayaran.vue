@@ -61,7 +61,7 @@ const remove = () => {
             <span v-if="tanggalBayar" class="text-slate-600 text-[10px] whitespace-nowrap">{{ tanggalBayar }}</span>
         </div>
         <div v-else class="w-56 bg-slate-900 border border-slate-700 rounded-lg p-2.5 space-y-1.5">
-            <input v-model="form.jumlah" type="number" placeholder="Jumlah"
+            <MoneyInput v-model="form.jumlah" placeholder="Jumlah"
                 class="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
             <input v-model="form.tanggal_bayar" type="date"
                 class="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />

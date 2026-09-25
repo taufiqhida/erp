@@ -76,9 +76,8 @@ class DashboardController extends Controller
             ->where('status', '!=', 'cancelled')
             ->with([
                 'konsumen:id,nama', 'kavling.project:id,nama', 'skemaDpPreset', 'pembayarans',
-                'jadwalTagihans.pembayaran', 'biayaTambahans.pembayaran',
-                'biayaKelebihanTanahPembayaran', 'rincianBiayaAkad.pembayaran',
-                'pencairanKprTahaps', 'tambahanUmPembayaran',
+                'jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans',
+                'rincianBiayaAkad.pembayaran', 'pencairanKprTahaps',
             ])
             ->get();
 
@@ -106,18 +105,29 @@ class DashboardController extends Controller
         // per komponen (dipakai tombol "expand" di tiap kartu) — satu pass
         // atas $activeTransaksi, reuse kartuPiutangBreakdown() yang sama
         // biar tidak query dua kali per transaksi.
-        $totalPendapatan = $activeTransaksi->sum('harga_deal');
-
-        $nilaiTransaksiBreakdown = ['harga_dasar' => 0.0, 'biaya_tanah' => 0.0, 'biaya_tambahan_lain' => 0.0, 'diskon' => 0.0];
+        // Kategori 1 (Rekening Resmi) & Kategori 2 (Rekening Titipan) — lihat
+        // KavlingKonsumen::kategoriPendapatan() buat aturan lengkapnya.
+        // Total headline sekarang mencakup Booking Fee & Titipan Biaya Akad
+        // juga (sebelumnya cuma harga_deal), supaya benar-benar merefleksikan
+        // seluruh uang yang terkait transaksi, bukan cuma harga rumah.
+        $totalPendapatan = 0.0;
+        $nilaiTransaksiBreakdown = [
+            'resmi'   => ['harga_dasar' => 0.0, 'booking_fee' => 0.0, 'diskon' => 0.0],
+            'titipan' => ['biaya_tanah' => 0.0, 'biaya_tambahan_lain' => 0.0, 'titipan_biaya_akad' => 0.0, 'booking_fee' => 0.0],
+        ];
         $piutangTotals = ['piutang_konsumen' => 0.0, 'terbayar_konsumen' => 0.0, 'piutang_bank' => 0.0, 'terbayar_bank' => 0.0];
         $piutangKonsumenByNama = [];
         $piutangBankByNama = [];
 
         foreach ($activeTransaksi as $kk) {
-            $nilaiTransaksiBreakdown['harga_dasar']         += (float) $kk->harga_dasar;
-            $nilaiTransaksiBreakdown['biaya_tanah']         += $kk->biaya_kelebihan_tanah_aktif ? (float) $kk->biaya_kelebihan_tanah_nominal : 0;
-            $nilaiTransaksiBreakdown['biaya_tambahan_lain'] += (float) $kk->biayaTambahans->sum('nominal');
-            $nilaiTransaksiBreakdown['diskon']              += (float) ($kk->diskon_nominal ?? 0);
+            $kategori = $kk->kategoriPendapatan();
+            $totalPendapatan += $kategori['resmi_total'] + $kategori['titipan_total'];
+            foreach ($kategori['resmi_rincian'] as $key => $val) {
+                $nilaiTransaksiBreakdown['resmi'][$key] += $val;
+            }
+            foreach ($kategori['titipan_rincian'] as $key => $val) {
+                $nilaiTransaksiBreakdown['titipan'][$key] += $val;
+            }
 
             $breakdown = $kk->kartuPiutangBreakdown();
             $piutangTotals['piutang_konsumen']  += $breakdown['total_piutang_konsumen'];
@@ -198,7 +208,7 @@ class DashboardController extends Controller
         $bastTertunda = $scopeViaKavling(KavlingKonsumen::query())
             ->where('status_penjualan', 'akad')
             ->where('status', '!=', 'cancelled')
-            ->whereHas('kavling', fn($q) => $q->where('status_bangun_stage_id', $finalStageId))
+            ->whereHas('kavling', fn($q) => $q->where('status_bangun_stage_id', $finalStageId)->where('status_bangun_persen', '>=', 100))
             ->with(['konsumen:id,nama', 'kavling.project:id,nama'])
             ->orderBy('tanggal_akad')
             ->get()
@@ -410,7 +420,7 @@ class DashboardController extends Controller
         $performaSales = $scopeViaKavling(KavlingKonsumen::query())
             ->whereBetween('tanggal_booking', [$periodFrom, $periodTo])
             ->whereNotNull('sales_agent_id')
-            ->with('salesAgent:id,nama,agency_nama')
+            ->with('salesAgent:id,nama,tipe')
             ->get()
             ->groupBy('sales_agent_id')
             ->map(function ($group) {
@@ -420,7 +430,7 @@ class DashboardController extends Controller
                 return [
                     'sales_agent_id'  => $agent?->id,
                     'nama'            => $agent?->nama ?? '-',
-                    'agency_nama'     => $agent?->agency_nama,
+                    'tipe_label'      => $agent?->tipe_label,
                     'jumlah_booking'  => $totalBooking,
                     'conversion_rate' => $totalBooking > 0 ? round($totalAkadKeAtas / $totalBooking * 100, 1) : 0,
                 ];

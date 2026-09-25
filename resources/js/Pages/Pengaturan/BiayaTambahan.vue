@@ -1,5 +1,6 @@
 <script setup>
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
+import UrutanButtons from '@/Components/UrutanButtons.vue';
 import { useForm, router } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -42,7 +43,7 @@ const destroy = (preset) => {
 
             <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 <div v-if="presets.length">
-                    <div v-for="preset in presets" :key="preset.id"
+                    <div v-for="(preset, idx) in presets" :key="preset.id"
                         class="flex items-center justify-between px-5 py-3 border-b border-slate-800 hover:bg-slate-800/30 transition-colors group"
                         :class="{ 'opacity-50': !preset.is_active }">
                         <div>
@@ -50,6 +51,7 @@ const destroy = (preset) => {
                             <div class="text-slate-500 text-xs mt-0.5">{{ preset.keterangan ?? '-' }}</div>
                         </div>
                         <div class="flex items-center gap-3">
+                            <UrutanButtons type="biaya-tambahan" :id="preset.id" :first="idx === 0" :last="idx === presets.length - 1" />
                             <button @click="toggleActive(preset)"
                                 :class="preset.is_active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-700 text-slate-400'"
                                 class="px-2 py-1 rounded-lg text-xs font-medium transition-colors">

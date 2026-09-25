@@ -14,6 +14,8 @@ const form = useForm({
     telepon:            props.profile.telepon ?? '',
     email:              props.profile.email ?? '',
     npwp:               props.profile.npwp ?? '',
+    nama_penandatangan:    props.profile.nama_penandatangan ?? '',
+    jabatan_penandatangan: props.profile.jabatan_penandatangan ?? '',
     logo:               null,
     kop_surat:          null,
 });
@@ -99,6 +101,17 @@ const save = () => {
                             <textarea v-model="form.alamat" rows="2" placeholder="Jl. ..."
                                 class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none" />
                         </div>
+                        <div>
+                            <label class="block text-slate-400 text-xs mb-1.5 font-medium">Nama Penandatangan Surat (default)</label>
+                            <input v-model="form.nama_penandatangan" type="text" placeholder="mis. Ferry Yoga Asmara"
+                                class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-xs mb-1.5 font-medium">Jabatan Penandatangan</label>
+                            <input v-model="form.jabatan_penandatangan" type="text" placeholder="mis. Manager Marketing"
+                                class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                        </div>
+                        <p class="sm:col-span-2 text-slate-600 text-xs -mt-2">Dipakai otomatis di semua Cetak Dokumen — bisa ditimpa manual per surat kalau penandatangannya beda.</p>
                     </div>
 
                     <div class="flex justify-end pt-2">

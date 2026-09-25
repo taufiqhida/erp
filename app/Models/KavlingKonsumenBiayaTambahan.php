@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class KavlingKonsumenBiayaTambahan extends Model
 {
@@ -14,8 +15,6 @@ class KavlingKonsumenBiayaTambahan extends Model
         'biaya_tambahan_preset_id',
         'nama',
         'nominal',
-        'status',
-        'pembayaran_konsumen_id',
     ];
 
     protected $casts = [
@@ -32,8 +31,9 @@ class KavlingKonsumenBiayaTambahan extends Model
         return $this->belongsTo(BiayaTambahanPreset::class, 'biaya_tambahan_preset_id');
     }
 
-    public function pembayaran(): BelongsTo
+    /** Cicilan bebas item ini — lihat KavlingKonsumen::kartuPiutangBreakdown(). */
+    public function pembayarans(): HasMany
     {
-        return $this->belongsTo(PembayaranKonsumen::class, 'pembayaran_konsumen_id');
+        return $this->hasMany(PembayaranKonsumen::class, 'kavling_konsumen_biaya_tambahan_id');
     }
 }

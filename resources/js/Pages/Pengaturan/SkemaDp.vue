@@ -183,7 +183,7 @@ const nilaiLabel = (tipe, nilai, basis) => tipe === 'persen'
                                         </div>
                                         <div>
                                             <label class="block text-slate-500 text-[10px] mb-0.5">Nilai</label>
-                                            <input v-model.number="editForm.booking_fee_nilai" type="number" min="0" :placeholder="editForm.booking_fee_tipe === 'persen' ? '%' : 'Rp'"
+                                            <MoneyInput :plain="editForm.booking_fee_tipe === 'persen'" v-model.number="editForm.booking_fee_nilai" :placeholder="editForm.booking_fee_tipe === 'persen' ? '%' : 'Rp'"
                                                 class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs" />
                                         </div>
                                         <div>
@@ -219,7 +219,7 @@ const nilaiLabel = (tipe, nilai, basis) => tipe === 'persen'
                                         </div>
                                         <div>
                                             <label class="block text-slate-500 text-[10px] mb-0.5">Nilai</label>
-                                            <input v-model.number="editForm.dp_nilai" type="number" min="0" :placeholder="editForm.dp_tipe === 'persen' ? '%' : 'Rp'"
+                                            <MoneyInput :plain="editForm.dp_tipe === 'persen'" v-model.number="editForm.dp_nilai" :placeholder="editForm.dp_tipe === 'persen' ? '%' : 'Rp'"
                                                 class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs" />
                                         </div>
                                         <div>
@@ -286,7 +286,7 @@ const nilaiLabel = (tipe, nilai, basis) => tipe === 'persen'
                                 </div>
                                 <div>
                                     <label class="block text-slate-500 text-[10px] mb-0.5">Nilai</label>
-                                    <input v-model.number="addForm.booking_fee_nilai" type="number" min="0" :placeholder="addForm.booking_fee_tipe === 'persen' ? '%' : 'Rp'"
+                                    <MoneyInput :plain="addForm.booking_fee_tipe === 'persen'" v-model.number="addForm.booking_fee_nilai" :placeholder="addForm.booking_fee_tipe === 'persen' ? '%' : 'Rp'"
                                         class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs" />
                                 </div>
                                 <div>
@@ -322,7 +322,7 @@ const nilaiLabel = (tipe, nilai, basis) => tipe === 'persen'
                                 </div>
                                 <div>
                                     <label class="block text-slate-500 text-[10px] mb-0.5">Nilai</label>
-                                    <input v-model.number="addForm.dp_nilai" type="number" min="0" :placeholder="addForm.dp_tipe === 'persen' ? '%' : 'Rp'"
+                                    <MoneyInput :plain="addForm.dp_tipe === 'persen'" v-model.number="addForm.dp_nilai" :placeholder="addForm.dp_tipe === 'persen' ? '%' : 'Rp'"
                                         class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs" />
                                 </div>
                                 <div>

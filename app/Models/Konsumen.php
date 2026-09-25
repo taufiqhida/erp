@@ -17,15 +17,37 @@ class Konsumen extends Model
     protected $fillable = [
         'nama',
         'nik',
+        'npwp',
         'no_hp',
         'email',
         'alamat',
         'pekerjaan',
         'status_pernikahan',
         'sumber_lead_id',
+        'referral_keterangan',
         'catatan',
-        'drive_folder_link',
     ];
+
+    // NPWP disimpan angka saja (15 digit lama / 16 digit baru); titik dan strip dari input dibuang.
+    public function setNpwpAttribute($value): void
+    {
+        $digits = preg_replace('/\D/', '', (string) $value);
+        $this->attributes['npwp'] = $digits === '' ? null : $digits;
+    }
+
+    /** Aturan validasi NPWP: opsional, 15 atau 16 digit setelah titik/strip dibuang. */
+    public static function npwpRules(): array
+    {
+        return [
+            'nullable', 'string', 'max:30',
+            function ($attribute, $value, $fail) {
+                $len = strlen(preg_replace('/\D/', '', (string) $value));
+                if ($len !== 0 && !in_array($len, [15, 16], true)) {
+                    $fail('NPWP harus 15 atau 16 digit.');
+                }
+            },
+        ];
+    }
 
     public static function jenisPekerjaanLabel(): array
     {

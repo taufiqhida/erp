@@ -12,17 +12,14 @@ class DokumenKonsumen extends Model
         'nama_dokumen',
         'sifat',
         'status',
-        'file_path',
         'catatan',
         'catatan_revisi',
-        'tanggal_upload',
         'tanggal_verifikasi',
         'verified_by',
         'updated_by',
     ];
 
     protected $casts = [
-        'tanggal_upload'     => 'datetime',
         'tanggal_verifikasi' => 'datetime',
     ];
 

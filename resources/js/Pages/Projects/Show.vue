@@ -75,9 +75,9 @@ const resetFilters = () => {
 
 const activeFilterCount = computed(() => Object.values(filters.value).filter(Boolean).length);
 
-const canUpdateStatusBangun = computed(() =>
-    page.props.auth?.user?.permissions?.includes('update status bangun')
-);
+// Edit status bangun pindah ke halaman Proses Bangun (Tahap 2) — Stok
+// Kavling sekarang murni tampilan read-only untuk kolom Pembangunan.
+const canUpdateStatusBangun = computed(() => false);
 const canEditKavlings = computed(() =>
     page.props.auth?.user?.permissions?.includes('edit kavlings')
 );
@@ -86,6 +86,12 @@ const canEditKavlings = computed(() =>
 const updateIdRumah = (k, value) => {
     if ((value || '') === (k.id_rumah || '')) return;
     useForm({ id_rumah: value || null }).patch(route('kavlings.id-rumah', k.id), { preserveScroll: true });
+};
+
+// ── Update Nomor HGB langsung dari tabel — sama polanya dengan ID Rumah ──
+const updateHgbNo = (k, value) => {
+    if ((value || '') === (k.hgb_no || '')) return;
+    useForm({ hgb_no: value || null }).patch(route('kavlings.hgb-no', k.id), { preserveScroll: true });
 };
 
 // Siteplan selalu tampilkan semua unit (tidak ikut filter Table view, karena
@@ -141,13 +147,13 @@ const isClickable = (k) => k.status_jual === 'available';
 // ── Forms ────────────────────────────────────────────────────────────────
 const kavlingForm = useForm({
     kluster: '', blok: '', nomor_kavling: '', tipe_unit_preset_id: '',
-    harga: '', keterangan: '', perlu_biaya_tambahan: false, status_jual: 'available', status_bangun_stage_id: defaultStatusBangunStageId.value, catatan: '', id_rumah: '',
+    harga: '', keterangan: '', perlu_biaya_tambahan: false, status_jual: 'available', status_bangun_stage_id: defaultStatusBangunStageId.value, catatan: '', id_rumah: '', hgb_no: '',
 });
 
 // ── Edit Kavling (info umum saja — status_jual & konsumen bukan bagian ini) ──
 const kavlingEditForm = useForm({
     kluster: '', blok: '', nomor_kavling: '', tipe_unit_preset_id: '',
-    harga: '', keterangan: '', perlu_biaya_tambahan: false, catatan: '', id_rumah: '',
+    harga: '', keterangan: '', perlu_biaya_tambahan: false, catatan: '', id_rumah: '', hgb_no: '',
 });
 
 const openEditKavling = (k) => {
@@ -161,6 +167,7 @@ const openEditKavling = (k) => {
     kavlingEditForm.perlu_biaya_tambahan = k.perlu_biaya_tambahan ?? false;
     kavlingEditForm.catatan = k.catatan ?? '';
     kavlingEditForm.id_rumah = k.id_rumah ?? '';
+    kavlingEditForm.hgb_no = k.hgb_no ?? '';
     selectedKavling.value = k;
     showEditModal.value = true;
 };
@@ -669,6 +676,7 @@ const submitUploadSiteplan = () => {
                                 <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Pembangunan</th>
                                 <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Konsumen</th>
                                 <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">ID Rumah</th>
+                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">No. HGB</th>
                                 <th class="text-right px-5 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Aksi</th>
                             </tr>
                         </thead>
@@ -721,6 +729,13 @@ const submitUploadSiteplan = () => {
                                         placeholder="Isi ID Rumah..."
                                         class="w-44 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-600 placeholder:font-sans" />
                                     <span v-else class="text-slate-400 text-xs font-mono">{{ k.id_rumah ?? '-' }}</span>
+                                </td>
+                                <td class="px-4 py-3.5">
+                                    <input v-if="canEditKavlings" :value="k.hgb_no"
+                                        @change="updateHgbNo(k, $event.target.value)"
+                                        placeholder="Isi No. HGB..."
+                                        class="w-36 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-600 placeholder:font-sans" />
+                                    <span v-else class="text-slate-400 text-xs font-mono">{{ k.hgb_no ?? '-' }}</span>
                                 </td>
                                 <td class="px-5 py-3.5 text-right">
                                     <div class="inline-flex items-center gap-1 justify-end">
@@ -843,6 +858,12 @@ const submitUploadSiteplan = () => {
                         <div v-if="selectedKavling.id_rumah" class="bg-slate-800/50 rounded-xl p-3">
                             <div class="text-slate-500 text-xs mb-0.5">ID Rumah (Tapera/SIKUMBANG)</div>
                             <div class="text-slate-200 text-sm font-mono">{{ selectedKavling.id_rumah }}</div>
+                        </div>
+
+                        <!-- Nomor HGB, jika ada -->
+                        <div v-if="selectedKavling.hgb_no" class="bg-slate-800/50 rounded-xl p-3">
+                            <div class="text-slate-500 text-xs mb-0.5">Nomor HGB</div>
+                            <div class="text-slate-200 text-sm font-mono">{{ selectedKavling.hgb_no }}</div>
                         </div>
 
                         <!-- Harga -->
@@ -980,12 +1001,13 @@ const submitUploadSiteplan = () => {
                                 <input v-model="kavlingForm.kluster" type="text" placeholder="Cluster A" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
                             </div>
                             <div>
-                                <label class="block text-slate-400 text-xs mb-1.5">Blok</label>
-                                <input v-model="kavlingForm.blok" type="text" placeholder="A" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
+                                <label class="block text-slate-400 text-xs mb-1.5">Blok <span class="text-rose-400">*</span></label>
+                                <input v-model="kavlingForm.blok" type="text" placeholder="A1" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': kavlingForm.errors.blok }"/>
+                                <p v-if="kavlingForm.errors.blok" class="text-rose-400 text-xs mt-1">{{ kavlingForm.errors.blok }}</p>
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-slate-400 text-xs mb-1.5">Nomor Kavling <span class="text-rose-400">*</span></label>
-                                <input v-model="kavlingForm.nomor_kavling" type="text" placeholder="A01" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': kavlingForm.errors.nomor_kavling }"/>
+                                <input v-model="kavlingForm.nomor_kavling" type="text" placeholder="1" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': kavlingForm.errors.nomor_kavling }"/>
                                 <p v-if="kavlingForm.errors.nomor_kavling" class="text-rose-400 text-xs mt-1">{{ kavlingForm.errors.nomor_kavling }}</p>
                             </div>
                             <div class="col-span-2">
@@ -999,7 +1021,7 @@ const submitUploadSiteplan = () => {
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-slate-400 text-xs mb-1.5">Harga (Rp)</label>
-                                <input v-model="kavlingForm.harga" type="number" step="1000000" placeholder="500000000" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
+                                <MoneyInput v-model="kavlingForm.harga" placeholder="500000000" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-slate-400 text-xs mb-1.5">Keterangan</label>
@@ -1015,6 +1037,11 @@ const submitUploadSiteplan = () => {
                                 <label class="block text-slate-400 text-xs mb-1.5">ID Rumah (Tapera/SIKUMBANG)</label>
                                 <input v-model="kavlingForm.id_rumah" type="text" placeholder="cth. DMK0120062025T002A309" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': kavlingForm.errors.id_rumah }"/>
                                 <p v-if="kavlingForm.errors.id_rumah" class="text-rose-400 text-xs mt-1">{{ kavlingForm.errors.id_rumah }}</p>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-slate-400 text-xs mb-1.5">Nomor HGB</label>
+                                <input v-model="kavlingForm.hgb_no" type="text" placeholder="cth. 00709" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': kavlingForm.errors.hgb_no }"/>
+                                <p v-if="kavlingForm.errors.hgb_no" class="text-rose-400 text-xs mt-1">{{ kavlingForm.errors.hgb_no }}</p>
                             </div>
                         </div>
                         <div class="flex justify-end gap-3">
@@ -1049,8 +1076,9 @@ const submitUploadSiteplan = () => {
                                 <input v-model="kavlingEditForm.kluster" type="text" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
                             </div>
                             <div>
-                                <label class="block text-slate-400 text-xs mb-1.5">Blok</label>
-                                <input v-model="kavlingEditForm.blok" type="text" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
+                                <label class="block text-slate-400 text-xs mb-1.5">Blok <span class="text-rose-400">*</span></label>
+                                <input v-model="kavlingEditForm.blok" type="text" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': kavlingEditForm.errors.blok }"/>
+                                <p v-if="kavlingEditForm.errors.blok" class="text-rose-400 text-xs mt-1">{{ kavlingEditForm.errors.blok }}</p>
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-slate-400 text-xs mb-1.5">Nomor Kavling <span class="text-rose-400">*</span></label>
@@ -1067,7 +1095,7 @@ const submitUploadSiteplan = () => {
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-slate-400 text-xs mb-1.5">Harga (Rp)</label>
-                                <input v-model="kavlingEditForm.harga" type="number" step="1000000" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
+                                <MoneyInput v-model="kavlingEditForm.harga" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-slate-400 text-xs mb-1.5">Keterangan</label>
@@ -1083,6 +1111,11 @@ const submitUploadSiteplan = () => {
                                 <label class="block text-slate-400 text-xs mb-1.5">ID Rumah (Tapera/SIKUMBANG)</label>
                                 <input v-model="kavlingEditForm.id_rumah" type="text" placeholder="cth. DMK0120062025T002A309" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': kavlingEditForm.errors.id_rumah }"/>
                                 <p v-if="kavlingEditForm.errors.id_rumah" class="text-rose-400 text-xs mt-1">{{ kavlingEditForm.errors.id_rumah }}</p>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-slate-400 text-xs mb-1.5">Nomor HGB</label>
+                                <input v-model="kavlingEditForm.hgb_no" type="text" placeholder="cth. 00709" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': kavlingEditForm.errors.hgb_no }"/>
+                                <p v-if="kavlingEditForm.errors.hgb_no" class="text-rose-400 text-xs mt-1">{{ kavlingEditForm.errors.hgb_no }}</p>
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-slate-400 text-xs mb-1.5">Catatan</label>

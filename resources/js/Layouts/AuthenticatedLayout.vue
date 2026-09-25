@@ -45,31 +45,66 @@ const allNavItems = computed(() => [
         icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>`,
     },
     {
-        label: 'Kavling',
-        href: currentProject.value ? route('projects.show', currentProject.value.id) : route('beranda'),
-        routeName: 'projects.*',
+        label: 'Proyek & Teknik',
         roles: null,
         icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008zm0 3h.008v.008h-.008v-.008z" /></svg>`,
+        children: [
+            {
+                label: 'Stok Kavling',
+                href: currentProject.value ? route('projects.show', currentProject.value.id) : route('beranda'),
+                routeName: 'projects.*',
+                roles: null,
+            },
+            {
+                label: 'Proses Bangun',
+                href: currentProject.value ? route('proses-bangun.index', currentProject.value.id) : route('beranda'),
+                routeName: ['proses-bangun.*', 'spk.*'],
+                roles: null,
+            },
+        ],
     },
     {
-        label: 'Penjualan',
-        href: currentProject.value ? route('penjualan.project', currentProject.value.id) : route('beranda'),
-        routeName: 'penjualan.*',
-        roles: ['superadmin', 'manajer', 'sales'],
-        icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" /></svg>`,
-    },
-    {
-        label: 'Konsumen',
-        href: route('konsumens.index'),
-        routeName: 'konsumens.*',
+        label: 'Pemasaran & Penjualan',
         roles: ['superadmin', 'manajer', 'sales', 'staff_kpr'],
-        icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>`,
+        icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" /></svg>`,
+        children: [
+            {
+                label: 'Pemesanan',
+                href: currentProject.value ? route('penjualan.project', currentProject.value.id) : route('beranda'),
+                routeName: 'penjualan.*',
+                roles: ['superadmin', 'manajer', 'sales'],
+            },
+            {
+                label: 'Konsumen',
+                href: route('konsumens.index'),
+                routeName: 'konsumens.*',
+                roles: ['superadmin', 'manajer', 'sales', 'staff_kpr'],
+            },
+            {
+                label: 'Rencana Akad',
+                href: route('rencana-akad.index'),
+                routeName: 'rencana-akad.*',
+                roles: ['superadmin', 'manajer', 'sales', 'staff_kpr'],
+            },
+        ],
     },
     {
         label: 'Keuangan',
-        href: route('keuangan.index'),
-        routeName: 'keuangan.*',
         roles: ['superadmin', 'manajer', 'finance', 'sales'],
+        children: [
+            {
+                label: 'Piutang Konsumen',
+                href: route('keuangan.index'),
+                routeName: ['keuangan.index', 'keuangan.detail', 'pembayaran.kuitansi'],
+                roles: ['superadmin', 'manajer', 'finance', 'sales'],
+            },
+            {
+                label: 'Pencairan KPR',
+                href: route('keuangan.pencairan'),
+                routeName: 'keuangan.pencairan',
+                roles: ['superadmin', 'manajer', 'finance', 'sales'],
+            },
+        ],
         icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" /></svg>`,
     },
     {
@@ -84,20 +119,35 @@ const allNavItems = computed(() => [
     // bukan bagian dari navigasi reguler per-proyek.
 ]);
 
-// Filter nav berdasarkan role
+// Filter nav berdasarkan role — item dengan children difilter di level anak
+// juga, supaya dropdown tidak nampilin sub-menu yang role-nya tidak boleh akses.
+const canAccessItem = (item) => !item.roles || item.roles.some(r => hasRole(r));
 const navItems = computed(() => {
-    return allNavItems.value.filter(item => {
-        if (!item.roles) return true; // semua bisa akses
-        return item.roles.some(r => hasRole(r));
-    });
+    return allNavItems.value
+        .filter(canAccessItem)
+        .map(item => item.children ? { ...item, children: item.children.filter(canAccessItem) } : item)
+        .filter(item => !item.children || item.children.length > 0);
 });
 
 const isActive = (routeName) => {
+    if (!routeName) return false;
     try {
-        return route().current(routeName);
+        const names = Array.isArray(routeName) ? routeName : [routeName];
+        return names.some(r => route().current(r));
     } catch {
         return false;
     }
+};
+
+// Dropdown expand/collapse — default terbuka kalau salah satu anaknya aktif,
+// sekali user toggle manual barulah state eksplisit itu yang dipakai.
+const openDropdowns = ref({});
+const isDropdownOpen = (item) => {
+    if (item.label in openDropdowns.value) return openDropdowns.value[item.label];
+    return item.children?.some(c => isActive(c.routeName)) ?? false;
+};
+const toggleDropdown = (item) => {
+    openDropdowns.value[item.label] = !isDropdownOpen(item);
 };
 </script>
 
@@ -126,15 +176,63 @@ const isActive = (routeName) => {
                     </svg>
                 </div>
                 <div>
-                    <div class="text-white font-semibold text-sm leading-none">ERP Property</div>
-                    <div class="text-slate-400 text-xs mt-0.5">Management System</div>
+                    <div class="text-white font-semibold text-sm leading-none">SSID</div>
+                    <div class="text-slate-400 text-xs mt-0.5">Sedaya Sistem Informasi Developer</div>
                 </div>
             </Link>
 
             <!-- Nav -->
             <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
                 <template v-for="item in navItems" :key="item.label">
+                    <!-- Item dengan sub-menu (dropdown) -->
+                    <div v-if="item.children">
+                        <button
+                            type="button"
+                            @click="toggleDropdown(item)"
+                            :class="[
+                                'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group',
+                                isActive(item.children.map(c => c.routeName).flat())
+                                    ? 'bg-violet-600/20 text-violet-300 shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                            ]"
+                        >
+                            <span
+                                :class="[
+                                    'flex-shrink-0 transition-colors',
+                                    isActive(item.children.map(c => c.routeName).flat()) ? 'text-violet-400' : 'text-slate-500 group-hover:text-slate-300'
+                                ]"
+                                v-html="item.icon"
+                            />
+                            {{ item.label }}
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
+                                :class="['w-4 h-4 ml-auto transition-transform flex-shrink-0', isDropdownOpen(item) ? 'rotate-90' : '']">
+                                <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                        <div v-if="isDropdownOpen(item)" class="mt-0.5 ml-4 pl-4 border-l border-slate-800 space-y-0.5">
+                            <Link
+                                v-for="child in item.children"
+                                :key="child.label"
+                                :href="child.href"
+                                :class="[
+                                    'flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
+                                    isActive(child.routeName)
+                                        ? 'bg-violet-600/20 text-violet-300 shadow-sm'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                ]"
+                            >
+                                {{ child.label }}
+                                <span
+                                    v-if="isActive(child.routeName)"
+                                    class="ml-auto w-1.5 h-1.5 rounded-full bg-violet-400"
+                                />
+                            </Link>
+                        </div>
+                    </div>
+
+                    <!-- Item biasa (link langsung) -->
                     <Link
+                        v-else
                         :href="item.href"
                         :class="[
                             'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group',

@@ -1,9 +1,22 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
 
 const page = usePage();
+const currentProject = computed(() => page.props.currentProject);
+
+// ── Import Konsumen (konsumen proyek berjalan, langsung ke tahap terakhirnya) ──
+// Sama seperti pola Import Excel Kavling — download template, browse file,
+// upload. Butuh proyek aktif karena unit di-assign scoped per proyek.
+const showImport = ref(false);
+const importForm = useForm({ file: null });
+const onImportFile = (e) => { importForm.file = e.target.files[0]; };
+const submitImport = () => {
+    importForm.post(route('konsumens.import', currentProject.value.id), {
+        onSuccess: () => { showImport.value = false; importForm.reset(); },
+    });
+};
 
 const props = defineProps({
     mode:          String, // 'unit' | 'konsumen'
@@ -20,10 +33,22 @@ const statusJual  = ref(props.filters?.status_jual ?? '');
 const statusBangun = ref(props.filters?.status_bangun_stage_id ?? '');
 const statusPenjualan = ref(props.filters?.status_penjualan ?? '');
 
-const applyFilter = () => {
+// Sort dilakukan di server (daftar dipaginasi) — klik judul kolom untuk urut,
+// klik lagi untuk membalik. Default: booking terbaru di atas.
+const sortKey = computed(() => props.filters?.sort ?? 'booking');
+const sortDir = computed(() => props.filters?.sort ? (props.filters?.dir === 'asc' ? 'asc' : 'desc') : 'desc');
+const setSort = (key) => {
+    const dir = sortKey.value === key ? (sortDir.value === 'asc' ? 'desc' : 'asc') : (key === 'unit' ? 'asc' : 'desc');
+    applyFilter({ sort: key, dir });
+};
+const sortArrow = (key) => sortKey.value === key ? (sortDir.value === 'asc' ? '▲' : '▼') : '';
+
+const applyFilter = (sortOverride = null) => {
+    const sortParams = sortOverride ?? (props.filters?.sort ? { sort: props.filters.sort, dir: props.filters.dir } : {});
     router.get(
         route('konsumens.index'),
         {
+            ...sortParams,
             view: props.mode,
             search: search.value || undefined,
             kluster: kluster.value || undefined,
@@ -40,9 +65,9 @@ const applyFilter = () => {
 let searchTimer;
 watch(search, () => {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(applyFilter, 400);
+    searchTimer = setTimeout(() => applyFilter(), 400);
 });
-watch([kluster, blok, tipeUnit, statusJual, statusBangun, statusPenjualan], applyFilter);
+watch([kluster, blok, tipeUnit, statusJual, statusBangun, statusPenjualan], () => applyFilter());
 
 const resetFilters = () => {
     kluster.value = '';
@@ -137,6 +162,11 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                     <h1 class="text-white font-bold text-xl">Data Konsumen</h1>
                     <p class="text-slate-400 text-sm mt-0.5">Daftar semua konsumen &amp; unit properti — konsumen baru ditambahkan lewat form Booking di halaman Penjualan.</p>
                 </div>
+                <button v-if="currentProject" @click="showImport = true"
+                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium rounded-lg transition-colors border border-slate-700 whitespace-nowrap">
+                    📥 Import Konsumen
+                </button>
+                <div v-else class="text-slate-500 text-xs">Pilih proyek aktif dulu untuk Import Konsumen.</div>
             </div>
 
             <!-- View Mode Toggle -->
@@ -232,7 +262,12 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                         <thead class="border-b border-slate-800 text-xs text-slate-500 uppercase tracking-wide">
                             <tr>
                                 <th class="px-4 py-3 text-left font-medium">Konsumen</th>
-                                <th class="px-4 py-3 text-left font-medium">Unit</th>
+                                <th class="px-4 py-3 text-left font-medium">
+                                    <button type="button" @click="setSort('unit')" class="uppercase tracking-wide hover:text-slate-300 transition-colors" :class="sortKey === 'unit' ? 'text-violet-400' : ''">Unit {{ sortArrow('unit') }}</button>
+                                </th>
+                                <th class="px-4 py-3 text-left font-medium">
+                                    <button type="button" @click="setSort('booking')" class="uppercase tracking-wide hover:text-slate-300 transition-colors" :class="sortKey === 'booking' ? 'text-violet-400' : ''">Tgl Booking {{ sortArrow('booking') }}</button>
+                                </th>
                                 <th class="px-4 py-3 text-right font-medium">Harga</th>
                                 <th class="px-4 py-3 text-left font-medium">Cara Bayar</th>
                                 <th class="px-4 py-3 text-left font-medium">Bank</th>
@@ -254,6 +289,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                     {{ row.kavling_nomor }}
                                     <div class="text-slate-600 text-xs">{{ row.project_nama }}<span v-if="row.kluster"> · {{ row.kluster }}</span></div>
                                 </td>
+                                <td class="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{{ row.tanggal_booking ?? '-' }}</td>
                                 <td class="px-4 py-3 text-slate-300 text-right font-medium">{{ formatRp(row.harga_deal) }}</td>
                                 <td class="px-4 py-3 text-slate-400">{{ row.cara_bayar_label }}</td>
                                 <td class="px-4 py-3 text-slate-400 text-xs">{{ row.bank_rekanan_kpr ?? '-' }}</td>
@@ -396,5 +432,47 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                 />
             </div>
         </div>
+
+        <!-- ── MODAL: Import Konsumen ───────────────────────────────── -->
+        <Teleport to="body">
+            <div v-if="showImport" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showImport = false" />
+                <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+                        <div>
+                            <h3 class="text-white font-semibold">Import Konsumen</h3>
+                            <p class="text-slate-400 text-xs mt-0.5">{{ currentProject?.nama }} — upload file Excel (.xlsx) sesuai format template</p>
+                        </div>
+                        <button @click="showImport = false" class="text-slate-500 hover:text-slate-300">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
+                        </button>
+                    </div>
+                    <div class="px-6 py-5 space-y-4">
+                        <a :href="route('konsumens.import-template', currentProject.id)"
+                            class="flex items-center justify-center gap-2 w-full py-2.5 bg-violet-600/15 hover:bg-violet-600/25 text-violet-300 text-sm font-medium rounded-lg transition-colors border border-violet-500/30">
+                            📄 Download Template Excel
+                        </a>
+                        <div class="bg-slate-800 rounded-xl p-4 text-xs space-y-1.5 text-slate-400">
+                            <div class="text-slate-300 font-medium">Untuk konsumen proyek yang sudah berjalan</div>
+                            <p>Template berisi 4 sheet (KPR Subsidi/KPR Komersil/Cash/Cash Bertahap) — pilih sheet sesuai cara bayar tiap konsumen. Baca sheet "Petunjuk" &amp; "Kamus Kolom" di dalam file untuk aturan lengkap dan strategi migrasi bertahap.</p>
+                            <p class="pt-1 text-slate-500">Unit (Kluster+Blok+Nomor) harus sudah ada di Stok Kavling &amp; berstatus Tersedia. Baris dengan data tidak valid dilewati dengan pesan error yang jelas — baris lain tetap masuk.</p>
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 text-xs font-medium mb-1.5">Pilih File Excel</label>
+                            <input type="file" accept=".xlsx,.xls" @change="onImportFile"
+                                class="block w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:bg-slate-700 file:text-slate-300 hover:file:bg-slate-600 cursor-pointer" />
+                            <p v-if="importForm.errors.file" class="text-rose-400 text-xs mt-1">{{ importForm.errors.file }}</p>
+                        </div>
+                    </div>
+                    <div class="px-6 pb-5 flex gap-3">
+                        <button @click="showImport = false" class="flex-1 py-2.5 text-slate-400 border border-slate-700 rounded-lg text-sm transition-colors hover:text-slate-200">Batal</button>
+                        <button @click="submitImport" :disabled="importForm.processing || !importForm.file"
+                            class="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-all">
+                            {{ importForm.processing ? 'Mengimpor...' : '📥 Import Sekarang' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
     </AuthenticatedLayout>
 </template>

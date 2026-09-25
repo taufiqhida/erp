@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasUrutan;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
@@ -12,28 +12,19 @@ use Spatie\Activitylog\Support\LogOptions;
 
 class SalesAgent extends Model
 {
-    use HasFactory, SoftDeletes, LogsActivity;
+    use HasFactory, SoftDeletes, LogsActivity, HasUrutan;
 
+    // Rekening & skema komisi sengaja tidak dicatat di sini — itu urusan HR
+    // di sistem terpisah. Sistem ini cukup simpan atribusi (siapa jual unit
+    // apa) lewat relasi kavlingKonsumens(), itu sudah jadi rekap datanya.
     protected $fillable = [
         'nama',
         'tipe',
-        'user_id',
-        'nik',
-        'npwp',
-        'no_hp',
-        'email',
-        'nama_bank',
-        'nomor_rekening',
-        'atas_nama_rekening',
-        'agency_nama',
-        'komisi_tipe',
-        'komisi_nilai',
         'is_active',
     ];
 
     protected $casts = [
-        'komisi_nilai' => 'decimal:2',
-        'is_active'    => 'boolean',
+        'is_active' => 'boolean',
     ];
 
     public function getActivitylogOptions(): LogOptions
@@ -44,26 +35,39 @@ class SalesAgent extends Model
             ->setDescriptionForEvent(fn(string $event) => "Sales/Agent {$this->nama} telah di-{$event}");
     }
 
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
-
     public function kavlingKonsumens(): HasMany
     {
         return $this->hasMany(KavlingKonsumen::class);
     }
 
-    public function getTipeLabelAttribute(): string
+    // Urutan diatur per kategori (tipe) — geser hanya menukar dengan sesama tipe.
+    public function urutanGroup(): array
     {
-        return $this->tipe === 'freelance' ? 'Freelance' : 'Inhouse';
+        return ['tipe' => $this->tipe];
     }
 
-    public function getKomisiLabelAttribute(): string
+    // Kategori mengikuti urutan tipeLabels(), lalu urutan di dalam kategori.
+    public function scopeOrdered($query)
     {
-        if (!$this->komisi_nilai) return '-';
-        return $this->komisi_tipe === 'persen'
-            ? "{$this->komisi_nilai}%"
-            : 'Rp ' . number_format((float) $this->komisi_nilai, 0, ',', '.');
+        $tipeOrder = implode(',', array_map(fn ($t) => "'{$t}'", array_keys(self::tipeLabels())));
+
+        return $query->orderByRaw("FIELD(tipe, {$tipeOrder})")->orderBy('urutan')->orderBy('id');
     }
+
+    // Asal sales — label tagging saja; fee/agensi diurus di luar sistem ini.
+    public static function tipeLabels(): array
+    {
+        return [
+            'inhouse'   => 'Inhouse',
+            'freelance' => 'Freelance',
+            'agen'      => 'Agen',
+            'allowance' => 'Allowance',
+        ];
+    }
+
+    public function getTipeLabelAttribute(): string
+    {
+        return self::tipeLabels()[$this->tipe] ?? ucfirst($this->tipe);
+    }
+
 }

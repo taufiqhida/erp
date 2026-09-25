@@ -4,6 +4,8 @@ import { Link, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     templates: Array,
+    placeholders: Object,
+    jadwalPlaceholders: Object,
 });
 
 const delForm = useForm({});
@@ -20,7 +22,7 @@ const del = (id) => {
             <div class="flex items-center justify-between">
                 <div>
                     <h1 class="text-white font-bold text-xl">Template Surat</h1>
-                    <p class="text-slate-400 text-sm mt-0.5">Kelola template surat menyurat (booking, SP3K, akad, dll)</p>
+                    <p class="text-slate-400 text-sm mt-0.5">Upload file .docx (SPR, Surat Penawaran Pembiayaan, dll) — sistem isi otomatis placeholder-nya saat dicetak dari halaman Konsumen.</p>
                 </div>
                 <Link :href="route('pengaturan.surat-templates.create')"
                     class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-violet-500/20">
@@ -47,7 +49,7 @@ const del = (id) => {
                         <div>
                             <div class="text-slate-200 font-medium">{{ tmpl.nama }}</div>
                             <div class="flex items-center gap-2 mt-0.5">
-                                <span class="text-slate-500 text-xs">{{ tmpl.jenis_label }}</span>
+                                <span class="text-slate-500 text-xs font-mono">{{ tmpl.file_original_name }}</span>
                                 <span class="text-slate-700 text-xs">·</span>
                                 <span class="text-slate-500 text-xs">Diperbarui {{ tmpl.updated_at }}</span>
                             </div>
@@ -66,13 +68,29 @@ const del = (id) => {
                 </div>
             </div>
 
-            <!-- Info variables -->
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5">
-                <h3 class="text-slate-300 font-medium text-sm mb-3">📌 Variabel Template yang Tersedia</h3>
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                    <div v-for="v in ['{{konsumen_nama}}','{{konsumen_nik}}','{{konsumen_no_hp}}','{{kavling_nomor}}','{{kavling_blok}}','{{project_nama}}','{{harga_deal}}','{{booking_fee}}','{{cara_bayar}}','{{tanggal_booking}}','{{developer_nama}}','{{developer_alamat}}']"
-                        :key="v" class="bg-slate-800 px-2.5 py-1.5 rounded-lg text-xs text-violet-300 font-mono">
-                        {{ v }}
+            <!-- Info placeholder -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                <div>
+                    <h3 class="text-slate-300 font-medium text-sm mb-1">Placeholder yang tersedia</h3>
+                    <p class="text-slate-500 text-xs mb-3">Taruh persis seperti ini di file .docx kamu sebelum diupload — sistem akan isi otomatis sesuai data transaksi saat dicetak.</p>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                        <div v-for="(label, key) in placeholders" :key="key"
+                            class="bg-slate-800 px-2.5 py-1.5 rounded-lg" :title="label">
+                            <div class="text-xs text-violet-300 font-mono">{{ key }}</div>
+                            <div class="text-[11px] text-slate-500 truncate">{{ label }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-3 border-t border-slate-800">
+                    <h3 class="text-slate-300 font-medium text-sm mb-1">Tabel Jadwal Pembayaran (khusus SPR)</h3>
+                    <p class="text-slate-500 text-xs mb-3">Kalau template punya tabel Jadwal Pembayaran, buat 1 baris tabel berisi placeholder ini — sistem akan clone barisnya otomatis sesuai jumlah cicilan.</p>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        <div v-for="(label, key) in jadwalPlaceholders" :key="key"
+                            class="bg-slate-800 px-2.5 py-1.5 rounded-lg" :title="label">
+                            <div class="text-xs text-violet-300 font-mono">{{ key }}</div>
+                            <div class="text-[11px] text-slate-500 truncate">{{ label }}</div>
+                        </div>
                     </div>
                 </div>
             </div>

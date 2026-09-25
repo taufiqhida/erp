@@ -12,7 +12,10 @@ use App\Http\Controllers\MediaController;
 use App\Http\Controllers\PengaturanController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProsesBangunController;
+use App\Http\Controllers\RencanaAkadController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SuratGenerateController;
 use App\Http\Controllers\TipeUnitPresetController;
 use Illuminate\Support\Facades\Route;
 
@@ -94,8 +97,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('kavlings.status-bangun');
     Route::patch('kavlings/{kavling}/id-rumah', [KavlingController::class, 'updateIdRumah'])
         ->name('kavlings.id-rumah');
+    Route::patch('kavlings/{kavling}/hgb-no', [KavlingController::class, 'updateHgbNo'])
+        ->name('kavlings.hgb-no');
+
+    // ── Proses Bangun (progress bangun + SPK) — terpisah dari Stok Kavling ──
+    Route::get('proyek/{project}/proses-bangun', [ProsesBangunController::class, 'index'])
+        ->name('proses-bangun.index');
+    Route::get('proyek/{project}/spk/buat', [ProsesBangunController::class, 'createSpk'])
+        ->name('spk.create');
+    Route::post('proyek/{project}/spk', [ProsesBangunController::class, 'storeSpk'])
+        ->name('spk.store');
 
     // ── Penjualan (menu proyek untuk sales) ───────────────────────────
+    Route::get('rencana-akad', [RencanaAkadController::class, 'index'])->name('rencana-akad.index');
     Route::get('penjualan', [BookingController::class, 'projectList'])->name('penjualan.index');
     Route::get('penjualan/{project}', [BookingController::class, 'projectDetail'])->name('penjualan.project');
     Route::get('proyek/{project}/kavlings-available', [BookingController::class, 'availableKavlings'])->name('bookings.available-kavlings');
@@ -126,12 +140,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('dokumen.index');
     Route::patch('dokumen/{dok}/status', [DokumenKonsumenController::class, 'updateStatus'])
         ->name('dokumen.update-status');
-    Route::post('dokumen/{dok}/upload', [DokumenKonsumenController::class, 'uploadFile'])
-        ->name('dokumen.upload');
 
     // ── Konsumens (CRUD) — tanpa create/store: konsumen baru cuma dibuat
     // lewat form booking, biar tidak ada row konsumen yatim tanpa transaksi.
     Route::resource('konsumens', KonsumenController::class)->except(['create', 'store']);
+    Route::get('konsumens/{project}/import-template', [KonsumenController::class, 'downloadImportTemplate'])
+        ->name('konsumens.import-template');
+    Route::post('konsumens/{project}/import', [KonsumenController::class, 'importKonsumen'])
+        ->name('konsumens.import');
 
     // ── Rincian Biaya Akad (Dajam/SBUM/Biaya Akad per transaksi) ────────
     Route::post('kavling-konsumen/{transaksi}/biaya-akad', [KonsumenController::class, 'storeRincianBiayaAkad'])
@@ -141,8 +157,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('biaya-akad/{rincian}', [KonsumenController::class, 'destroyRincianBiayaAkad'])
         ->name('konsumens.biaya-akad.destroy');
 
+    // ── Cetak Dokumen (generate dari Template Surat) — GET karena murni
+    // export/read (tidak ubah data tersimpan), jadi bisa lewat form biasa
+    // tanpa perlu CSRF token di frontend, cukup navigasi/submit native.
+    Route::get('kavling-konsumen/{kk}/surat/{suratTemplate}/generate', [SuratGenerateController::class, 'generate'])
+        ->name('surat.generate');
+
     // ── Keuangan ──────────────────────────────────────────────────────
     Route::get('keuangan', [KeuanganController::class, 'index'])->name('keuangan.index');
+    Route::get('keuangan/pencairan-kpr', [KeuanganController::class, 'pencairan'])->name('keuangan.pencairan');
     Route::get('keuangan/transaksi/{kk}', [KeuanganController::class, 'detail'])->name('keuangan.detail');
     Route::post('keuangan/transaksi/{kk}/selesai', [KeuanganController::class, 'markComplete'])->name('keuangan.mark-complete');
     Route::post('kavling-konsumen/{kk}/pembayaran', [KeuanganController::class, 'storePembayaran'])
@@ -159,24 +182,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('pelunasan.cicilan.store');
     Route::delete('jadwal-tagihan/{jadwal}', [KeuanganController::class, 'destroyJadwalTagihan'])
         ->name('jadwal-tagihan.destroy');
-    Route::post('kavling-konsumen/{kk}/biaya-tanah/bayar', [KeuanganController::class, 'payBiayaTanah'])
-        ->name('biaya-tanah.bayar');
-    Route::delete('kavling-konsumen/{kk}/biaya-tanah/bayar', [KeuanganController::class, 'destroyBiayaTanahPembayaran'])
-        ->name('biaya-tanah.bayar.destroy');
-    Route::post('kavling-konsumen/{kk}/tambahan-um/bayar', [KeuanganController::class, 'payTambahanUm'])
-        ->name('tambahan-um.bayar');
-    Route::delete('kavling-konsumen/{kk}/tambahan-um/bayar', [KeuanganController::class, 'destroyTambahanUmPembayaran'])
-        ->name('tambahan-um.bayar.destroy');
+    Route::post('kavling-konsumen/{kk}/biaya-tanah/cicilan', [KeuanganController::class, 'storeBiayaTanahCicilan'])
+        ->name('biaya-tanah.cicilan.store');
+    Route::post('kavling-konsumen/{kk}/tambahan-um/cicilan', [KeuanganController::class, 'storeTambahanUmCicilan'])
+        ->name('tambahan-um.cicilan.store');
+    Route::post('kavling-konsumen/{kk}/titipan-biaya-akad/cicilan', [KeuanganController::class, 'storeTitipanBiayaAkadCicilan'])
+        ->name('titipan-biaya-akad.cicilan.store');
+    Route::patch('cicilan-pembayaran/{pembayaran}', [KeuanganController::class, 'updateCicilanKonsumen'])
+        ->name('cicilan-pembayaran.update');
+    Route::delete('cicilan-pembayaran/{pembayaran}', [KeuanganController::class, 'destroyCicilanKonsumen'])
+        ->name('cicilan-pembayaran.destroy');
     Route::post('kavling-konsumen/{kk}/pencairan-kpr/tahap', [KeuanganController::class, 'storePencairanKprTahap'])
         ->name('pencairan-kpr.tahap.store');
     Route::patch('pencairan-kpr/tahap/{tahap}', [KeuanganController::class, 'updatePencairanKprTahap'])
         ->name('pencairan-kpr.tahap.update');
     Route::delete('pencairan-kpr/tahap/{tahap}', [KeuanganController::class, 'destroyPencairanKprTahap'])
         ->name('pencairan-kpr.tahap.destroy');
-    Route::post('biaya-tambahan/{item}/bayar', [KeuanganController::class, 'payBiayaTambahan'])
-        ->name('biaya-tambahan.bayar');
-    Route::delete('biaya-tambahan/{item}/bayar', [KeuanganController::class, 'destroyBiayaTambahanPembayaran'])
-        ->name('biaya-tambahan.bayar.destroy');
+    Route::post('biaya-tambahan/{item}/cicilan', [KeuanganController::class, 'storeBiayaTambahanCicilan'])
+        ->name('biaya-tambahan.cicilan.store');
     Route::post('rincian-biaya-akad/{item}/bayar', [KeuanganController::class, 'payDajamSbum'])
         ->name('rincian-biaya-akad.bayar');
     Route::delete('rincian-biaya-akad/{item}/bayar', [KeuanganController::class, 'destroyDajamSbumPembayaran'])
@@ -223,6 +246,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('dokumen-templates.store');
         Route::patch('dokumen-templates/{template}', [PengaturanController::class, 'updateDokumenTemplate'])
             ->name('dokumen-templates.update');
+        Route::patch('dokumen-templates/{template}/move-up', [PengaturanController::class, 'moveUpDokumenTemplate'])
+            ->name('dokumen-templates.move-up');
+        Route::patch('dokumen-templates/{template}/move-down', [PengaturanController::class, 'moveDownDokumenTemplate'])
+            ->name('dokumen-templates.move-down');
         Route::delete('dokumen-templates/{template}', [PengaturanController::class, 'destroyDokumenTemplate'])
             ->name('dokumen-templates.destroy');
 
@@ -260,6 +287,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('biaya-tambahan/{biayaTambahan}', [PengaturanController::class, 'destroyBiayaTambahan'])
             ->name('biaya-tambahan.destroy');
 
+        // Program All In
+        Route::get('program-all-in', [PengaturanController::class, 'programAllIn'])
+            ->name('program-all-in');
+        Route::post('program-all-in', [PengaturanController::class, 'storeProgramAllIn'])
+            ->name('program-all-in.store');
+        Route::patch('program-all-in/{programAllIn}', [PengaturanController::class, 'updateProgramAllIn'])
+            ->name('program-all-in.update');
+        Route::delete('program-all-in/{programAllIn}', [PengaturanController::class, 'destroyProgramAllIn'])
+            ->name('program-all-in.destroy');
+
         // Master Sumber Lead
         Route::get('sumber-lead', [PengaturanController::class, 'sumberLead'])
             ->name('sumber-lead');
@@ -270,6 +307,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('sumber-lead/{sumberLead}', [PengaturanController::class, 'destroySumberLead'])
             ->name('sumber-lead.destroy');
 
+        // Urutan master data (geser naik/turun)
+        Route::patch('urutan/{type}/{id}/{direction}', [PengaturanController::class, 'moveUrutan'])
+            ->whereNumber('id')->whereIn('direction', ['up', 'down'])
+            ->name('urutan.move');
+
+        // Master Notaris
+        Route::get('notaris', [PengaturanController::class, 'notaris'])
+            ->name('notaris');
+        Route::post('notaris', [PengaturanController::class, 'storeNotaris'])
+            ->name('notaris.store');
+        Route::patch('notaris/{notaris}', [PengaturanController::class, 'updateNotaris'])
+            ->name('notaris.update');
+        Route::delete('notaris/{notaris}', [PengaturanController::class, 'destroyNotaris'])
+            ->name('notaris.destroy');
+
         // Master Bank Rekanan KPR
         Route::get('bank-rekanan', [PengaturanController::class, 'bankRekanan'])
             ->name('bank-rekanan');
@@ -279,6 +331,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('bank-rekanan.update');
         Route::delete('bank-rekanan/{bankRekanan}', [PengaturanController::class, 'destroyBankRekanan'])
             ->name('bank-rekanan.destroy');
+
+        // Master Kontraktor
+        Route::get('kontraktor', [PengaturanController::class, 'kontraktor'])
+            ->name('kontraktor');
+        Route::post('kontraktor', [PengaturanController::class, 'storeKontraktor'])
+            ->name('kontraktor.store');
+        Route::patch('kontraktor/{kontraktor}', [PengaturanController::class, 'updateKontraktor'])
+            ->name('kontraktor.update');
+        Route::delete('kontraktor/{kontraktor}', [PengaturanController::class, 'destroyKontraktor'])
+            ->name('kontraktor.destroy');
 
         // Preset Promo
         Route::get('promo', [PengaturanController::class, 'promo'])

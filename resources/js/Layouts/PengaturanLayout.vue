@@ -22,6 +22,7 @@ const navGroups = [
             { label: 'Promo',                route: 'pengaturan.promo' },
             { label: 'Skema DP',             route: 'pengaturan.skema-dp' },
             { label: 'Dana Jaminan & SBUM',  route: 'pengaturan.dajam-sbum' },
+            { label: 'Program All In',       route: 'pengaturan.program-all-in' },
             { label: 'Warna Status',         route: 'pengaturan.status-colors' },
         ],
     },
@@ -30,6 +31,7 @@ const navGroups = [
         items: [
             { label: 'Sumber Lead',       route: 'pengaturan.sumber-lead' },
             { label: 'Bank Rekanan KPR',  route: 'pengaturan.bank-rekanan' },
+            { label: 'Notaris',           route: 'pengaturan.notaris' },
         ],
     },
     {
@@ -42,6 +44,7 @@ const navGroups = [
         label: 'Konstruksi',
         items: [
             { label: 'Status Bangun', route: 'pengaturan.status-bangun' },
+            { label: 'Kontraktor',    route: 'pengaturan.kontraktor' },
         ],
     },
 ];

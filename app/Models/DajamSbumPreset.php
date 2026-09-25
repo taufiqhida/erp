@@ -20,9 +20,8 @@ class DajamSbumPreset extends Model
     public static function kategoriLabel(): array
     {
         return [
-            'dajam'      => 'Dana Jaminan',
-            'sbum'       => 'SBUM',
-            'biaya_akad' => 'Biaya Akad',
+            'dajam' => 'Dana Jaminan',
+            'sbum'  => 'SBUM',
         ];
     }
 }

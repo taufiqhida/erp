@@ -27,10 +27,13 @@ class KavlingImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
     public int $imported = 0;
     public int $skipped  = 0;
 
-    /** Nomor kavling yang sudah diproses dalam batch file ini — supaya
-     *  duplikat SESAMA baris di file yang sama juga ketahuan, bukan cuma
-     *  duplikat terhadap data yang sudah ada di database. */
+    /** Identitas unit (kluster|blok|nomor) yang sudah diproses dalam batch
+     *  file ini — supaya duplikat SESAMA baris di file yang sama juga
+     *  ketahuan, bukan cuma duplikat terhadap data yang sudah ada di database. */
     private array $seenInBatch = [];
+
+    /** No. HGB yang sudah dipakai baris lain di batch ini (hgb_no harus unik). */
+    private array $seenHgb = [];
 
     public function __construct(Project $project)
     {
@@ -67,18 +70,24 @@ class KavlingImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 continue;
             }
 
-            if (isset($this->seenInBatch[$noUnit])) {
-                $this->errors[] = "Baris {$rowNum}: No Unit '{$noUnit}' duplikat dengan baris {$this->seenInBatch[$noUnit]} di file yang sama, dilewati.";
+            if ($blok === '') {
+                $this->errors[] = "Baris {$rowNum}: Blok kosong (wajib diisi), dilewati.";
                 $this->skipped++;
                 continue;
             }
 
-            $exists = Kavling::where('project_id', $this->project->id)
-                ->where('nomor_kavling', $noUnit)
-                ->exists();
+            // Identitas unit = kluster + blok + nomor (kluster boleh kosong).
+            $unitLabel = ($kluster !== '' ? "{$kluster} · " : '') . "{$blok}-{$noUnit}";
+            $batchKey = mb_strtolower("{$kluster}|{$blok}|{$noUnit}");
 
-            if ($exists) {
-                $this->errors[] = "Baris {$rowNum}: No Unit '{$noUnit}' sudah ada di proyek ini, dilewati.";
+            if (isset($this->seenInBatch[$batchKey])) {
+                $this->errors[] = "Baris {$rowNum}: Unit '{$unitLabel}' duplikat dengan baris {$this->seenInBatch[$batchKey]} di file yang sama, dilewati.";
+                $this->skipped++;
+                continue;
+            }
+
+            if (Kavling::identitasExists($this->project->id, $kluster !== '' ? $kluster : null, $blok, $noUnit)) {
+                $this->errors[] = "Baris {$rowNum}: Unit '{$unitLabel}' sudah ada di proyek ini, dilewati.";
                 $this->skipped++;
                 continue;
             }
@@ -110,6 +119,20 @@ class KavlingImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 continue;
             }
 
+            // Persen penyelesaian DI DALAM tahap bangun (0–100), opsional, default 0.
+            $persenRaw = trim((string) ($row['persen_tahap'] ?? ''));
+            $persenTahap = 0.0;
+            if ($persenRaw !== '') {
+                if (!is_numeric(str_replace(',', '.', $persenRaw)) || (float) str_replace(',', '.', $persenRaw) < 0 || (float) str_replace(',', '.', $persenRaw) > 100) {
+                    $this->errors[] = "Baris {$rowNum}: persen_tahap '{$persenRaw}' tidak valid (harus angka 0–100), dilewati.";
+                    $this->skipped++;
+                    continue;
+                }
+                $persenTahap = (float) str_replace(',', '.', $persenRaw);
+            }
+            // Tahap awal (Belum Mulai) tidak punya persen.
+            if ($statusBangunStageId === $defaultStageId) $persenTahap = 0.0;
+
             $harga = $this->parseAngka($row['harga'] ?? 0);
             $lb    = $this->parseAngka($row['lb'] ?? $row['luas_bangunan'] ?? 0);
             $lt    = $this->parseAngka($row['lt'] ?? $row['luas_tanah'] ?? 0);
@@ -119,6 +142,20 @@ class KavlingImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 $this->errors[] = "Baris {$rowNum}: ID Rumah '{$idRumah}' sudah dipakai kavling lain, dilewati.";
                 $this->skipped++;
                 continue;
+            }
+
+            $hgbNo = trim((string) ($row['hgb_no'] ?? ''));
+            if ($hgbNo !== '') {
+                if (isset($this->seenHgb[$hgbNo])) {
+                    $this->errors[] = "Baris {$rowNum}: No. HGB '{$hgbNo}' duplikat dengan baris {$this->seenHgb[$hgbNo]} di file yang sama, dilewati.";
+                    $this->skipped++;
+                    continue;
+                }
+                if (Kavling::where('hgb_no', $hgbNo)->exists()) {
+                    $this->errors[] = "Baris {$rowNum}: No. HGB '{$hgbNo}' sudah dipakai kavling lain, dilewati.";
+                    $this->skipped++;
+                    continue;
+                }
             }
 
             try {
@@ -141,9 +178,12 @@ class KavlingImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                     'status_unit'   => $statusRaw,
                     'status_jual'   => $statusRaw === 'not_for_sale' ? StatusJual::Hold : StatusJual::Available,
                     'status_bangun_stage_id' => $statusBangunStageId,
+                    'status_bangun_persen'   => $persenTahap,
                     'id_rumah'      => $idRumah ?: null,
+                    'hgb_no'        => $hgbNo ?: null,
                 ]);
-                $this->seenInBatch[$noUnit] = $rowNum;
+                if ($hgbNo !== '') $this->seenHgb[$hgbNo] = $rowNum;
+                $this->seenInBatch[$batchKey] = $rowNum;
                 $this->imported++;
             } catch (\Exception $e) {
                 $this->errors[] = "Baris {$rowNum}: Error – {$e->getMessage()}";

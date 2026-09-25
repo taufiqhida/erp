@@ -11,6 +11,7 @@ const props = defineProps({
     dokumens:   Array,
     bast:       Object,
     bankRekananPresets: { type: Array, default: () => [] },
+    notarisPresets: { type: Array, default: () => [] },
 });
 
 // Kalau bank yang sudah tersimpan belum ada di master data (mis. data lama
@@ -63,20 +64,6 @@ const updateStatus = (dok, status) => {
 };
 
 const formatRp = (v) => v ? 'Rp ' + Number(v).toLocaleString('id-ID') : '-';
-
-// Upload file dokumen (memicu status otomatis jadi "Sudah Ada" di server)
-const uploadForm = useForm({ file: null });
-const uploadingFile = ref(null);
-const onDokumenFileChange = (e, dok) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    uploadForm.file = file;
-    uploadingFile.value = dok.id;
-    uploadForm.post(route('dokumen.upload', dok.id), {
-        forceFormData: true,
-        onFinish: () => { uploadingFile.value = null; uploadForm.reset(); },
-    });
-};
 
 // ── Pipeline KPR ──────────────────────────────────────────────────────
 // Cash & Cash Bertahap tidak melalui Proses Bank/SLIK & SP3K (Fase 4 —
@@ -277,6 +264,7 @@ const onPengajuanBatalSuccess = () => { showPengajuanBatal.value = false; router
 // ── Rencana Akad ─────────────────────────────────────────────────────────
 const rencanaAkadForm = useForm({
     tanggal_rencana_akad: props.transaksi.tanggal_rencana_akad ?? '',
+    notaris_preset_id: props.transaksi.notaris_preset_id ?? '',
 });
 
 const submitRencanaAkad = () => {
@@ -484,9 +472,17 @@ const submitBast = () => {
                         <input v-model="rencanaAkadForm.tanggal_rencana_akad" type="date" :disabled="!transaksi.can_update_status"
                             class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
                     </div>
+                    <div>
+                        <label class="block text-slate-400 text-xs font-medium mb-1.5">Notaris</label>
+                        <select v-model="rencanaAkadForm.notaris_preset_id" :disabled="!transaksi.can_update_status"
+                            class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60 min-w-[220px]">
+                            <option value="">— Belum dipilih —</option>
+                            <option v-for="n in notarisPresets" :key="n.id" :value="n.id">{{ n.nama }}</option>
+                        </select>
+                    </div>
                     <button v-if="transaksi.can_update_status" @click="submitRencanaAkad" :disabled="rencanaAkadForm.processing"
                         class="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
-                        {{ rencanaAkadForm.processing ? 'Menyimpan...' : 'Simpan Tanggal' }}
+                        {{ rencanaAkadForm.processing ? 'Menyimpan...' : 'Simpan' }}
                     </button>
                 </div>
                 <p class="text-slate-600 text-xs mt-3">Saat "Lanjutkan ke Akad" ditekan, ini hanya konfirmasi bahwa akad terlaksana sesuai tanggal di atas.</p>
@@ -584,7 +580,7 @@ const submitBast = () => {
 
                 <div v-if="sp3kForm.status_sp3k === 'turun_plafon'" class="mb-4">
                     <label class="block text-slate-400 text-xs font-medium mb-1.5">Plafon Baru</label>
-                    <input v-model="sp3kForm.plafon_baru" type="number" min="0" :disabled="!transaksi.can_update_status"
+                    <MoneyInput v-model="sp3kForm.plafon_baru" :disabled="!transaksi.can_update_status"
                         placeholder="cth. 250000000"
                         class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
                     <p v-if="transaksi.plafon_kpr" class="text-slate-600 text-xs mt-1">Plafon sebelumnya: {{ formatRp(transaksi.plafon_kpr) }}</p>
@@ -704,22 +700,13 @@ const submitBast = () => {
                                     class="text-xs px-2 py-0.5 rounded-full font-medium">
                                     {{ statusConfig[dok.status]?.label ?? dok.status }}
                                 </span>
-                                <span v-if="dok.tanggal_upload" class="text-slate-600 text-xs">Diupload {{ dok.tanggal_upload }}</span>
                                 <span v-if="dok.verified_by" class="text-slate-600 text-xs">· Diverifikasi {{ dok.verified_by }}, {{ dok.tanggal_verifikasi }}</span>
-                                <a v-if="dok.file_path" :href="dok.file_path" target="_blank" class="text-violet-400 hover:text-violet-300 text-xs underline">📎 Lihat file</a>
                             </div>
                             <p v-if="['perlu_revisi','ditolak'].includes(dok.status) && dok.catatan_revisi"
                                 class="mt-1.5 text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
                                 📝 {{ dok.catatan_revisi }}
                             </p>
                         </div>
-
-                        <!-- Upload File -->
-                        <label v-if="isEditable" class="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0 bg-slate-800 hover:bg-slate-700 cursor-pointer transition-colors" title="Upload file">
-                            <span v-if="uploadingFile === dok.id" class="animate-spin text-xs">↻</span>
-                            <span v-else>📎</span>
-                            <input type="file" accept=".pdf,.jpg,.jpeg,.png" class="hidden" @change="onDokumenFileChange($event, dok)" />
-                        </label>
 
                         <!-- Status Update Buttons -->
                         <div v-if="isEditable" class="flex items-center gap-1.5 flex-shrink-0">

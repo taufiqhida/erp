@@ -52,6 +52,11 @@ class Project extends Model
         return $this->hasMany(TipeUnitPreset::class);
     }
 
+    public function spks(): HasMany
+    {
+        return $this->hasMany(Spk::class);
+    }
+
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'project_user')->withTimestamps();

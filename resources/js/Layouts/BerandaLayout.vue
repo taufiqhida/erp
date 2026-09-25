@@ -36,8 +36,8 @@ const logout = () => router.post(route('logout'));
                     </svg>
                 </div>
                 <div class="hidden md:block">
-                    <div class="text-white font-semibold text-sm leading-none">ERP Property</div>
-                    <div class="text-slate-400 text-xs mt-0.5">Management System</div>
+                    <div class="text-white font-semibold text-sm leading-none">SSID</div>
+                    <div class="text-slate-400 text-xs mt-0.5">Sedaya Sistem Informasi Developer</div>
                 </div>
             </Link>
 

@@ -49,7 +49,7 @@ const presetsByKategori = computed(() => {
             <div>
                 <h1 class="text-white font-bold text-xl">Dana Jaminan & SBUM</h1>
                 <p class="text-slate-400 text-sm mt-0.5">
-                    Daftar item Dana Jaminan (Sertifikat/BBN, Air, Listrik/PLN, IMB/PBG, dll), SBUM, & Biaya Akad yang berlaku
+                    Daftar item Dana Jaminan (Sertifikat/BBN, Air, Listrik/PLN, IMB/PBG, dll) & SBUM yang berlaku
                     global — bukan per-proyek atau per-cara-bayar. Tidak ada nominal di sini; nominal ditentukan sales secara
                     fleksibel per konsumen/bank saat booking.
                 </p>

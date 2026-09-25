@@ -9,6 +9,7 @@ class PembayaranKonsumen extends Model
 {
     protected $fillable = [
         'kavling_konsumen_id',
+        'kavling_konsumen_biaya_tambahan_id',
         'jenis',
         'jumlah',
         'tanggal_bayar',
@@ -50,8 +51,8 @@ class PembayaranKonsumen extends Model
             'biaya_tambahan' => 'Biaya Tambahan',
             'sbum'           => 'SBUM',
             'dajam'          => 'Dana Jaminan',
-            'biaya_akad'     => 'Biaya Akad',
             'tambahan_um'    => 'Tambahan Uang Muka',
+            'titipan_biaya_akad' => 'Titipan Biaya Akad',
             default          => $this->jenis,
         };
     }

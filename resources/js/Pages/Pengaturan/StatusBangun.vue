@@ -66,8 +66,9 @@ const destroyStage = (stage) => {
             <h1 class="text-white font-bold text-xl">Status Bangun</h1>
             <p class="text-slate-400 text-sm mt-0.5">
                 Master tahap progress pembangunan kavling — global untuk semua proyek. Tambah/hapus/urutkan tahap
-                bebas, atur bobot masing-masing sampai total 100%. Progress unit dihitung kumulatif dari tahap
-                pertama sampai tahap yang sedang dipilih.
+                bebas, atur bobot masing-masing sampai total 100%. Progress unit = total bobot tahap-tahap sebelumnya
+                + bobot tahap yang sedang dikerjakan × persen penyelesaian tahap itu (diisi di Proses Bangun). Unit baru dianggap
+                siap serah terima kalau sudah di tahap terakhir dan persennya 100%.
             </p>
         </div>
 

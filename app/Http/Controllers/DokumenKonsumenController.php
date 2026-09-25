@@ -8,10 +8,10 @@ use App\Models\BankRekananPreset;
 use App\Models\CancellationRequest;
 use App\Models\DokumenKonsumen;
 use App\Models\KavlingKonsumen;
+use App\Models\NotarisPreset;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -47,6 +47,7 @@ class DokumenKonsumenController extends Controller
                 'progress_berkas'  => $kk->progress_berkas,
                 'tanggal_booking'      => $kk->tanggal_booking?->format('Y-m-d'),
                 'tanggal_rencana_akad' => $kk->tanggal_rencana_akad?->format('Y-m-d'),
+                'notaris_preset_id'    => $kk->notaris_preset_id,
                 'tanggal_sp3k'         => $kk->tanggal_sp3k?->format('Y-m-d'),
                 'tanggal_expired_sp3k' => $kk->tanggal_expired_sp3k?->format('Y-m-d'),
                 'tanggal_akad'         => $kk->tanggal_akad?->format('Y-m-d'),
@@ -86,7 +87,7 @@ class DokumenKonsumenController extends Controller
                 'project_nama'        => $kk->kavling->project->nama,
                 'status_bangun_stage_id' => $kk->kavling->status_bangun_stage_id,
                 'status_bangun_label' => $kk->kavling->status_bangun_label,
-                'status_bangun_is_final' => $kk->kavling->statusBangunStage?->isFinalStage() ?? false,
+                'status_bangun_is_final' => $kk->kavling->bangun_selesai,
             ],
             'dokumens'   => $kk->dokumens->map(fn($d) => [
                 'id'           => $d->id,
@@ -96,10 +97,8 @@ class DokumenKonsumenController extends Controller
                 'status'       => $d->status,
                 'status_label' => $d->status_label,
                 'status_icon'  => $d->status_icon,
-                'file_path'    => $d->file_path ? route('media.show', ['path' => $d->file_path]) : null,
                 'catatan'      => $d->catatan,
                 'catatan_revisi'     => $d->catatan_revisi,
-                'tanggal_upload'     => $d->tanggal_upload?->format('d M Y H:i'),
                 'tanggal_verifikasi' => $d->tanggal_verifikasi?->format('d M Y H:i'),
                 'verified_by'        => $d->verifiedBy?->name,
             ]),
@@ -108,7 +107,10 @@ class DokumenKonsumenController extends Controller
                 'catatan'      => $kk->bastRecord->catatan,
                 'status_ttd'   => $kk->bastRecord->status_ttd,
             ] : null,
-            'bankRekananPresets' => BankRekananPreset::where('is_active', true)->orderBy('nama')->get(['id', 'nama']),
+            'bankRekananPresets' => BankRekananPreset::where('is_active', true)->ordered()->get(['id', 'nama']),
+            'notarisPresets'     => NotarisPreset::where('is_active', true)
+                ->orWhere('id', $kk->notaris_preset_id)
+                ->ordered()->get(['id', 'nama']),
         ]);
     }
 
@@ -138,36 +140,5 @@ class DokumenKonsumenController extends Controller
         ]);
 
         return back()->with('success', "Status dokumen '{$dok->nama_dokumen}' diperbarui.");
-    }
-
-    /**
-     * Upload file dokumen
-     */
-    public function uploadFile(Request $request, DokumenKonsumen $dok): RedirectResponse
-    {
-        $this->authorizeProjectAccess($dok->transaksi->kavling->project);
-        abort_unless(Auth::user()->can('manage dokumen'), 403);
-        $this->assertTransactionEditable($dok->transaksi, 'Upload dokumen');
-
-        $request->validate([
-            'file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240', // max 10MB
-        ]);
-
-        // Hapus file lama jika ada
-        if ($dok->file_path) {
-            Storage::disk('public')->delete($dok->file_path);
-        }
-
-        $kkId = $dok->kavling_konsumen_id;
-        $path = $request->file('file')->store("dokumen/{$kkId}", 'public');
-
-        $dok->update([
-            'file_path'      => $path,
-            'status'         => 'sudah_ada',
-            'tanggal_upload' => now(),
-            'updated_by'     => Auth::id(),
-        ]);
-
-        return back()->with('success', "Dokumen '{$dok->nama_dokumen}' berhasil diupload.");
     }
 }

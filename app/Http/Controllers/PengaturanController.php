@@ -9,11 +9,14 @@ use App\Models\DeveloperProfile;
 use App\Models\DeveloperProfileBank;
 use App\Models\DokumenTemplate;
 use App\Models\Kavling;
+use App\Models\Kontraktor;
+use App\Models\ProgramAllInPreset;
 use App\Models\PromoPreset;
 use App\Models\SalesAgent;
 use App\Models\SkemaDpPreset;
 use App\Models\StatusBangunStage;
 use App\Models\StatusColor;
+use App\Models\NotarisPreset;
 use App\Models\SumberLead;
 use App\Models\SuratTemplate;
 use App\Models\User;
@@ -43,6 +46,8 @@ class PengaturanController extends Controller
                 'telepon'            => $profile->telepon,
                 'email'              => $profile->email,
                 'npwp'               => $profile->npwp,
+                'nama_penandatangan'    => $profile->nama_penandatangan,
+                'jabatan_penandatangan' => $profile->jabatan_penandatangan,
                 'logo_url'           => $profile->logo_path
                     ? route('media.show', ['path' => $profile->logo_path]) : null,
                 'kop_surat_url'      => $profile->kop_surat_path
@@ -60,6 +65,8 @@ class PengaturanController extends Controller
             'telepon'            => 'nullable|string|max:30',
             'email'              => 'nullable|email|max:100',
             'npwp'               => 'nullable|string|max:30',
+            'nama_penandatangan'    => 'nullable|string|max:100',
+            'jabatan_penandatangan' => 'nullable|string|max:100',
             'logo'               => 'nullable|image|mimes:png,jpg,jpeg,svg|max:2048',
             'kop_surat'          => 'nullable|image|mimes:png,jpg,jpeg|max:5120',
         ]);
@@ -151,7 +158,7 @@ class PengaturanController extends Controller
 
     public function dokumenTemplates(): Response
     {
-        $templates = DokumenTemplate::orderBy('cara_bayar')->orderBy('urutan')->get()
+        $templates = DokumenTemplate::orderBy('cara_bayar')->orderBy('urutan')->orderBy('id')->get()
             ->groupBy('cara_bayar')
             ->map(fn($items) => $items->map(fn($t) => [
                 'id'           => $t->id,
@@ -174,8 +181,10 @@ class PengaturanController extends Controller
             'cara_bayar'   => 'required|in:cash,cash_bertahap,kpr_subsidi,kpr_komersil',
             'nama_dokumen' => 'required|string|max:100',
             'sifat'        => 'required|in:wajib,kondisional,opsional',
-            'urutan'       => 'integer|min:0',
         ]);
+
+        // Item baru selalu masuk paling bawah di cara bayarnya; urutan diatur lewat tombol geser.
+        $validated['urutan'] = (DokumenTemplate::where('cara_bayar', $validated['cara_bayar'])->max('urutan') ?? 0) + 1;
 
         DokumenTemplate::create($validated);
 
@@ -187,12 +196,40 @@ class PengaturanController extends Controller
         $validated = $request->validate([
             'nama_dokumen' => 'required|string|max:100',
             'sifat'        => 'required|in:wajib,kondisional,opsional',
-            'urutan'       => 'integer|min:0',
         ]);
 
         $template->update($validated);
 
         return back()->with('success', 'Template dokumen berhasil diperbarui.');
+    }
+
+    public function moveUpDokumenTemplate(DokumenTemplate $template): RedirectResponse
+    {
+        $this->swapDokumenTemplateOrder($template, 'up');
+        return back();
+    }
+
+    public function moveDownDokumenTemplate(DokumenTemplate $template): RedirectResponse
+    {
+        $this->swapDokumenTemplateOrder($template, 'down');
+        return back();
+    }
+
+    private function swapDokumenTemplateOrder(DokumenTemplate $template, string $direction): void
+    {
+        $siblings = DokumenTemplate::where('cara_bayar', $template->cara_bayar);
+
+        $neighbor = $direction === 'up'
+            ? $siblings->where('urutan', '<', $template->urutan)->orderByDesc('urutan')->first()
+            : $siblings->where('urutan', '>', $template->urutan)->orderBy('urutan')->first();
+
+        if (!$neighbor) return;
+
+        DB::transaction(function () use ($template, $neighbor) {
+            $urutan = $template->urutan;
+            $template->update(['urutan' => $neighbor->urutan]);
+            $neighbor->update(['urutan' => $urutan]);
+        });
     }
 
     public function destroyDokumenTemplate(DokumenTemplate $template): RedirectResponse
@@ -218,7 +255,7 @@ class PengaturanController extends Controller
     {
         $validated = $request->validate([
             'nama'       => 'required|string|max:150',
-            'kategori'   => 'required|in:dajam,sbum,biaya_akad',
+            'kategori'   => 'required|in:dajam,sbum',
             'keterangan' => 'nullable|string|max:255',
         ]);
 
@@ -231,7 +268,7 @@ class PengaturanController extends Controller
     {
         $validated = $request->validate([
             'nama'       => 'required|string|max:150',
-            'kategori'   => 'required|in:dajam,sbum,biaya_akad',
+            'kategori'   => 'required|in:dajam,sbum',
             'keterangan' => 'nullable|string|max:255',
             'is_active'  => 'boolean',
         ]);
@@ -416,32 +453,43 @@ class PengaturanController extends Controller
 
     public function suratTemplates(): Response
     {
-        $templates = SuratTemplate::orderBy('nama')->get(['id', 'nama', 'subjek', 'created_at']);
+        $templates = SuratTemplate::orderBy('nama')->get(['id', 'nama', 'file_original_name', 'updated_at']);
 
         return Inertia::render('Pengaturan/SuratTemplates/Index', [
-            'templates'    => $templates,
-            'placeholders' => SuratTemplate::availablePlaceholders(),
+            'templates' => $templates->map(fn($t) => [
+                'id'                  => $t->id,
+                'nama'                => $t->nama,
+                'file_original_name'  => $t->file_original_name,
+                'updated_at'          => $t->updated_at->format('d M Y'),
+            ]),
+            'placeholders'           => SuratTemplate::availablePlaceholders(),
+            'jadwalPlaceholders'     => SuratTemplate::jadwalPembayaranPlaceholders(),
         ]);
     }
 
     public function createSuratTemplate(): Response
     {
         return Inertia::render('Pengaturan/SuratTemplates/Form', [
-            'template'     => null,
-            'placeholders' => SuratTemplate::availablePlaceholders(),
+            'template'           => null,
+            'placeholders'       => SuratTemplate::availablePlaceholders(),
+            'jadwalPlaceholders' => SuratTemplate::jadwalPembayaranPlaceholders(),
         ]);
     }
 
     public function storeSuratTemplate(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'nama'   => 'required|string|max:100',
-            'subjek' => 'nullable|string|max:200',
-            'isi'    => 'required|string',
+            'nama' => 'required|string|max:100',
+            'file' => 'required|file|mimes:docx',
         ]);
 
-        $validated['created_by'] = Auth::id();
-        SuratTemplate::create($validated);
+        $file = $request->file('file');
+        SuratTemplate::create([
+            'nama'                => $validated['nama'],
+            'file_path'           => $file->store('surat-templates'),
+            'file_original_name'  => $file->getClientOriginalName(),
+            'created_by'          => Auth::id(),
+        ]);
 
         return redirect()->route('pengaturan.surat-templates')
             ->with('success', 'Template surat berhasil dibuat.');
@@ -451,22 +499,29 @@ class PengaturanController extends Controller
     {
         return Inertia::render('Pengaturan/SuratTemplates/Form', [
             'template' => [
-                'id'     => $suratTemplate->id,
-                'nama'   => $suratTemplate->nama,
-                'subjek' => $suratTemplate->subjek,
-                'isi'    => $suratTemplate->isi,
+                'id'                 => $suratTemplate->id,
+                'nama'               => $suratTemplate->nama,
+                'file_original_name' => $suratTemplate->file_original_name,
             ],
-            'placeholders' => SuratTemplate::availablePlaceholders(),
+            'placeholders'       => SuratTemplate::availablePlaceholders(),
+            'jadwalPlaceholders' => SuratTemplate::jadwalPembayaranPlaceholders(),
         ]);
     }
 
     public function updateSuratTemplate(Request $request, SuratTemplate $suratTemplate): RedirectResponse
     {
         $validated = $request->validate([
-            'nama'   => 'required|string|max:100',
-            'subjek' => 'nullable|string|max:200',
-            'isi'    => 'required|string',
+            'nama' => 'required|string|max:100',
+            'file' => 'nullable|file|mimes:docx',
         ]);
+
+        if ($request->hasFile('file')) {
+            Storage::delete($suratTemplate->file_path);
+            $file = $request->file('file');
+            $validated['file_path'] = $file->store('surat-templates');
+            $validated['file_original_name'] = $file->getClientOriginalName();
+        }
+        unset($validated['file']);
 
         $suratTemplate->update($validated);
 
@@ -476,6 +531,7 @@ class PengaturanController extends Controller
 
     public function destroySuratTemplate(SuratTemplate $suratTemplate): RedirectResponse
     {
+        Storage::delete($suratTemplate->file_path);
         $suratTemplate->delete();
         return back()->with('success', 'Template surat berhasil dihapus.');
     }
@@ -487,7 +543,7 @@ class PengaturanController extends Controller
     public function biayaTambahan(): Response
     {
         return Inertia::render('Pengaturan/BiayaTambahan', [
-            'presets' => BiayaTambahanPreset::orderBy('nama')->get(),
+            'presets' => BiayaTambahanPreset::ordered()->get(),
         ]);
     }
 
@@ -523,6 +579,55 @@ class PengaturanController extends Controller
     }
 
     /* ---------------------------------------------------------------
+     | Program All In — bundel nominal yang mencakup Booking Fee/DP/Titipan
+     | Biaya Akad. Dipilih di form booking, hasilnya baris "Titipan Biaya
+     | Akad" di Kartu Piutang (nominal All In dikurangi komponen yang
+     | di-include).
+     --------------------------------------------------------------- */
+
+    public function programAllIn(): Response
+    {
+        return Inertia::render('Pengaturan/ProgramAllIn', [
+            'presets' => ProgramAllInPreset::ordered()->get(),
+        ]);
+    }
+
+    public function storeProgramAllIn(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama'                 => 'required|string|max:150',
+            'nominal'              => 'required|numeric|min:0',
+            'include_booking_fee'  => 'boolean',
+            'include_dp'           => 'boolean',
+        ]);
+
+        ProgramAllInPreset::create($validated);
+
+        return back()->with('success', 'Program All In berhasil ditambahkan.');
+    }
+
+    public function updateProgramAllIn(Request $request, ProgramAllInPreset $programAllIn): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama'                 => 'required|string|max:150',
+            'nominal'              => 'required|numeric|min:0',
+            'include_booking_fee'  => 'boolean',
+            'include_dp'           => 'boolean',
+            'is_active'            => 'boolean',
+        ]);
+
+        $programAllIn->update($validated);
+
+        return back()->with('success', 'Program All In berhasil diperbarui.');
+    }
+
+    public function destroyProgramAllIn(ProgramAllInPreset $programAllIn): RedirectResponse
+    {
+        $programAllIn->delete();
+        return back()->with('success', 'Program All In berhasil dihapus.');
+    }
+
+    /* ---------------------------------------------------------------
      | Master Sumber Lead (global) — dropdown asal lead konsumen, diisi
      | sales saat booking konsumen baru.
      --------------------------------------------------------------- */
@@ -530,15 +635,16 @@ class PengaturanController extends Controller
     public function sumberLead(): Response
     {
         return Inertia::render('Pengaturan/SumberLead', [
-            'presets' => SumberLead::orderBy('nama')->get(),
+            'presets' => SumberLead::ordered()->get(),
         ]);
     }
 
     public function storeSumberLead(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'nama'       => 'required|string|max:100',
-            'keterangan' => 'nullable|string|max:255',
+            'nama'        => 'required|string|max:100',
+            'keterangan'  => 'nullable|string|max:255',
+            'is_referral' => 'boolean',
         ]);
 
         SumberLead::create($validated);
@@ -549,9 +655,10 @@ class PengaturanController extends Controller
     public function updateSumberLead(Request $request, SumberLead $sumberLead): RedirectResponse
     {
         $validated = $request->validate([
-            'nama'       => 'required|string|max:100',
-            'keterangan' => 'nullable|string|max:255',
-            'is_active'  => 'boolean',
+            'nama'        => 'required|string|max:100',
+            'keterangan'  => 'nullable|string|max:255',
+            'is_referral' => 'boolean',
+            'is_active'   => 'boolean',
         ]);
 
         $sumberLead->update($validated);
@@ -566,6 +673,47 @@ class PengaturanController extends Controller
     }
 
     /* ---------------------------------------------------------------
+     | Master Notaris (global) — dropdown notaris yang menangani akad,
+     | dipilih di tahap Rencana Akad.
+     --------------------------------------------------------------- */
+
+    public function notaris(): Response
+    {
+        return Inertia::render('Pengaturan/Notaris', [
+            'presets' => NotarisPreset::ordered()->get(),
+        ]);
+    }
+
+    public function storeNotaris(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama' => 'required|string|max:150',
+        ]);
+
+        NotarisPreset::create($validated);
+
+        return back()->with('success', 'Notaris berhasil ditambahkan.');
+    }
+
+    public function updateNotaris(Request $request, NotarisPreset $notaris): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama'      => 'required|string|max:150',
+            'is_active' => 'boolean',
+        ]);
+
+        $notaris->update($validated);
+
+        return back()->with('success', 'Notaris berhasil diperbarui.');
+    }
+
+    public function destroyNotaris(NotarisPreset $notaris): RedirectResponse
+    {
+        $notaris->delete();
+        return back()->with('success', 'Notaris berhasil dihapus.');
+    }
+
+    /* ---------------------------------------------------------------
      | Master Bank Rekanan KPR (global) — dropdown pilihan bank di tahap
      | Pemberkasan/Proses Bank, menggantikan input teks bebas.
      --------------------------------------------------------------- */
@@ -573,15 +721,18 @@ class PengaturanController extends Controller
     public function bankRekanan(): Response
     {
         return Inertia::render('Pengaturan/BankRekanan', [
-            'presets' => BankRekananPreset::orderBy('nama')->get(),
+            'presets' => BankRekananPreset::ordered()->get(),
         ]);
     }
 
     public function storeBankRekanan(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'nama'       => 'required|string|max:100',
-            'keterangan' => 'nullable|string|max:255',
+            'nama'          => 'required|string|max:100',
+            'nama_pt'       => 'nullable|string|max:150',
+            'kantor_cabang' => 'nullable|string|max:100',
+            'keterangan'    => 'nullable|string|max:255',
+            'alamat'        => 'nullable|string',
         ]);
 
         BankRekananPreset::create($validated);
@@ -592,9 +743,12 @@ class PengaturanController extends Controller
     public function updateBankRekanan(Request $request, BankRekananPreset $bankRekanan): RedirectResponse
     {
         $validated = $request->validate([
-            'nama'       => 'required|string|max:100',
-            'keterangan' => 'nullable|string|max:255',
-            'is_active'  => 'boolean',
+            'nama'          => 'required|string|max:100',
+            'nama_pt'       => 'nullable|string|max:150',
+            'kantor_cabang' => 'nullable|string|max:100',
+            'keterangan'    => 'nullable|string|max:255',
+            'alamat'        => 'nullable|string',
+            'is_active'     => 'boolean',
         ]);
 
         $bankRekanan->update($validated);
@@ -606,6 +760,51 @@ class PengaturanController extends Controller
     {
         $bankRekanan->delete();
         return back()->with('success', 'Bank rekanan berhasil dihapus.');
+    }
+
+    /* ---------------------------------------------------------------
+     | Master Kontraktor — dipakai saat terbitkan SPK (Proses Bangun)
+     --------------------------------------------------------------- */
+
+    public function kontraktor(): Response
+    {
+        return Inertia::render('Pengaturan/Kontraktor', [
+            'kontraktors' => Kontraktor::orderBy('nama')->get(),
+        ]);
+    }
+
+    public function storeKontraktor(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama'   => 'required|string|max:150',
+            'no_hp'  => 'nullable|string|max:30',
+            'alamat' => 'nullable|string',
+        ]);
+
+        Kontraktor::create($validated);
+
+        return back()->with('success', 'Kontraktor berhasil ditambahkan.');
+    }
+
+    public function updateKontraktor(Request $request, Kontraktor $kontraktor): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama'      => 'required|string|max:150',
+            'no_hp'     => 'nullable|string|max:30',
+            'alamat'    => 'nullable|string',
+            'is_active' => 'boolean',
+        ]);
+
+        $kontraktor->update($validated);
+
+        return back()->with('success', 'Kontraktor berhasil diperbarui.');
+    }
+
+    public function destroyKontraktor(Kontraktor $kontraktor): RedirectResponse
+    {
+        abort_if($kontraktor->spks()->exists(), 422, 'Kontraktor ini sudah punya riwayat SPK, tidak bisa dihapus — nonaktifkan saja.');
+        $kontraktor->delete();
+        return back()->with('success', 'Kontraktor berhasil dihapus.');
     }
 
     /* ---------------------------------------------------------------
@@ -711,29 +910,47 @@ class PengaturanController extends Controller
     }
 
     /* ---------------------------------------------------------------
+     | Urutan master data — satu endpoint untuk semua master yang bisa
+     | digeser naik/turun (whitelist model, bukan class dari input user).
+     --------------------------------------------------------------- */
+
+    public function moveUrutan(string $type, int $id, string $direction): RedirectResponse
+    {
+        $models = [
+            'biaya-tambahan' => BiayaTambahanPreset::class,
+            'program-all-in' => ProgramAllInPreset::class,
+            'sumber-lead'    => SumberLead::class,
+            'bank-rekanan'   => BankRekananPreset::class,
+            'notaris'        => NotarisPreset::class,
+            'sales-agent'    => SalesAgent::class,
+        ];
+
+        abort_unless(isset($models[$type]) && in_array($direction, ['up', 'down'], true), 404);
+
+        $models[$type]::findOrFail($id)->moveUrutan($direction);
+
+        return back();
+    }
+
+    /* ---------------------------------------------------------------
      | Master Sales / Agent
      --------------------------------------------------------------- */
 
     public function salesAgents(): Response
     {
-        $agents = SalesAgent::with('user:id,name')
-            ->orderBy('nama')
+        $agents = SalesAgent::ordered()
             ->get()
             ->map(fn($a) => [
                 'id'          => $a->id,
                 'nama'        => $a->nama,
                 'tipe'        => $a->tipe,
                 'tipe_label'  => $a->tipe_label,
-                'user_nama'   => $a->user?->name,
-                'no_hp'       => $a->no_hp,
-                'email'       => $a->email,
-                'agency_nama' => $a->agency_nama,
-                'komisi_label' => $a->komisi_label,
                 'is_active'   => $a->is_active,
             ]);
 
         return Inertia::render('Pengaturan/SalesAgents/Index', [
             'agents' => $agents,
+            'tipeOptions' => SalesAgent::tipeLabels(),
         ]);
     }
 
@@ -741,28 +958,15 @@ class PengaturanController extends Controller
     {
         return Inertia::render('Pengaturan/SalesAgents/Form', [
             'agent' => null,
-            'users' => User::role('sales')->orderBy('name')->get(['id', 'name']),
+            'tipeOptions' => SalesAgent::tipeLabels(),
         ]);
     }
 
-    private function salesAgentRules(?SalesAgent $agent = null): array
+    private function salesAgentRules(): array
     {
-        $userUniqueId = $agent?->id;
-
         return [
-            'nama'                => 'required|string|max:150',
-            'tipe'                => 'required|in:inhouse,freelance',
-            'user_id'             => "nullable|exists:users,id|unique:sales_agents,user_id,{$userUniqueId}",
-            'nik'                 => 'nullable|string|max:20',
-            'npwp'                => 'nullable|string|max:30',
-            'no_hp'               => 'nullable|string|max:20',
-            'email'               => 'nullable|email|max:100',
-            'nama_bank'           => 'nullable|string|max:100',
-            'nomor_rekening'      => 'nullable|string|max:50',
-            'atas_nama_rekening'  => 'nullable|string|max:100',
-            'agency_nama'         => 'nullable|string|max:150',
-            'komisi_tipe'         => 'required|in:nominal,persen',
-            'komisi_nilai'        => 'nullable|numeric|min:0',
+            'nama' => 'required|string|max:150',
+            'tipe' => 'required|in:' . implode(',', array_keys(SalesAgent::tipeLabels())),
         ];
     }
 
@@ -780,14 +984,14 @@ class PengaturanController extends Controller
     {
         return Inertia::render('Pengaturan/SalesAgents/Form', [
             'agent' => $salesAgent,
-            'users' => User::role('sales')->orderBy('name')->get(['id', 'name']),
+            'tipeOptions' => SalesAgent::tipeLabels(),
         ]);
     }
 
     public function updateSalesAgent(Request $request, SalesAgent $salesAgent): RedirectResponse
     {
         $validated = $request->validate(array_merge(
-            $this->salesAgentRules($salesAgent),
+            $this->salesAgentRules(),
             ['is_active' => 'boolean']
         ));
 

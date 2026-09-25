@@ -39,10 +39,8 @@ const nominalLabel = (nominal, dibayar, status) => status === 'sebagian' && diba
 
 const sbumItems = computed(() => (props.transaksi.rincian_biaya_akad || []).filter(i => i.kategori === 'sbum'));
 const dajamItems = computed(() => (props.transaksi.rincian_biaya_akad || []).filter(i => i.kategori === 'dajam'));
-const biayaAkadItems = computed(() => (props.transaksi.rincian_biaya_akad || []).filter(i => i.kategori === 'biaya_akad'));
 
 const totalKartuPiutang = computed(() => (props.transaksi.kartu_piutang_static || []).reduce((sum, i) => sum + Number(i.nominal), 0));
-const totalTitipan = computed(() => biayaAkadItems.value.reduce((sum, i) => sum + Number(i.nominal), 0));
 
 // ── Edit tanggal jatuh tempo cicilan ──────────────────────────────────
 const editingTanggal = ref(null);
@@ -86,7 +84,7 @@ const deleteCicilanRow = (j) => {
 // Tambahan Uang Muka sekarang baris Kartu Piutang sungguhan (subjek
 // Konsumen) — ambil dari kartu_piutang_static biar status/jumlah_dibayar
 // konsisten sama baris lain, bukan angka statis di section Pencairan KPR.
-const tambahanUmRow = computed(() => (props.transaksi.kartu_piutang_static || []).find(r => r.type === 'tambahan_um'));
+const tambahanUmRow = computed(() => (props.transaksi.kartu_piutang_static || []).find(r => r.type === 'tambahan_um_group'));
 
 // Pencairan KPR (uang cair dari bank ke developer) dicatat manual per
 // tahap — bank tidak ikut skema/tenor apa pun, beda dari Booking Fee/DP.
@@ -122,11 +120,59 @@ const submitTambahTahap = () => {
 // dirender sebagai grup — klik row utk expand/collapse lihat detail per
 // cicilan inline, sama seperti di Konsumens/Show.vue.
 const rowJenisMap = { booking_fee_group: 'booking_fee', dp_group: 'dp', pelunasan_group: 'pelunasan' };
-const isGroupRow = (row) => !!rowJenisMap[row.type];
+// Biaya Tanah/Tambahan UM/Titipan Biaya Akad/Biaya Tambahan — cicilan bebas
+// (bukan jadwal tagihan), datanya sudah dikirim langsung di row.cicilan dari
+// kartuPiutangBreakdown(), bukan difilter dari trx.jadwal_tagihan. Biaya
+// Tambahan beda dari 3 lainnya: satu transaksi bisa punya banyak baris
+// bertipe sama (multi-preset), jadi expand-state & route-nya harus discope
+// per row.id (lihat rowKey), bukan cuma row.type.
+const cicilanLainGroupTypes = ['biaya_tanah_group', 'tambahan_um_group', 'titipan_biaya_akad_group', 'biaya_tambahan_group'];
+const isGroupRow = (row) => !!rowJenisMap[row.type] || cicilanLainGroupTypes.includes(row.type);
 const cicilanForRow = (row) => (props.transaksi.jadwal_tagihan || []).filter(j => j.jenis === rowJenisMap[row.type]);
+const rowKey = (row) => `${row.type}:${row.id ?? ''}`;
 const expandedRows = reactive({});
-const isRowExpanded = (type) => !!expandedRows[type];
-const toggleRowExpand = (type) => { expandedRows[type] = !expandedRows[type]; };
+const isRowExpanded = (row) => !!expandedRows[rowKey(row)];
+const toggleRowExpand = (row) => { const k = rowKey(row); expandedRows[k] = !expandedRows[k]; };
+
+// Cicilan Biaya Tanah/Tambahan UM/Titipan Biaya Akad/Biaya Tambahan — pola
+// sama persis Pencairan KPR Tahap: nambah baris kapan saja, tidak
+// digenerate otomatis. Biaya Tambahan routing-nya ke item spesifik (row.id
+// = id KavlingKonsumenBiayaTambahan), 3 lainnya ke transaksi (row.id null).
+const cicilanRouteMap = {
+    biaya_tanah_group: 'biaya-tanah.cicilan.store',
+    tambahan_um_group: 'tambahan-um.cicilan.store',
+    titipan_biaya_akad_group: 'titipan-biaya-akad.cicilan.store',
+    biaya_tambahan_group: 'biaya-tambahan.cicilan.store',
+};
+const cicilanRouteParam = (row) => row.type === 'biaya_tambahan_group' ? row.id : props.transaksi.id;
+const showTambahCicilanLain = reactive({});
+const tambahCicilanLainForm = useForm({ jumlah: '', tanggal_bayar: '', keterangan: '' });
+const submitTambahCicilanLain = (row) => {
+    const key = rowKey(row);
+    tambahCicilanLainForm.post(route(cicilanRouteMap[row.type], cicilanRouteParam(row)), {
+        preserveScroll: true,
+        onSuccess: () => { tambahCicilanLainForm.reset(); showTambahCicilanLain[key] = false; },
+    });
+};
+
+const editingCicilanLain = ref(null);
+const cicilanLainForm = useForm({ jumlah: '', tanggal_bayar: '', keterangan: '' });
+const openEditCicilanLain = (c) => {
+    editingCicilanLain.value = c.id;
+    cicilanLainForm.jumlah = c.jumlah;
+    cicilanLainForm.tanggal_bayar = c.tanggal_bayar_raw;
+    cicilanLainForm.keterangan = c.keterangan;
+};
+const submitEditCicilanLain = (c) => {
+    cicilanLainForm.patch(route('cicilan-pembayaran.update', c.id), {
+        preserveScroll: true,
+        onSuccess: () => { editingCicilanLain.value = null; },
+    });
+};
+const deleteCicilanLain = (c) => {
+    if (!confirm('Hapus cicilan ini?')) return;
+    router.delete(route('cicilan-pembayaran.destroy', c.id), { preserveScroll: true });
+};
 </script>
 
 <template>
@@ -218,6 +264,7 @@ const toggleRowExpand = (type) => { expandedRows[type] = !expandedRows[type]; };
                         <div class="text-slate-500 text-[11px] uppercase tracking-wide mb-1">
                             Cara Pembayaran: {{ transaksi.cara_bayar_label }}
                             <span v-if="transaksi.skema_dp_preset" class="text-slate-600 normal-case">· Skema: {{ transaksi.skema_dp_preset.nama }}</span>
+                            <span v-if="transaksi.program_all_in_nama" class="text-slate-600 normal-case">· Program All In: {{ transaksi.program_all_in_nama }}</span>
                         </div>
                         <div v-if="transaksi.booking_fee > 0" class="flex justify-between text-slate-400">
                             <span>
@@ -241,7 +288,11 @@ const toggleRowExpand = (type) => { expandedRows[type] = !expandedRows[type]; };
                             </span>
                             <span class="text-slate-300">{{ formatRp(transaksi.dp_nominal) }}</span>
                         </div>
-                        <div v-if="!(transaksi.booking_fee > 0) && !(transaksi.dp_nominal > 0)" class="text-slate-600 text-xs">Tidak ada booking fee maupun DP.</div>
+                        <div v-if="transaksi.titipan_biaya_akad_nominal > 0" class="flex justify-between text-slate-400">
+                            <span>Titipan Biaya Akad<span class="text-slate-600 text-xs ml-1">(dari Program All In)</span></span>
+                            <span class="text-slate-300">{{ formatRp(transaksi.titipan_biaya_akad_nominal) }}</span>
+                        </div>
+                        <div v-if="!(transaksi.booking_fee > 0) && !(transaksi.dp_nominal > 0) && !(transaksi.titipan_biaya_akad_nominal > 0)" class="text-slate-600 text-xs">Tidak ada booking fee maupun DP.</div>
                     </div>
                 </div>
             </div>
@@ -261,10 +312,10 @@ const toggleRowExpand = (type) => { expandedRows[type] = !expandedRows[type]; };
                         <div
                             class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-slate-800/60 text-sm"
                             :class="isGroupRow(row) ? 'cursor-pointer hover:bg-slate-800/40 transition-colors' : ''"
-                            @click="isGroupRow(row) && toggleRowExpand(row.type)">
+                            @click="isGroupRow(row) && toggleRowExpand(row)">
                             <div class="min-w-[160px] flex items-center gap-1.5 flex-1">
                                 <svg v-if="isGroupRow(row)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
-                                    :class="['w-3 h-3 text-slate-500 transition-transform flex-shrink-0', isRowExpanded(row.type) ? 'rotate-90' : '']">
+                                    :class="['w-3 h-3 text-slate-500 transition-transform flex-shrink-0', isRowExpanded(row) ? 'rotate-90' : '']">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                                 </svg>
                                 <span class="text-slate-300">{{ row.nama }}</span>
@@ -274,27 +325,10 @@ const toggleRowExpand = (type) => { expandedRows[type] = !expandedRows[type]; };
                             <div class="flex items-center gap-3 flex-shrink-0">
                                 <span class="text-slate-200 font-medium min-w-[110px] text-right">{{ nominalLabel(row.nominal, row.jumlah_dibayar, row.status) }}</span>
                                 <span class="w-20 flex justify-center"><StatusPembayaranBadge :status="row.status" /></span>
-                                <span class="w-36 flex justify-end" @click.stop>
-                                    <CatatPembayaran v-if="row.type === 'biaya_tanah'"
-                                        :url="route('biaya-tanah.bayar', transaksi.id)"
-                                        :delete-url="route('biaya-tanah.bayar.destroy', transaksi.id)"
-                                        :status="row.status" :tanggal-bayar="row.tanggal_bayar"
-                                        :default-jumlah="row.nominal" :paid-jumlah="row.jumlah_dibayar" :can-manage="canPayItem" />
-                                    <CatatPembayaran v-else-if="row.type === 'biaya_tambahan'"
-                                        :url="route('biaya-tambahan.bayar', row.id)"
-                                        :delete-url="route('biaya-tambahan.bayar.destroy', row.id)"
-                                        :status="row.status" :tanggal-bayar="row.tanggal_bayar"
-                                        :default-jumlah="row.nominal" :paid-jumlah="row.jumlah_dibayar" :can-manage="canPayItem" />
-                                    <CatatPembayaran v-else-if="row.type === 'tambahan_um'"
-                                        :url="route('tambahan-um.bayar', transaksi.id)"
-                                        :delete-url="route('tambahan-um.bayar.destroy', transaksi.id)"
-                                        :status="row.status" :tanggal-bayar="row.tanggal_bayar"
-                                        :default-jumlah="row.nominal" :paid-jumlah="row.jumlah_dibayar" :can-manage="canPayItem" />
-                                </span>
                             </div>
                         </div>
 
-                        <div v-if="isGroupRow(row) && isRowExpanded(row.type)" class="bg-slate-950/40 border-t border-slate-800/60">
+                        <div v-if="isGroupRow(row) && isRowExpanded(row)" class="bg-slate-950/40 border-t border-slate-800/60">
                             <div v-if="row.legacy_pembayaran"
                                 class="flex flex-wrap items-center justify-between gap-2 pl-8 pr-3 py-2 text-sm border-b border-slate-800/40">
                                 <div class="flex-1">
@@ -331,8 +365,8 @@ const toggleRowExpand = (type) => { expandedRows[type] = !expandedRows[type]; };
                                     <span v-if="j.status !== 'lunas' && j.is_terlambat" class="ml-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-500/15 text-rose-400">Terlambat</span>
                                 </div>
                                 <div class="flex items-center gap-3 flex-shrink-0">
-                                    <input v-if="j.jenis === 'pelunasan' && j.status === 'belum_bayar' && canPayItem" type="number" :value="j.jumlah"
-                                        @change="updateCicilanJumlah(j, $event.target.value)"
+                                    <MoneyInput v-if="j.jenis === 'pelunasan' && j.status === 'belum_bayar' && canPayItem" :model-value="j.jumlah"
+                                        @commit="updateCicilanJumlah(j, $event)"
                                         class="w-28 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-right text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                     <span v-else class="font-medium min-w-[110px] text-right" :class="j.status === 'lunas' ? 'text-emerald-400' : 'text-slate-300'">{{ nominalLabel(j.jumlah, j.jumlah_dibayar, j.status) }}</span>
                                     <span class="w-20 flex justify-center"><StatusPembayaranBadge :status="j.status" /></span>
@@ -353,13 +387,71 @@ const toggleRowExpand = (type) => { expandedRows[type] = !expandedRows[type]; };
                                 </div>
                             </div>
 
+                            <!-- Cicilan Biaya Tanah/Tambahan UM/Titipan Biaya Akad — dicatat
+                                 manual per baris (bukan jadwal_tagihan), persis pola Pencairan
+                                 KPR Tahap. -->
+                            <template v-if="cicilanLainGroupTypes.includes(row.type)">
+                                <div v-for="c in row.cicilan" :key="c.id"
+                                    class="flex flex-wrap items-center justify-between gap-2 pl-8 pr-3 py-2 text-sm border-b border-slate-800/40 last:border-b-0">
+                                    <template v-if="editingCicilanLain === c.id">
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            <MoneyInput v-model="cicilanLainForm.jumlah" placeholder="Jumlah"
+                                                class="w-28 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                            <input v-model="cicilanLainForm.tanggal_bayar" type="date"
+                                                class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                            <input v-model="cicilanLainForm.keterangan" type="text" placeholder="Keterangan"
+                                                class="w-32 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                            <button @click="submitEditCicilanLain(c)" class="text-emerald-400 hover:text-emerald-300 text-xs">✓</button>
+                                            <button @click="editingCicilanLain = null" class="text-slate-500 hover:text-slate-300 text-xs">✕</button>
+                                        </div>
+                                    </template>
+                                    <template v-else>
+                                        <div class="flex-1">
+                                            <span class="text-slate-300 font-medium">{{ formatRp(c.jumlah) }}</span>
+                                            <span class="text-slate-600 text-xs ml-2">dibayar {{ c.tanggal_bayar }}</span>
+                                            <span v-if="c.keterangan" class="text-slate-600 text-xs ml-2">· {{ c.keterangan }}</span>
+                                        </div>
+                                        <div v-if="canPayItem" class="flex items-center gap-1 flex-shrink-0">
+                                            <button @click="openEditCicilanLain(c)" title="Ubah" class="px-1 py-1 text-slate-500 hover:text-violet-400 rounded transition-colors">✎</button>
+                                            <button @click="deleteCicilanLain(c)" title="Hapus" class="px-1 py-1 text-rose-400 hover:bg-rose-500/10 rounded transition-colors">
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div v-if="!row.cicilan?.length" class="pl-8 pr-3 py-2 text-slate-600 text-xs">Belum ada cicilan tercatat.</div>
+
+                                <div v-if="canPayItem" class="pl-8 pr-3 py-2">
+                                    <button v-if="!showTambahCicilanLain[rowKey(row)]" @click="showTambahCicilanLain[rowKey(row)] = true"
+                                        class="text-xs text-violet-400 hover:text-violet-300 transition-colors">
+                                        + Catat Cicilan
+                                    </button>
+                                    <div v-else class="flex flex-wrap items-center gap-1.5">
+                                        <MoneyInput v-model="tambahCicilanLainForm.jumlah" placeholder="Jumlah"
+                                            class="w-32 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                        <input v-model="tambahCicilanLainForm.tanggal_bayar" type="date"
+                                            class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                        <input v-model="tambahCicilanLainForm.keterangan" type="text" placeholder="Keterangan (opsional)"
+                                            class="w-36 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                        <button @click="submitTambahCicilanLain(row)"
+                                            :disabled="!tambahCicilanLainForm.jumlah || !tambahCicilanLainForm.tanggal_bayar || tambahCicilanLainForm.processing"
+                                            class="px-2.5 py-1 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
+                                            Simpan
+                                        </button>
+                                        <button @click="showTambahCicilanLain[rowKey(row)] = false; tambahCicilanLainForm.reset()" class="px-2 py-1 text-slate-400 hover:text-slate-200 text-xs">Batal</button>
+                                    </div>
+                                </div>
+                            </template>
+
                             <div v-if="row.type === 'pelunasan_group' && canPayItem" class="pl-8 pr-3 py-2">
                                 <button v-if="!showTambahCicilan" @click="showTambahCicilan = true"
                                     class="text-xs text-violet-400 hover:text-violet-300 transition-colors">
                                     + Tambah Cicilan Custom
                                 </button>
                                 <div v-else class="flex flex-wrap items-center gap-1.5">
-                                    <input v-model="tambahCicilanForm.jumlah" type="number" placeholder="Jumlah"
+                                    <MoneyInput v-model="tambahCicilanForm.jumlah" placeholder="Jumlah"
                                         class="w-32 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                     <input v-model="tambahCicilanForm.tanggal_jatuh_tempo" type="date"
                                         class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
@@ -465,7 +557,7 @@ const toggleRowExpand = (type) => { expandedRows[type] = !expandedRows[type]; };
                             class="flex flex-wrap items-center justify-between gap-2 pl-8 pr-3 py-2 text-sm border-b border-slate-800/40 last:border-b-0">
                             <template v-if="editingTahap === t.id">
                                 <div class="flex flex-wrap items-center gap-1.5">
-                                    <input v-model="tahapForm.nominal" type="number" placeholder="Nominal"
+                                    <MoneyInput v-model="tahapForm.nominal" placeholder="Nominal"
                                         class="w-32 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                     <input v-model="tahapForm.tanggal_cair" type="date"
                                         class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
@@ -499,7 +591,7 @@ const toggleRowExpand = (type) => { expandedRows[type] = !expandedRows[type]; };
                                 + Catat Pencairan
                             </button>
                             <div v-else class="flex flex-wrap items-center gap-1.5">
-                                <input v-model="tambahTahapForm.nominal" type="number" placeholder="Nominal"
+                                <MoneyInput v-model="tambahTahapForm.nominal" placeholder="Nominal"
                                     class="w-32 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                 <input v-model="tambahTahapForm.tanggal_cair" type="date"
                                     class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
@@ -515,35 +607,6 @@ const toggleRowExpand = (type) => { expandedRows[type] = !expandedRows[type]; };
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Kartu Piutang Titipan -->
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-2">
-                <div class="flex justify-between items-center">
-                    <h2 class="text-slate-300 font-medium text-sm">Kartu Piutang Titipan</h2>
-                    <span v-if="biayaAkadItems.length" class="text-slate-500 text-xs">Total: {{ formatRp(totalTitipan) }}</span>
-                </div>
-                <div v-if="biayaAkadItems.length" class="space-y-1.5">
-                    <div v-for="item in biayaAkadItems" :key="item.id"
-                        class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-800/60 rounded-lg text-sm">
-                        <div class="flex-1">
-                            <span class="text-slate-300">{{ item.nama }}</span>
-                            <span class="text-slate-600 text-xs ml-2">Biaya Akad</span>
-                        </div>
-                        <div class="flex items-center gap-3 flex-shrink-0">
-                            <span class="text-slate-300 font-medium min-w-[110px] text-right">{{ nominalLabel(item.nominal, item.jumlah_dibayar, item.status) }}</span>
-                            <span class="w-20 flex justify-center"><StatusPembayaranBadge :status="item.status" /></span>
-                            <span class="w-36 flex justify-end">
-                                <CatatPembayaran
-                                    :url="route('rincian-biaya-akad.bayar', item.id)"
-                                    :delete-url="route('rincian-biaya-akad.bayar.destroy', item.id)"
-                                    :status="item.status" :tanggal-bayar="item.tanggal_bayar"
-                                    :default-jumlah="item.nominal" :paid-jumlah="item.jumlah_dibayar" :can-manage="canPayDajamSbum" />
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                <div v-else class="text-slate-600 text-xs px-1">Belum ada biaya akad (dikelola di tab Konsumen).</div>
             </div>
 
             <!-- Riwayat Pembayaran -->

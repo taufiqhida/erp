@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasFinanceTotals;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,7 +13,7 @@ use Spatie\Activitylog\Support\LogOptions;
 
 class KavlingKonsumen extends Model
 {
-    use HasFactory, LogsActivity;
+    use HasFactory, LogsActivity, HasFinanceTotals;
 
     protected $table = 'kavling_konsumen';
 
@@ -33,24 +34,21 @@ class KavlingKonsumen extends Model
         'skema_dp_preset_id',
         'plafon_kpr',
         'sales_agent_id',
-        'komisi_tipe',
-        'komisi_nilai',
         'biaya_kelebihan_tanah_aktif',
         'biaya_kelebihan_tanah_luas',
         'biaya_kelebihan_tanah_mode',
         'biaya_kelebihan_tanah_harga_per_m2',
         'biaya_kelebihan_tanah_nominal',
-        'biaya_kelebihan_tanah_status',
-        'biaya_kelebihan_tanah_pembayaran_id',
-        'tambahan_um_status',
-        'tambahan_um_pembayaran_id',
         'promo_preset_id',
         'diskon_mode',
         'diskon_nilai',
         'diskon_nominal',
         'total_biaya_tambahan',
+        'program_all_in_preset_id',
+        'titipan_biaya_akad_nominal',
         'status_penjualan',
         'tanggal_rencana_akad',
+        'notaris_preset_id',
         'tanggal_pengajuan_bank',
         'tanggal_keputusan_bank',
         'status_bank',
@@ -81,7 +79,6 @@ class KavlingKonsumen extends Model
         'plafon_kpr'                           => 'decimal:2',
         'realisasi_cair'                       => 'decimal:2',
         'dajam_ditahan'                        => 'decimal:2',
-        'komisi_nilai'                         => 'decimal:2',
         'biaya_kelebihan_tanah_aktif'          => 'boolean',
         'biaya_kelebihan_tanah_luas'           => 'decimal:2',
         'biaya_kelebihan_tanah_harga_per_m2'   => 'decimal:2',
@@ -89,6 +86,7 @@ class KavlingKonsumen extends Model
         'diskon_nilai'                         => 'decimal:2',
         'diskon_nominal'                       => 'decimal:2',
         'total_biaya_tambahan'                 => 'decimal:2',
+        'titipan_biaya_akad_nominal'           => 'decimal:2',
     ];
 
     public function getActivitylogOptions(): LogOptions
@@ -121,6 +119,11 @@ class KavlingKonsumen extends Model
     public function salesAgent(): BelongsTo
     {
         return $this->belongsTo(SalesAgent::class);
+    }
+
+    public function notarisPreset(): BelongsTo
+    {
+        return $this->belongsTo(NotarisPreset::class);
     }
 
     public function skemaDpPreset(): BelongsTo
@@ -168,14 +171,9 @@ class KavlingKonsumen extends Model
         return $this->hasMany(PencairanKprTahap::class);
     }
 
-    public function biayaKelebihanTanahPembayaran(): BelongsTo
+    public function programAllInPreset(): BelongsTo
     {
-        return $this->belongsTo(PembayaranKonsumen::class, 'biaya_kelebihan_tanah_pembayaran_id');
-    }
-
-    public function tambahanUmPembayaran(): BelongsTo
-    {
-        return $this->belongsTo(PembayaranKonsumen::class, 'tambahan_um_pembayaran_id');
+        return $this->belongsTo(ProgramAllInPreset::class);
     }
 
     public function sbumRecord(): HasOne
@@ -375,11 +373,12 @@ class KavlingKonsumen extends Model
      * dan KeuanganController (tabel monitoring & detail Keuangan), supaya
      * formula Plafon KPR/SBUM/Pencairan cuma ada di satu tempat.
      *
-     * Perlu eager-load: jadwalTagihans(.pembayaran), biayaTambahans.pembayaran,
-     * biayaKelebihanTanahPembayaran, rincianBiayaAkad.pembayaran, skemaDpPreset,
-     * pembayarans, pencairanKprTahaps, tambahanUmPembayaran — kalau tidak,
-     * relasi di-lazy-load otomatis (aman utk 1 transaksi, tapi N+1 kalau
-     * dipanggil untuk banyak baris sekaligus).
+     * Perlu eager-load: jadwalTagihans(.pembayaran), biayaTambahans.pembayarans,
+     * pembayarans (dipakai juga buat cicilan Biaya Tanah/Tambahan UM/Titipan
+     * Biaya Akad — lihat $cicilanLain), rincianBiayaAkad.pembayaran,
+     * skemaDpPreset, pencairanKprTahaps — kalau tidak, relasi di-lazy-load
+     * otomatis (aman utk 1 transaksi, tapi N+1 kalau dipanggil untuk banyak
+     * baris sekaligus).
      */
     public function kartuPiutangBreakdown(): array
     {
@@ -402,6 +401,27 @@ class KavlingKonsumen extends Model
             if ($cicilan->every(fn($j) => $j->status === 'lunas')) return 'lunas';
             if ($cicilan->contains(fn($j) => $j->status !== 'belum_bayar')) return 'sebagian';
             return 'belum_bayar';
+        };
+
+        // Cicilan bebas (bukan jadwal_tagihan) buat item yang bisa dibayar
+        // berkali-kali kapan saja (Biaya Tanah/Tambahan UM/Titipan Biaya
+        // Akad) — diambil langsung dari pembayarans berdasar `jenis`, TANPA
+        // FK single-payment lagi. Persis pola Pencairan KPR Tahap, tapi
+        // lewat tabel pembayaran_konsumens yang sudah ada supaya tetap
+        // muncul di Riwayat Pembayaran (beda dari Pencairan KPR yang memang
+        // uang bank, bukan pembayaran konsumen).
+        $cicilanLain = function (string $jenis, float $target) {
+            $items = $this->pembayarans->where('jenis', $jenis)->values();
+            $dibayar = (float) $items->sum('jumlah');
+            $status = $dibayar <= 0 ? 'belum_bayar' : ($dibayar >= $target ? 'lunas' : 'sebagian');
+            $cicilanList = $items->map(fn($p) => [
+                'id'                => $p->id,
+                'jumlah'            => (float) $p->jumlah,
+                'tanggal_bayar'     => $p->tanggal_bayar?->format('d M Y'),
+                'tanggal_bayar_raw' => $p->tanggal_bayar?->format('Y-m-d'),
+                'keterangan'        => $p->keterangan,
+            ])->values();
+            return [$cicilanList, $dibayar, $status];
         };
 
         // ── Kartu Piutang: baris terkomputasi (bukan dari CRUD rincian biaya
@@ -442,28 +462,57 @@ class KavlingKonsumen extends Model
         // dua kali (double) untuk komponen yang sama.
         if ($isKpr) {
             if ($this->biaya_kelebihan_tanah_aktif) {
-                if ($this->biayaKelebihanTanahPembayaran) {
-                    $terbayarKonsumen += (float) $this->biayaKelebihanTanahPembayaran->jumlah;
-                }
+                [$cicilan, $dibayar, $status] = $cicilanLain('biaya_tanah', (float) $this->biaya_kelebihan_tanah_nominal);
+                $terbayarKonsumen += $dibayar;
                 $kartuPiutangStatic->push([
-                    'type' => 'biaya_tanah', 'id' => null, 'status' => $this->biaya_kelebihan_tanah_status,
+                    'type' => 'biaya_tanah_group', 'id' => null, 'status' => $status,
                     'nama' => 'Biaya Penambahan Tanah', 'subjek' => 'Konsumen',
                     'nominal' => (float) $this->biaya_kelebihan_tanah_nominal,
-                    'jumlah_dibayar' => $this->biayaKelebihanTanahPembayaran?->jumlah,
-                    'tanggal_bayar' => $this->biayaKelebihanTanahPembayaran?->tanggal_bayar?->format('d M Y'),
+                    'jumlah_dibayar' => $dibayar > 0 ? $dibayar : null,
+                    'cicilan' => $cicilan,
                 ]);
             }
+            // Biaya Tambahan: satu transaksi bisa punya banyak item berbeda
+            // (multi-preset), jadi tiap item jadi baris grup sendiri (id diisi
+            // id item, beda dari Biaya Tanah/dst yang singleton per transaksi
+            // & id-nya null) — cicilannya discope lewat FK
+            // kavling_konsumen_biaya_tambahan_id, bukan cuma `jenis`.
             foreach ($this->biayaTambahans as $bt) {
-                if ($bt->pembayaran) {
-                    $terbayarKonsumen += (float) $bt->pembayaran->jumlah;
-                }
+                $items = $bt->pembayarans;
+                $dibayar = (float) $items->sum('jumlah');
+                $target = (float) $bt->nominal;
+                $status = $dibayar <= 0 ? 'belum_bayar' : ($dibayar >= $target ? 'lunas' : 'sebagian');
+                $terbayarKonsumen += $dibayar;
                 $kartuPiutangStatic->push([
-                    'type' => 'biaya_tambahan', 'id' => $bt->id, 'status' => $bt->status,
-                    'nama' => $bt->nama, 'subjek' => 'Konsumen', 'nominal' => (float) $bt->nominal,
-                    'jumlah_dibayar' => $bt->pembayaran?->jumlah,
-                    'tanggal_bayar' => $bt->pembayaran?->tanggal_bayar?->format('d M Y'),
+                    'type' => 'biaya_tambahan_group', 'id' => $bt->id, 'status' => $status,
+                    'nama' => $bt->nama, 'subjek' => 'Konsumen', 'nominal' => $target,
+                    'jumlah_dibayar' => $dibayar > 0 ? $dibayar : null,
+                    'cicilan' => $items->map(fn($p) => [
+                        'id'                => $p->id,
+                        'jumlah'            => (float) $p->jumlah,
+                        'tanggal_bayar'     => $p->tanggal_bayar?->format('d M Y'),
+                        'tanggal_bayar_raw' => $p->tanggal_bayar?->format('Y-m-d'),
+                        'keterangan'        => $p->keterangan,
+                    ])->values(),
                 ]);
             }
+        }
+
+        // Titipan Biaya Akad (dari Program All In) — nominal sudah dihitung &
+        // dikunci sekali saat booking (lihat BookingController::store()),
+        // baris piutang independen di luar harga_deal, jadi berlaku baik
+        // untuk KPR maupun cash. Dibayar terpisah lewat aksi Catat Pembayaran
+        // sendiri (bukan otomatis ngikut status Booking Fee/DP).
+        if ((float) $this->titipan_biaya_akad_nominal > 0) {
+            [$cicilan, $dibayar, $status] = $cicilanLain('titipan_biaya_akad', (float) $this->titipan_biaya_akad_nominal);
+            $terbayarKonsumen += $dibayar;
+            $kartuPiutangStatic->push([
+                'type' => 'titipan_biaya_akad_group', 'id' => null, 'status' => $status,
+                'nama' => 'Titipan Biaya Akad', 'subjek' => 'Konsumen',
+                'nominal' => (float) $this->titipan_biaya_akad_nominal,
+                'jumlah_dibayar' => $dibayar > 0 ? $dibayar : null,
+                'cicilan' => $cicilan,
+            ]);
         }
 
         // Booking Fee/DP yang TIDAK masuk harga jual berarti biaya terpisah
@@ -519,15 +568,14 @@ class KavlingKonsumen extends Model
             // & dicatat pembayarannya seperti Biaya Tambahan lain, bukan
             // cuma angka tampilan di section Pencairan KPR.
             if ($tambahanUm > 0) {
-                if ($this->tambahanUmPembayaran) {
-                    $terbayarKonsumen += (float) $this->tambahanUmPembayaran->jumlah;
-                }
+                [$cicilan, $dibayar, $status] = $cicilanLain('tambahan_um', $tambahanUm);
+                $terbayarKonsumen += $dibayar;
                 $kartuPiutangStatic->push([
-                    'type' => 'tambahan_um', 'id' => null, 'status' => $this->tambahan_um_status,
+                    'type' => 'tambahan_um_group', 'id' => null, 'status' => $status,
                     'nama' => 'Tambahan Uang Muka', 'subjek' => 'Konsumen',
                     'nominal' => $tambahanUm,
-                    'jumlah_dibayar' => $this->tambahanUmPembayaran?->jumlah,
-                    'tanggal_bayar' => $this->tambahanUmPembayaran?->tanggal_bayar?->format('d M Y'),
+                    'jumlah_dibayar' => $dibayar > 0 ? $dibayar : null,
+                    'cicilan' => $cicilan,
                 ]);
             }
         } else {
@@ -599,6 +647,142 @@ class KavlingKonsumen extends Model
             'total_piutang_bank'       => $totalPiutangBank,
             'total_terbayar_bank'      => $totalTerbayarBank,
         ];
+    }
+
+    /**
+     * Klasifikasi nilai transaksi jadi 2 kategori rekening — dipakai buat
+     * pelaporan (Keuangan & Dashboard), BUKAN penentu perlakuan pajak resmi
+     * (itu tetap keputusan accounting). Aturannya:
+     *
+     * Kategori 1 (Rekening Resmi): harga_dasar (sudah termasuk bundling
+     * tetap seperti kelebihan tanah/hook/strategis komersil yang di-input
+     * langsung di harga Kavling — makanya TIDAK dipecah lagi di sini),
+     * dikurangi diskon/promo, ditambah Booking Fee KALAU skemanya
+     * "masuk_harga_jual".
+     *
+     * Kategori 2 (Rekening Titipan): Biaya Kelebihan Tanah & Biaya Tambahan
+     * yang memang dihitung terpisah saat booking (bukan yang sudah dibundel
+     * ke harga unit), Titipan Biaya Akad dari Program All In, ditambah
+     * Booking Fee KALAU skemanya "di luar harga_jual".
+     */
+    public function kategoriPendapatan(): array
+    {
+        $bookingFeeResmi = (bool) ($this->skemaDpPreset?->booking_fee_masuk_harga_jual ?? false);
+        $bookingFee = (float) $this->booking_fee;
+
+        $resmiRincian = [
+            'harga_dasar' => (float) $this->harga_dasar,
+            'booking_fee' => $bookingFeeResmi ? $bookingFee : 0,
+            'diskon'      => -(float) ($this->diskon_nominal ?? 0),
+        ];
+
+        $titipanRincian = [
+            'biaya_tanah'         => $this->biaya_kelebihan_tanah_aktif ? (float) $this->biaya_kelebihan_tanah_nominal : 0,
+            'biaya_tambahan_lain' => (float) $this->biayaTambahans->sum('nominal'),
+            'titipan_biaya_akad'  => (float) $this->titipan_biaya_akad_nominal,
+            'booking_fee'         => $bookingFeeResmi ? 0 : $bookingFee,
+        ];
+
+        return [
+            'resmi_total'     => array_sum($resmiRincian),
+            'resmi_rincian'   => $resmiRincian,
+            'titipan_total'   => array_sum($titipanRincian),
+            'titipan_rincian' => $titipanRincian,
+        ];
+    }
+
+    /**
+     * Nilai semua placeholder yang tersedia buat generate dokumen dari
+     * SuratTemplate (SPR, Surat Penawaran Pembiayaan, dll) — lihat
+     * SuratTemplate::availablePlaceholders() untuk daftar key yang sama.
+     * Nilai currency sudah diformat "Rp X.XXX.XXX" siap tampil apa adanya
+     * di dokumen, bukan angka mentah.
+     */
+    public function suratPlaceholders(): array
+    {
+        $this->loadMissing(['konsumen', 'kavling.project', 'kavling.tipeUnitPreset', 'kavling.spks', 'skemaDpPreset', 'jadwalTagihans', 'rincianBiayaAkad']);
+
+        $rupiah = fn($v) => 'Rp ' . number_format((float) $v, 0, ',', '.');
+        $caraBayarLabel = match ($this->cara_bayar) {
+            'cash'          => 'Cash',
+            'cash_bertahap' => 'Cash Bertahap',
+            'kpr_subsidi'   => 'KPR Subsidi',
+            'kpr_komersil'  => 'KPR Komersil',
+            default         => $this->cara_bayar ?? '-',
+        };
+
+        $dpTotal = (float) $this->jadwalTagihans->where('jenis', 'dp')->sum('jumlah');
+        $sbumTotal = (float) $this->rincianBiayaAkad->where('kategori', 'sbum')->sum('nominal');
+        $plafonKpr = $this->kartuPiutangBreakdown()['pencairan_kpr']['plafon_hitung'] ?? null;
+        $bankPreset = $this->bank_rekanan_kpr
+            ? BankRekananPreset::where('nama', $this->bank_rekanan_kpr)->first()
+            : null;
+        $developer = DeveloperProfile::getSingleton();
+        $spkAktif = $this->kavling->spk_aktif;
+
+        return [
+            'nama_konsumen'    => $this->konsumen->nama,
+            'nik_konsumen'     => $this->konsumen->nik ?? '',
+            'npwp_konsumen'    => $this->konsumen->npwp ?? '',
+            'no_hp_konsumen'   => $this->konsumen->no_hp ?? '',
+            'alamat_konsumen'  => $this->konsumen->alamat ?? '',
+            'nama_proyek'      => $this->kavling->project->nama,
+            'nomor_kavling'    => $this->kavling->nomor_kavling,
+            'blok_kavling'     => $this->kavling->nomor_unit,
+            'kluster_kavling'  => $this->kavling->kluster ?? '',
+            'tipe_unit'        => $this->kavling->tipeUnitPreset?->nama ?? '',
+            'luas_tanah'       => $this->kavling->tipeUnitPreset?->luas_tanah ?? '',
+            'luas_bangunan'    => $this->kavling->tipeUnitPreset?->luas_bangunan ?? '',
+            'hgb_no'           => $this->kavling->hgb_no ?? '',
+            'id_lokasi_rumah'  => $this->kavling->id_rumah ?? '',
+            'harga_deal'       => $rupiah($this->harga_deal),
+            'harga_dasar'      => $rupiah($this->harga_dasar),
+            'cara_bayar'       => $caraBayarLabel,
+            'uang_muka'        => $rupiah($dpTotal),
+            'sbum'             => $rupiah($sbumTotal),
+            'kpr_diajukan'     => $plafonKpr !== null ? $rupiah($plafonKpr) : '',
+            'nama_bank'        => $this->bank_rekanan_kpr ?? '',
+            'nama_bank_pt'     => $bankPreset?->nama_pt ?? '',
+            'kantor_cabang_bank' => $bankPreset?->kantor_cabang ?? '',
+            'alamat_bank'      => $bankPreset?->alamat ?? '',
+            'tanggal_akad'     => $this->tanggal_akad?->format('d F Y') ?? '',
+            'tanggal_hari_ini' => now()->format('d F Y'),
+            'tgl_spk'          => $spkAktif?->tanggal_terbit?->format('d F Y') ?? '',
+            'tahun_pembangunan' => $spkAktif?->tanggal_terbit?->format('Y') ?? '',
+            'nama_penandatangan'    => $developer->nama_penandatangan ?? '',
+            'jabatan_penandatangan' => $developer->jabatan_penandatangan ?? '',
+            'nama_developer'   => $developer->nama_developer ?? '',
+            'alamat_developer' => $developer->alamat ?? '',
+        ];
+    }
+
+    /**
+     * Baris tabel Jadwal Pembayaran (Uang Tanda Jadi + Pembayaran 1..N) buat
+     * template yang punya tabel dinamis (mis. SPR) — lihat
+     * SuratTemplate::jadwalPembayaranPlaceholders() & generateDocx().
+     */
+    public function jadwalPembayaranRows(): array
+    {
+        $this->loadMissing('jadwalTagihans');
+        $rupiah = fn($v) => number_format((float) $v, 0, ',', '.');
+
+        $rows = [];
+        foreach ($this->jadwalTagihans->where('jenis', 'booking_fee')->sortBy('nomor_cicilan') as $j) {
+            $rows[] = [
+                'tahap'         => 'Uang Tanda Jadi',
+                'tanggal_bayar' => $j->tanggal_jatuh_tempo?->format('d-m-Y') ?? '',
+                'jumlah_bayar'  => $rupiah($j->jumlah),
+            ];
+        }
+        foreach ($this->jadwalTagihans->where('jenis', 'dp')->sortBy('nomor_cicilan') as $j) {
+            $rows[] = [
+                'tahap'         => 'Pembayaran ' . $j->nomor_cicilan,
+                'tanggal_bayar' => $j->tanggal_jatuh_tempo?->format('d-m-Y') ?? '',
+                'jumlah_bayar'  => $rupiah($j->jumlah),
+            ];
+        }
+
+        return $rows;
     }
 }
 

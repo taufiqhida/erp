@@ -53,7 +53,7 @@ class BastController extends Controller
 
         $bast = $kk->bastRecord;
         abort_unless(
-            $kk->kavling->statusBangunStage?->isFinalStage(),
+            $kk->kavling->bangun_selesai,
             422,
             'Bangunan belum berstatus "Siap Serah Terima".'
         );

@@ -15,6 +15,7 @@ const props = defineProps({
     skemaDpPresets: { type: Array, default: () => [] },
     statusBangunStages: { type: Array, default: () => [] },
     sumberLeadPresets: { type: Array, default: () => [] },
+    programAllInPresets: { type: Array, default: () => [] },
 });
 
 // Kategori tetap (bukan master data admin-editable) — dropdown fixed set,
@@ -150,12 +151,15 @@ const bookForm = useForm({
     konsumen_nama:   '',
     konsumen_no_hp:  '',
     konsumen_nik:    '',
+    konsumen_npwp:   '',
     konsumen_email:  '',
     konsumen_pekerjaan:         '',
     konsumen_status_pernikahan: '',
     konsumen_sumber_lead_id:    '',
+    konsumen_referral_keterangan: '',
     konsumen_mode:   'new', // 'existing' | 'new' — mayoritas konsumen kami baru, bukan lama
 
+    program_all_in_preset_id: '',
     sales_agent_id:  null,
     // Section 2 — Biaya Kelebihan Tanah
     biaya_kelebihan_tanah_aktif: false,
@@ -179,6 +183,9 @@ const bookForm = useForm({
     catatan:         '',
 });
 
+const isReferralLead = computed(() =>
+    !!props.sumberLeadPresets.find(s => s.id === bookForm.konsumen_sumber_lead_id)?.is_referral
+);
 const selectedSalesAgent = computed(() =>
     props.salesAgents.find(a => a.id === bookForm.sales_agent_id)
 );
@@ -768,12 +775,23 @@ const isBookable = (k) => k.status_jual === 'available';
                                     <div>
                                         <label class="block text-slate-400 text-xs mb-1.5">No. HP/WA <span class="text-rose-400">*</span></label>
                                         <input v-model="bookForm.konsumen_no_hp" type="text" placeholder="08xxxxxxxxxx"
-                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                            :class="{ 'border-rose-500': bookForm.errors.konsumen_no_hp }" />
+                                        <p v-if="bookForm.errors.konsumen_no_hp" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.konsumen_no_hp }}</p>
                                     </div>
                                     <div>
-                                        <label class="block text-slate-400 text-xs mb-1.5">NIK</label>
+                                        <label class="block text-slate-400 text-xs mb-1.5">NIK <span class="text-rose-400">*</span></label>
                                         <input v-model="bookForm.konsumen_nik" type="text" placeholder="16 digit NIK"
-                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                            :class="{ 'border-rose-500': bookForm.errors.konsumen_nik }" />
+                                        <p v-if="bookForm.errors.konsumen_nik" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.konsumen_nik }}</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-400 text-xs mb-1.5">NPWP</label>
+                                        <input v-model="bookForm.konsumen_npwp" type="text" placeholder="15/16 digit (opsional)"
+                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                            :class="{ 'border-rose-500': bookForm.errors.konsumen_npwp }" />
+                                        <p v-if="bookForm.errors.konsumen_npwp" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.konsumen_npwp }}</p>
                                     </div>
                                     <div>
                                         <label class="block text-slate-400 text-xs mb-1.5">Email</label>
@@ -781,49 +799,70 @@ const isBookable = (k) => k.status_jual === 'available';
                                             class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                     </div>
                                     <div>
-                                        <label class="block text-slate-400 text-xs mb-1.5">Status Pernikahan</label>
+                                        <label class="block text-slate-400 text-xs mb-1.5">Status Pernikahan <span class="text-rose-400">*</span></label>
                                         <select v-model="bookForm.konsumen_status_pernikahan"
-                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                            :class="{ 'border-rose-500': bookForm.errors.konsumen_status_pernikahan }">
                                             <option value="">— Pilih —</option>
                                             <option v-for="(label, key) in STATUS_PERNIKAHAN_OPTIONS" :key="key" :value="key">{{ label }}</option>
                                         </select>
+                                        <p v-if="bookForm.errors.konsumen_status_pernikahan" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.konsumen_status_pernikahan }}</p>
                                     </div>
                                     <div>
-                                        <label class="block text-slate-400 text-xs mb-1.5">Jenis Pekerjaan</label>
+                                        <label class="block text-slate-400 text-xs mb-1.5">Jenis Pekerjaan <span class="text-rose-400">*</span></label>
                                         <select v-model="bookForm.konsumen_pekerjaan"
-                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                            :class="{ 'border-rose-500': bookForm.errors.konsumen_pekerjaan }">
                                             <option value="">— Pilih —</option>
                                             <option v-for="(label, key) in JENIS_PEKERJAAN_OPTIONS" :key="key" :value="key">{{ label }}</option>
                                         </select>
+                                        <p v-if="bookForm.errors.konsumen_pekerjaan" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.konsumen_pekerjaan }}</p>
                                     </div>
                                     <div>
-                                        <label class="block text-slate-400 text-xs mb-1.5">Sumber Lead</label>
+                                        <label class="block text-slate-400 text-xs mb-1.5">Sumber Lead <span class="text-rose-400">*</span></label>
                                         <select v-model="bookForm.konsumen_sumber_lead_id"
-                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                            :class="{ 'border-rose-500': bookForm.errors.konsumen_sumber_lead_id }">
                                             <option value="">— Pilih —</option>
                                             <option v-for="s in sumberLeadPresets" :key="s.id" :value="s.id">{{ s.nama }}</option>
                                         </select>
+                                        <p v-if="bookForm.errors.konsumen_sumber_lead_id" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.konsumen_sumber_lead_id }}</p>
+                                    </div>
+                                    <div v-if="isReferralLead" class="col-span-2">
+                                        <label class="block text-slate-400 text-xs mb-1.5">Keterangan Referral <span class="text-rose-400">*</span></label>
+                                        <input v-model="bookForm.konsumen_referral_keterangan" type="text" maxlength="150" placeholder="Konsumen ini direferensikan oleh siapa?"
+                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                            :class="{ 'border-rose-500': bookForm.errors.konsumen_referral_keterangan }" />
+                                        <p v-if="bookForm.errors.konsumen_referral_keterangan" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.konsumen_referral_keterangan }}</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
+                        <!-- Program All In -->
+                        <div class="space-y-2">
+                            <h4 class="text-slate-300 text-sm font-medium border-b border-slate-800 pb-2">Program All In</h4>
+                            <select v-model="bookForm.program_all_in_preset_id"
+                                class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
+                                <option value="">Tidak ikut Program All In</option>
+                                <option v-for="p in programAllInPresets" :key="p.id" :value="p.id">
+                                    {{ p.nama }} — {{ formatRupiah(p.nominal) }}
+                                </option>
+                            </select>
+                        </div>
+
                         <!-- Sales / Agent -->
                         <div class="space-y-2">
-                            <h4 class="text-slate-300 text-sm font-medium border-b border-slate-800 pb-2">Sales / Agent</h4>
+                            <h4 class="text-slate-300 text-sm font-medium border-b border-slate-800 pb-2">Sales / Agent <span class="text-rose-400">*</span></h4>
                             <SearchSelect
                                 v-model="bookForm.sales_agent_id"
                                 :items="salesAgents"
-                                :search-keys="['nama', 'agency_nama']"
+                                :search-keys="['nama']"
                                 label-key="nama"
                                 placeholder="Cari sales atau agent..."
                                 :option-hint="a => a.tipe_label"
                             />
-                            <div v-if="selectedSalesAgent" class="flex items-center gap-2 text-xs bg-violet-500/10 border border-violet-500/20 rounded-lg px-3 py-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5 text-violet-400 flex-shrink-0"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
-                                <span class="text-violet-300">Skema komisi terkunci: <strong>{{ selectedSalesAgent.komisi_label }}</strong></span>
-                                <span v-if="selectedSalesAgent.agency_nama" class="text-slate-500">· {{ selectedSalesAgent.agency_nama }}</span>
-                            </div>
+                            <p v-if="bookForm.errors.sales_agent_id" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.sales_agent_id }}</p>
                         </div>
 
                         <!-- ═══ SECTION 2: Biaya Tambahan & Diskon (harga netto dulu sebelum skema pembayaran) ═══ -->
@@ -858,13 +897,13 @@ const isBookable = (k) => k.status_jual === 'available';
                                     </div>
                                     <div>
                                         <label class="block text-slate-400 text-xs mb-1.5">Harga per m² (Rp)</label>
-                                        <input v-model="bookForm.biaya_kelebihan_tanah_harga_per_m2" type="number" min="0" placeholder="0"
+                                        <MoneyInput v-model="bookForm.biaya_kelebihan_tanah_harga_per_m2" placeholder="0"
                                             class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                     </div>
                                 </div>
                                 <div v-else>
                                     <label class="block text-slate-400 text-xs mb-1.5">Nominal (Rp)</label>
-                                    <input v-model="bookForm.biaya_kelebihan_tanah_nominal_input" type="number" min="0" placeholder="0"
+                                    <MoneyInput v-model="bookForm.biaya_kelebihan_tanah_nominal_input" placeholder="0"
                                         class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                 </div>
                                 <div class="text-xs text-slate-500">Subtotal: <span class="text-slate-300 font-medium">{{ formatRupiah(biayaKelebihanTanahNominal) }}</span></div>
@@ -880,7 +919,7 @@ const isBookable = (k) => k.status_jual === 'available';
                             </div>
                             <div v-for="id in bookForm.biaya_tambahan_selected" :key="id" class="flex items-center gap-2">
                                 <span class="flex-1 text-slate-300 text-sm">{{ biayaPresetNama(id) }}</span>
-                                <input v-model="bookForm.biaya_tambahan_nominals[id]" type="number" min="0" placeholder="Rp 0"
+                                <MoneyInput v-model="bookForm.biaya_tambahan_nominals[id]" placeholder="Rp 0"
                                     class="w-32 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                 <button type="button" @click="removeBiayaTambahan(id)" class="text-slate-500 hover:text-rose-400 transition-colors p-1">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
@@ -925,7 +964,7 @@ const isBookable = (k) => k.status_jual === 'available';
                                         <span class="text-slate-300 text-sm">Nominal</span>
                                     </label>
                                 </div>
-                                <input v-model="bookForm.diskon_nilai" type="number" min="0" :placeholder="bookForm.diskon_mode === 'persen' ? '%' : 'Rp'"
+                                <MoneyInput :plain="bookForm.diskon_mode === 'persen'" v-model="bookForm.diskon_nilai" :placeholder="bookForm.diskon_mode === 'persen' ? '%' : 'Rp'"
                                     class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
                             </div>
                         </div>

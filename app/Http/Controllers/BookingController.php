@@ -13,6 +13,7 @@ use App\Models\KavlingKonsumenBiayaTambahan;
 use App\Models\Konsumen;
 use App\Models\KavlingKonsumen;
 use App\Models\Project;
+use App\Models\ProgramAllInPreset;
 use App\Models\PromoPreset;
 use App\Models\SalesAgent;
 use App\Models\SkemaDpPreset;
@@ -53,8 +54,7 @@ class BookingController extends Controller
         $kavlings = $project->kavlings()
             ->where('status_jual', StatusJual::Available)
             ->with('tipeUnitPreset:id,nama')
-            ->orderBy('blok')
-            ->orderBy('nomor_kavling')
+            ->orderByUnit()
             ->get(['id', 'kluster', 'blok', 'nomor_kavling', 'tipe_unit_preset_id'])
             ->map(fn($k) => [
                 'id'            => $k->id,
@@ -83,8 +83,7 @@ class BookingController extends Controller
 
         $kavlings = $project->kavlings()
             ->with(['activeTransaction.konsumen', 'tipeUnitPreset', 'statusBangunStage'])
-            ->orderBy('blok')
-            ->orderBy('nomor_kavling')
+            ->orderByUnit()
             ->get()
             ->map(fn($k) => [
                 'id'                  => $k->id,
@@ -141,18 +140,14 @@ class BookingController extends Controller
             'kavlings' => $kavlings,
             'konsumens' => Konsumen::orderBy('nama')->get(['id', 'nama', 'no_hp', 'nik']),
             'salesAgents' => SalesAgent::where('is_active', true)
-                ->orderBy('nama')
+                ->ordered()
                 ->get()
                 ->map(fn($a) => [
                     'id'           => $a->id,
                     'nama'         => $a->nama,
                     'tipe_label'   => $a->tipe_label,
-                    'agency_nama'  => $a->agency_nama,
-                    'komisi_tipe'  => $a->komisi_tipe,
-                    'komisi_nilai' => $a->komisi_nilai,
-                    'komisi_label' => $a->komisi_label,
                 ]),
-            'biayaTambahanPresets' => BiayaTambahanPreset::where('is_active', true)->orderBy('nama')->get(['id', 'nama']),
+            'biayaTambahanPresets' => BiayaTambahanPreset::where('is_active', true)->ordered()->get(['id', 'nama']),
             'promoPresets' => PromoPreset::where('is_active', true)->orderBy('nama')->get(['id', 'nama']),
             'skemaDpPresets' => SkemaDpPreset::where('is_active', true)->orderBy('nama')->get([
                 'id', 'nama', 'cara_bayar',
@@ -160,7 +155,8 @@ class BookingController extends Controller
                 'dp_aktif', 'dp_tipe', 'dp_nilai', 'dp_basis',
             ]),
             'statusBangunStages' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna', 'urutan']),
-            'sumberLeadPresets' => SumberLead::where('is_active', true)->orderBy('nama')->get(['id', 'nama']),
+            'sumberLeadPresets' => SumberLead::where('is_active', true)->ordered()->get(['id', 'nama', 'is_referral']),
+            'programAllInPresets' => ProgramAllInPreset::where('is_active', true)->ordered()->get(['id', 'nama', 'nominal']),
         ]);
     }
 
@@ -175,15 +171,27 @@ class BookingController extends Controller
         $validated = $request->validate([
             // Section 1 — Tanggal, Konsumen, Sales/Agent
             'tanggal_booking'     => 'required|date',
+            // No HP/NIK/Status Pernikahan/Pekerjaan/Sumber Lead wajib HANYA
+            // saat bikin konsumen baru — konsumen lama datanya sudah ada,
+            // diedit dari halaman Konsumen, bukan diulang di sini.
             'konsumen_id'         => 'nullable|exists:konsumens,id',
             'konsumen_nama'       => 'nullable|required_without:konsumen_id|string|max:100',
-            'konsumen_no_hp'      => 'nullable|string|max:20',
-            'konsumen_nik'        => 'nullable|string|max:20',
+            'konsumen_no_hp'      => 'nullable|required_without:konsumen_id|string|max:20',
+            'konsumen_nik'        => 'nullable|required_without:konsumen_id|string|max:20',
+            'konsumen_npwp'       => Konsumen::npwpRules(),
             'konsumen_email'      => 'nullable|email|max:100',
-            'konsumen_pekerjaan'         => 'nullable|in:' . implode(',', array_keys(Konsumen::jenisPekerjaanLabel())),
-            'konsumen_status_pernikahan' => 'nullable|in:' . implode(',', array_keys(Konsumen::statusPernikahanLabel())),
-            'konsumen_sumber_lead_id'    => 'nullable|exists:sumber_leads,id',
-            'sales_agent_id'      => 'nullable|exists:sales_agents,id',
+            'konsumen_pekerjaan'         => 'nullable|required_without:konsumen_id|in:' . implode(',', array_keys(Konsumen::jenisPekerjaanLabel())),
+            'konsumen_status_pernikahan' => 'nullable|required_without:konsumen_id|in:' . implode(',', array_keys(Konsumen::statusPernikahanLabel())),
+            'konsumen_sumber_lead_id'    => 'nullable|required_without:konsumen_id|exists:sumber_leads,id',
+            // Wajib hanya kalau Sumber Lead yang dipilih bertanda "referral" di master.
+            'konsumen_referral_keterangan' => [
+                'nullable', 'string', 'max:150',
+                Rule::requiredIf(fn () => !$request->filled('konsumen_id')
+                    && SumberLead::where('id', $request->input('konsumen_sumber_lead_id'))->where('is_referral', true)->exists()),
+            ],
+            'program_all_in_preset_id'   => 'nullable|exists:program_all_in_presets,id',
+            // Sales Agent selalu wajib (atribut per-transaksi, bukan per-konsumen).
+            'sales_agent_id'      => 'required|exists:sales_agents,id',
             // Booking detail — booking_fee & skema_dp dihitung ulang di server
             // dari preset skema_dp_preset_id (lihat bawah), nilai dari client
             // di sini murni informasional dan tidak dipakai untuk menyimpan.
@@ -223,7 +231,8 @@ class BookingController extends Controller
             'diskon_nilai'        => 'required_with:diskon_mode|nullable|numeric|min:0',
         ]);
 
-        DB::transaction(function () use ($kavling, $validated) {
+        // Total keuangan tersimpan dihitung sekali di akhir (bukan tiap baris cicilan/pembayaran dibuat).
+        KavlingKonsumen::withoutFinanceRefresh(fn () => DB::transaction(function () use ($kavling, $validated) {
             // Lock baris kavling supaya dua request booking bersamaan tidak
             // lolos cek status yang sama sebelum salah satunya commit.
             $locked = Kavling::whereKey($kavling->id)->lockForUpdate()->firstOrFail();
@@ -238,21 +247,21 @@ class BookingController extends Controller
             if (!empty($validated['konsumen_id'])) {
                 $konsumen = Konsumen::findOrFail($validated['konsumen_id']);
             } else {
+                $isReferral = !empty($validated['konsumen_sumber_lead_id'])
+                    && SumberLead::where('id', $validated['konsumen_sumber_lead_id'])->where('is_referral', true)->exists();
+
                 $konsumen = Konsumen::create([
                     'nama'  => $validated['konsumen_nama'],
                     'no_hp' => $validated['konsumen_no_hp'] ?? null,
                     'nik'   => $validated['konsumen_nik'] ?? null,
+                    'npwp'  => $validated['konsumen_npwp'] ?? null,
                     'email' => $validated['konsumen_email'] ?? null,
                     'pekerjaan'         => $validated['konsumen_pekerjaan'] ?? null,
                     'status_pernikahan' => $validated['konsumen_status_pernikahan'] ?? null,
                     'sumber_lead_id'    => $validated['konsumen_sumber_lead_id'] ?? null,
+                    'referral_keterangan' => $isReferral ? ($validated['konsumen_referral_keterangan'] ?? null) : null,
                 ]);
             }
-
-            // Snapshot skema komisi sales/agent (terkunci pada saat booking)
-            $salesAgent = !empty($validated['sales_agent_id'])
-                ? SalesAgent::find($validated['sales_agent_id'])
-                : null;
 
             // ── Hitung Biaya Kelebihan Tanah (server-side, jangan percaya client) ──
             $biayaKelebihanNominal = 0;
@@ -313,6 +322,23 @@ class BookingController extends Controller
                 : 0;
             $skemaDpString = $dpNominal > 0 ? "nominal:{$dpNominal}" : 'tanpa_dp';
 
+            // ── Program All In: nominalnya sudah termasuk Booking Fee/DP kalau
+            // preset-nya set begitu — sisanya (yang belum ter-cover) jadi
+            // "Titipan Biaya Akad", ditagih & dicatat terpisah dari Booking
+            // Fee/DP (lihat KeuanganController::payTitipanBiayaAkad()).
+            // Dihitung & dikunci sekali di sini, tidak ikut berubah kalau
+            // preset diedit belakangan.
+            $allInPreset = !empty($validated['program_all_in_preset_id'])
+                ? ProgramAllInPreset::find($validated['program_all_in_preset_id'])
+                : null;
+            $titipanBiayaAkadNominal = 0;
+            if ($allInPreset) {
+                $titipanBiayaAkadNominal = (float) $allInPreset->nominal;
+                if ($allInPreset->include_booking_fee) $titipanBiayaAkadNominal -= $bookingFee;
+                if ($allInPreset->include_dp) $titipanBiayaAkadNominal -= $dpNominal;
+                $titipanBiayaAkadNominal = max(0, $titipanBiayaAkadNominal);
+            }
+
             // Buat transaksi
             $transaksi = KavlingKonsumen::create([
                 'kavling_id'       => $kavling->id,
@@ -327,9 +353,7 @@ class BookingController extends Controller
                 'skema_dp'         => $skemaDpString,
                 'skema_dp_preset_id' => $skemaPreset?->id,
                 'plafon_kpr'       => $validated['plafon_kpr'] ?? null,
-                'sales_agent_id'   => $salesAgent?->id,
-                'komisi_tipe'      => $salesAgent?->komisi_tipe,
-                'komisi_nilai'     => $salesAgent?->komisi_nilai,
+                'sales_agent_id'   => $validated['sales_agent_id'],
                 'biaya_kelebihan_tanah_aktif'        => $validated['biaya_kelebihan_tanah_aktif'] ?? false,
                 'biaya_kelebihan_tanah_luas'         => $validated['biaya_kelebihan_tanah_luas'] ?? null,
                 'biaya_kelebihan_tanah_mode'         => $validated['biaya_kelebihan_tanah_mode'] ?? null,
@@ -340,6 +364,8 @@ class BookingController extends Controller
                 'diskon_nilai'     => $validated['diskon_nilai'] ?? null,
                 'diskon_nominal'   => $diskonNominal,
                 'total_biaya_tambahan' => $totalBiayaTambahan,
+                'program_all_in_preset_id'   => $allInPreset?->id,
+                'titipan_biaya_akad_nominal' => $titipanBiayaAkadNominal,
                 // Booking otomatis tercomplete & lanjut ke Pemberkasan begitu
                 // sales input booking — tidak ada tahap "Booking" manual yang
                 // perlu dikonfirmasi terpisah lagi (tetap bisa direview lewat
@@ -436,7 +462,7 @@ class BookingController extends Controller
 
             // Update status kavling
             $locked->update(['status_jual' => StatusJual::Booked]);
-        });
+        }));
 
         return back()->with('success', "Kavling {$kavling->nomor_lengkap} berhasil dibooking.");
     }
@@ -673,11 +699,12 @@ class BookingController extends Controller
 
         $validated = $request->validate([
             'tanggal_rencana_akad' => 'required|date',
+            'notaris_preset_id'    => 'nullable|exists:notaris_presets,id',
         ]);
 
         $kk->update($validated);
 
-        return back()->with('success', 'Tanggal Rencana Akad berhasil disimpan.');
+        return back()->with('success', 'Rencana Akad berhasil disimpan.');
     }
 
     /**
@@ -704,10 +731,10 @@ class BookingController extends Controller
     /**
      * Edit Rincian Pesanan pasca-booking — sengaja dibatasi cuma boleh
      * mengubah komponen yang BELUM ada pembayaran tercatat (Biaya Kelebihan
-     * Tanah, Biaya Tambahan per-item, Diskon/Promo). Cara Bayar & Skema DP
-     * TIDAK bisa diganti di sini sama sekali — itu mengubah seluruh pipeline
-     * & checklist dokumen, jadi kalau memang perlu ganti, transaksi harus
-     * dibatalkan & booking ulang dari awal.
+     * Tanah, Biaya Tambahan per-item, Diskon/Promo, Program All In). Cara
+     * Bayar & Skema DP TIDAK bisa diganti di sini sama sekali — itu mengubah
+     * seluruh pipeline & checklist dokumen, jadi kalau memang perlu ganti,
+     * transaksi harus dibatalkan & booking ulang dari awal.
      *
      * Booking Fee & DP yang sudah digenerate ke jadwal_tagihan TIDAK ikut
      * dihitung ulang di sini (sengaja) — nominalnya tetap sesuai skema yang
@@ -743,15 +770,18 @@ class BookingController extends Controller
             'promo_preset_id'     => 'nullable|exists:promo_presets,id',
             'diskon_mode'         => 'nullable|in:persen,nominal',
             'diskon_nilai'        => 'required_with:diskon_mode|nullable|numeric|min:0',
+            'program_all_in_preset_id' => 'nullable|exists:program_all_in_presets,id',
         ]);
 
         DB::transaction(function () use ($kk, $validated) {
-            $kk->loadMissing('biayaTambahans');
+            $kk->loadMissing('biayaTambahans.pembayarans', 'pembayarans');
 
             // ── Biaya Kelebihan Tanah: cuma boleh diubah kalau belum ada
-            // pembayaran tercatat. Kalau sudah ('sebagian'/'lunas'), abaikan
+            // cicilan tercatat sama sekali. Kalau sudah ada (status
+            // sebagian/lunas dihitung dari cicilan, bukan kolom tersimpan
+            // lagi — lihat KavlingKonsumen::kartuPiutangBreakdown), abaikan
             // input & pertahankan nilai lama apa adanya.
-            $biayaKelebihanLocked = $kk->biaya_kelebihan_tanah_status !== 'belum_bayar';
+            $biayaKelebihanLocked = $kk->pembayarans->where('jenis', 'biaya_tanah')->isNotEmpty();
             if ($biayaKelebihanLocked) {
                 $biayaKelebihanNominal = (float) $kk->biaya_kelebihan_tanah_nominal;
             } else {
@@ -768,12 +798,13 @@ class BookingController extends Controller
                 $kk->biaya_kelebihan_tanah_nominal      = $biayaKelebihanNominal;
             }
 
-            // ── Biaya Tambahan: item dengan status selain 'belum_bayar' tetap
+            // ── Biaya Tambahan: item yang sudah punya cicilan tercatat tetap
             // dipertahankan apa adanya (tidak boleh dihapus/diubah lewat sini);
-            // item unpaid boleh dihapus/diubah, dan item baru boleh ditambah.
+            // item yang belum ada cicilan boleh dihapus/diubah, item baru
+            // boleh ditambah.
             $submitted = collect($validated['biaya_tambahan'] ?? []);
-            $existingLocked = $kk->biayaTambahans->where('status', '!=', 'belum_bayar');
-            $existingUnpaid = $kk->biayaTambahans->where('status', 'belum_bayar');
+            $existingLocked = $kk->biayaTambahans->filter(fn($bt) => $bt->pembayarans->isNotEmpty());
+            $existingUnpaid = $kk->biayaTambahans->filter(fn($bt) => $bt->pembayarans->isEmpty());
 
             $submittedIds = $submitted->pluck('id')->filter()->all();
             $lockedTouched = $existingLocked->pluck('id')->intersect($submittedIds)->isNotEmpty();
@@ -798,7 +829,6 @@ class BookingController extends Controller
                         'biaya_tambahan_preset_id' => $item['preset_id'],
                         'nama'                     => $preset?->nama ?? 'Biaya Tambahan',
                         'nominal'                  => (float) $item['nominal'],
-                        'status'                   => 'belum_bayar',
                     ]);
                 }
             }
@@ -824,6 +854,30 @@ class BookingController extends Controller
             $kk->diskon_nominal      = $diskonNominal;
             $kk->total_biaya_tambahan = $totalBiayaTambahan;
             $kk->harga_deal          = $hargaJualNetto;
+
+            // ── Program All In: pola sama persis Biaya Kelebihan Tanah — cuma
+            // boleh diganti kalau Titipan Biaya Akad belum ada cicilan
+            // tercatat, karena nominalnya langsung mempengaruhi baris itu.
+            $titipanLocked = $kk->pembayarans->where('jenis', 'titipan_biaya_akad')->isNotEmpty();
+            if (!$titipanLocked) {
+                $allInPreset = !empty($validated['program_all_in_preset_id'])
+                    ? ProgramAllInPreset::find($validated['program_all_in_preset_id'])
+                    : null;
+                $titipanBiayaAkadNominal = 0;
+                if ($allInPreset) {
+                    $titipanBiayaAkadNominal = (float) $allInPreset->nominal;
+                    if ($allInPreset->include_booking_fee) {
+                        $titipanBiayaAkadNominal -= (float) $kk->booking_fee;
+                    }
+                    if ($allInPreset->include_dp) {
+                        $titipanBiayaAkadNominal -= (float) $kk->jadwalTagihans()->where('jenis', 'dp')->sum('jumlah');
+                    }
+                    $titipanBiayaAkadNominal = max(0, $titipanBiayaAkadNominal);
+                }
+                $kk->program_all_in_preset_id   = $allInPreset?->id;
+                $kk->titipan_biaya_akad_nominal = $titipanBiayaAkadNominal;
+            }
+
             $kk->save();
         });
 
