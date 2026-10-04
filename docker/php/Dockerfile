@@ -10,6 +10,9 @@ RUN npm ci
 COPY resources ./resources
 COPY vite.config.js tailwind.config.js postcss.config.js ./
 COPY public ./public
+# resources/js/app.js meng-import ../../vendor/tightenco/ziggy (helper route() di Vue),
+# jadi paket itu harus ada di stage ini — ambil dari stage composer.
+COPY --from=vendor /app/vendor/tightenco/ziggy ./vendor/tightenco/ziggy
 RUN npm run build
 
 ##############################################
