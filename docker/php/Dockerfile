@@ -1,7 +1,17 @@
 # syntax=docker/dockerfile:1
 
 ##############################################
-# Stage 1 — build aset frontend (Vite/Vue)
+# Stage 1 — install dependency PHP (composer)
+##############################################
+FROM composer:2 AS vendor
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --ignore-platform-reqs
+COPY . .
+RUN composer dump-autoload --optimize --no-dev --ignore-platform-reqs
+
+##############################################
+# Stage 2 — build aset frontend (Vite/Vue)
 ##############################################
 FROM node:20-alpine AS frontend
 WORKDIR /app
@@ -14,16 +24,6 @@ COPY public ./public
 # jadi paket itu harus ada di stage ini — ambil dari stage composer.
 COPY --from=vendor /app/vendor/tightenco/ziggy ./vendor/tightenco/ziggy
 RUN npm run build
-
-##############################################
-# Stage 2 — install dependency PHP (composer)
-##############################################
-FROM composer:2 AS vendor
-WORKDIR /app
-COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --ignore-platform-reqs
-COPY . .
-RUN composer dump-autoload --optimize --no-dev --ignore-platform-reqs
 
 ##############################################
 # Stage 3 — runtime: satu image isi Nginx + PHP-FPM + supervisord.
