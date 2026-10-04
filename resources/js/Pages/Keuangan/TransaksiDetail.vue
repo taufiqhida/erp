@@ -604,6 +604,7 @@ const deleteCicilanLain = (c) => {
                                     class="w-32 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                 <input v-model="tambahTahapForm.tanggal_cair" type="date"
                                     class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                <span v-if="tambahTahapForm.tanggal_cair > new Date().toISOString().slice(0, 10)" class="text-amber-400 text-[11px]">⚠ Tanggal di masa depan</span>
                                 <input v-model="tambahTahapForm.keterangan" type="text" :placeholder="pencairanBelumAkad ? 'Alasan (wajib)' : 'Keterangan (opsional)'"
                                     class="w-36 px-2 py-1 bg-slate-900 border rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500"
                                     :class="pencairanBelumAkad && !tambahTahapForm.keterangan.trim() ? 'border-amber-500/50' : 'border-slate-700'" />

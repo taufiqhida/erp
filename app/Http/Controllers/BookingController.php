@@ -627,12 +627,17 @@ class BookingController extends Controller
         abort_unless(Auth::user()->can('kelola pemberkasan bank'), 403);
         abort_unless($kk->status_penjualan === 'sp3k', 422, 'Transaksi tidak sedang di tahap SP3K.');
 
+        // Expired tidak boleh sebelum tanggal terbit (pakai tanggal terbit yang sudah tersimpan
+        // kalau form hanya mengisi tanggal expired).
+        $tglTerbit = $request->input('tanggal_sp3k') ?: $kk->tanggal_sp3k?->toDateString();
         $validated = $request->validate([
             'tanggal_sp3k'           => 'nullable|date',
-            'tanggal_expired_sp3k'   => 'nullable|date',
+            'tanggal_expired_sp3k'   => ['nullable', 'date', $tglTerbit ? 'after_or_equal:' . $tglTerbit : 'date'],
             'status_sp3k'            => 'required|in:approved,turun_plafon',
             'catatan_sp3k'           => 'nullable|string',
             'plafon_baru'            => 'required_if:status_sp3k,turun_plafon|nullable|numeric|min:0',
+        ], [
+            'tanggal_expired_sp3k.after_or_equal' => 'Tanggal expired SP3K tidak boleh sebelum tanggal terbit SP3K.',
         ]);
 
         $update = [

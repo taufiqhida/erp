@@ -812,6 +812,7 @@ onMounted(() => {
                                             class="w-28 px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                         <button @click="addBiayaAkad(trx, 'sbum')"
                                             :disabled="!getBiayaAkadForm(trx.id, 'sbum').dajam_sbum_preset_id || !getBiayaAkadForm(trx.id, 'sbum').nominal"
+                                            title="Pilih item dan isi nominal dulu"
                                             class="px-2.5 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap">
                                             + Tambah
                                         </button>
@@ -866,6 +867,7 @@ onMounted(() => {
                                         class="w-28 px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                     <button @click="addBiayaAkad(trx, 'dajam')"
                                         :disabled="!getBiayaAkadForm(trx.id, 'dajam').dajam_sbum_preset_id || !getBiayaAkadForm(trx.id, 'dajam').nominal"
+                                            title="Pilih item dan isi nominal dulu"
                                         class="px-2.5 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap">
                                         + Tambah
                                     </button>

@@ -1017,7 +1017,7 @@ const submitUploadSiteplan = () => {
                                     <option v-for="t in tipeUnits" :key="t.id" :value="t.id">{{ t.nama }}</option>
                                 </select>
                                 <p v-if="kavlingForm.errors.tipe_unit_preset_id" class="text-rose-400 text-xs mt-1">{{ kavlingForm.errors.tipe_unit_preset_id }}</p>
-                                <p v-if="!tipeUnits?.length" class="text-amber-400 text-xs mt-1">Belum ada Tipe Unit — buat dulu lewat "Kelola Tipe Unit".</p>
+                                <p v-if="!tipeUnits?.length" class="text-amber-400 text-xs mt-1">Belum ada Tipe Unit — buat dulu lewat <Link :href="route('projects.tipe-unit.index', project.id)" class="underline hover:text-amber-300">Kelola Tipe Unit</Link>.</p>
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-slate-400 text-xs mb-1.5">Harga (Rp)</label>
@@ -1203,7 +1203,7 @@ const submitUploadSiteplan = () => {
                                 <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">id_rumah (opsional)</span>
                             </div>
                             <p class="pt-1 text-slate-500">status: <span class="font-mono">available</span> / <span class="font-mono">not_for_sale</span> (default available) · status_bangun: nama tahap persis sama seperti di menu "Kelola Status Bangun" — {{ (statusBangunStages ?? []).map(s => s.nama).join(' / ') }} (default {{ statusBangunStages?.[0]?.nama }}, isi kalau proyek sudah berjalan)</p>
-                            <p class="pt-1 text-slate-500">tipe_unit dicocokkan dengan nama Tipe Unit yang sudah ada di proyek ini — kalau belum ada, Tipe baru otomatis dibuat (spek kosong, lengkapi belakangan di "Kelola Tipe Unit").</p>
+                            <p class="pt-1 text-slate-500">tipe_unit dicocokkan dengan nama Tipe Unit yang sudah ada di proyek ini — kalau belum ada, baris itu dilewati — buat dulu Tipe Unit-nya di "Kelola Tipe Unit".</p>
                         </div>
                         <div>
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">Pilih File Excel</label>

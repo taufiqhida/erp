@@ -17,6 +17,7 @@ use App\Models\PencairanKprTahap;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -57,6 +58,35 @@ class KeuanganController extends Controller
      * semua endpoint catat-pembayaran item tunggal (bukan Kartu Piutang
      * grup yang statusnya dihitung dari agregat cicilan di model).
      */
+    /**
+     * Tolak pembayaran yang melebihi sisa tagihan sebuah komponen Kartu Piutang
+     * (salah ketik satu nol bisa bikin terbayar > piutang & sisa piutang negatif di
+     * Dashboard/Keuangan). Kurang bayar tetap boleh (status "sebagian"). Toleransi
+     * Rp 1 untuk pembulatan cicilan. $kecuali = nominal pembayaran yang sedang
+     * di-edit (supaya koreksi tidak menghitung dirinya dua kali).
+     */
+    private function assertTidakMelebihiSisa(KavlingKonsumen $kk, string $type, ?int $itemId, float $jumlah, string $label, float $kecuali = 0.0): void
+    {
+        $kk->unsetRelations()->load([
+            'jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans', 'rincianBiayaAkad.pembayaran',
+            'skemaDpPreset', 'pembayarans', 'pencairanKprTahaps',
+        ]);
+        $row = collect($kk->kartuPiutangBreakdown()['kartu_piutang_static'])
+            ->first(fn ($r) => $r['type'] === $type && ($itemId === null || ($r['id'] ?? null) === $itemId));
+        if (!$row) return; // komponen tidak ada di kartu piutang — jangan blokir
+
+        $this->tolakKalauMelebihi((float) $row['nominal'] - ((float) ($row['jumlah_dibayar'] ?? 0) - $kecuali), $jumlah, $label);
+    }
+
+    private function tolakKalauMelebihi(float $sisa, float $jumlah, string $label, string $field = 'jumlah'): void
+    {
+        if ($jumlah > $sisa + 1) {
+            throw ValidationException::withMessages([
+                $field => "Jumlah melebihi sisa tagihan {$label} (sisa Rp " . number_format(max(0, $sisa), 0, ',', '.') . ').',
+            ]);
+        }
+    }
+
     private function resolveItemStatus(float $jumlahDibayar, float $nominalHarusDibayar): string
     {
         return $jumlahDibayar >= $nominalHarusDibayar ? 'lunas' : 'sebagian';
@@ -568,6 +598,9 @@ class KeuanganController extends Controller
             'keterangan'    => 'nullable|string|max:500',
         ]);
 
+        // Satu baris jadwal = satu tagihan tetap; bayar lebih dari nominalnya hampir pasti salah ketik.
+        $this->tolakKalauMelebihi((float) $jadwal->jumlah, (float) $validated['jumlah'], $jadwal->jenis_label . ' #' . $jadwal->nomor_cicilan);
+
         if ($jadwal->pembayaran) {
             $jadwal->pembayaran->update([
                 'jumlah'        => $validated['jumlah'],
@@ -717,6 +750,7 @@ class KeuanganController extends Controller
             'tanggal_bayar' => 'required|date',
             'keterangan'    => 'nullable|string|max:500',
         ]);
+        $this->assertTidakMelebihiSisa($kk, "{$jenis}_group", null, (float) $validated['jumlah'], $labelDefault);
 
         $kk->pembayarans()->create([
             'jenis'         => $jenis,
@@ -767,6 +801,12 @@ class KeuanganController extends Controller
             'keterangan'    => 'nullable|string|max:500',
         ]);
 
+        $tipeKartu = $pembayaran->kavling_konsumen_biaya_tambahan_id ? 'biaya_tambahan_group' : "{$pembayaran->jenis}_group";
+        $this->assertTidakMelebihiSisa(
+            $kk, $tipeKartu, $pembayaran->kavling_konsumen_biaya_tambahan_id,
+            (float) $validated['jumlah'], $pembayaran->keterangan ?: 'cicilan ini', (float) $pembayaran->jumlah,
+        );
+
         $pembayaran->update($validated);
 
         return back()->with('success', 'Cicilan berhasil diperbarui.');
@@ -809,6 +849,7 @@ class KeuanganController extends Controller
             'tanggal_bayar' => 'required|date',
             'keterangan'    => 'nullable|string|max:500',
         ]);
+        $this->assertTidakMelebihiSisa($kk, 'biaya_tambahan_group', $item->id, (float) $validated['jumlah'], $item->nama);
 
         PembayaranKonsumen::create([
             'kavling_konsumen_id'                 => $kk->id,
@@ -852,6 +893,8 @@ class KeuanganController extends Controller
             'tanggal_bayar' => 'required|date',
             'keterangan'    => $butuhAlasanAkad ? 'required|string|max:500' : 'nullable|string|max:500',
         ]);
+
+        $this->tolakKalauMelebihi((float) $item->nominal, (float) $validated['jumlah'], $item->nama);
 
         if ($item->pembayaran) {
             $item->pembayaran->update([

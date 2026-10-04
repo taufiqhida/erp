@@ -779,6 +779,10 @@ const submitBast = () => {
                                 ✓ Akad akan dikonfirmasi terlaksana pada <span class="font-bold">{{ formatTanggalPendek(transaksi.tanggal_rencana_akad) }}</span>.
                             </p>
                             <p class="text-slate-400 text-xs mt-1">Setelah dikonfirmasi, status transaksi berubah menjadi Akad dan lanjut ke pengisian kesiapan BAST di bawah.</p>
+                            <p v-if="transaksi.tanggal_rencana_akad && transaksi.tanggal_rencana_akad > new Date().toISOString().slice(0, 10)"
+                                class="text-amber-400 text-xs mt-2">
+                                ⚠ Tanggal rencana akad masih di masa depan. Pastikan akad memang sudah terlaksana — kalau belum, ubah dulu Tanggal Rencana Akad.
+                            </p>
                         </div>
                         <div v-if="advanceForm.status_penjualan === 'proses_bank'">
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Pengajuan ke Bank</label>

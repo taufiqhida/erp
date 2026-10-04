@@ -1,5 +1,5 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue';
-import { usePage } from '@inertiajs/vue3';
+import { usePage, router } from '@inertiajs/vue3';
 
 /**
  * Toast notifikasi global — dipakai bareng oleh AuthenticatedLayout &
@@ -32,8 +32,24 @@ export function useToasts() {
     });
 
     const onAppToast = (e) => pushToast(e.detail.type, e.detail.message);
-    onMounted(() => window.addEventListener('app:toast', onAppToast));
-    onUnmounted(() => window.removeEventListener('app:toast', onAppToast));
+
+    // Error validasi dari server (422) — banyak form (Dokumen, Keuangan, Konsumen) tidak punya
+    // tempat menampilkan error per-field, jadi tanpa ini penolakan server terasa seperti
+    // "tombol tidak berfungsi". Form yang punya pesan inline tetap menampilkannya juga.
+    let offError = null;
+    onMounted(() => {
+        window.addEventListener('app:toast', onAppToast);
+        offError = router.on('error', (event) => {
+            const msgs = [...new Set(Object.values(event.detail.errors ?? {}).flat())];
+            if (!msgs.length) return;
+            const lebih = msgs.length > 3 ? `\n(+${msgs.length - 3} pesan lainnya)` : '';
+            pushToast('error', msgs.slice(0, 3).join('\n') + lebih);
+        });
+    });
+    onUnmounted(() => {
+        window.removeEventListener('app:toast', onAppToast);
+        offError?.();
+    });
 
     return { toasts, pushToast };
 }

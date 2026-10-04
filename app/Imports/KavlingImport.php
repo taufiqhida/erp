@@ -133,9 +133,15 @@ class KavlingImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
             // Tahap awal (Belum Mulai) tidak punya persen.
             if ($statusBangunStageId === $defaultStageId) $persenTahap = 0.0;
 
+            // Harga kosong boleh (diisi belakangan), tapi kalau diisi harus berisi angka —
+            // jangan diam-diam disimpan sebagai kosong.
+            $hargaRaw = trim((string) ($row['harga'] ?? ''));
+            if ($hargaRaw !== '' && !preg_match('/\d/', $hargaRaw)) {
+                $this->errors[] = "Baris {$rowNum}: Harga '{$hargaRaw}' bukan angka, dilewati.";
+                $this->skipped++;
+                continue;
+            }
             $harga = $this->parseAngka($row['harga'] ?? 0);
-            $lb    = $this->parseAngka($row['lb'] ?? $row['luas_bangunan'] ?? 0);
-            $lt    = $this->parseAngka($row['lt'] ?? $row['luas_tanah'] ?? 0);
 
             $idRumah = trim((string) ($row['id_rumah'] ?? ''));
             if ($idRumah !== '' && Kavling::where('id_rumah', $idRumah)->exists()) {
@@ -158,15 +164,18 @@ class KavlingImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
                 }
             }
 
-            try {
-                $tipePreset = TipeUnitPreset::firstOrCreate(
-                    ['project_id' => $this->project->id, 'nama' => $tipe],
-                    ['luas_tanah' => $lt ?: null, 'luas_bangunan' => $lb ?: null]
-                );
-                if ($tipePreset->wasRecentlyCreated) {
-                    $this->errors[] = "Baris {$rowNum}: Tipe Unit '{$tipe}' belum ada di proyek ini, dibuat otomatis — lengkapi spek lengkapnya di halaman Kelola Tipe Unit.";
-                }
+            // Tipe Unit harus sudah ada di proyek ini (dibuat lewat Kelola Tipe Unit) — salah ketik
+            // tidak boleh diam-diam membuat tipe baru tanpa luas/spek.
+            $tipePreset = TipeUnitPreset::where('project_id', $this->project->id)
+                ->whereRaw('LOWER(nama) = ?', [mb_strtolower($tipe)])
+                ->first();
+            if (!$tipePreset) {
+                $this->errors[] = "Baris {$rowNum}: Tipe Unit '{$tipe}' tidak ada di proyek ini (buat dulu di Kelola Tipe Unit), dilewati.";
+                $this->skipped++;
+                continue;
+            }
 
+            try {
                 Kavling::create([
                     'project_id'    => $this->project->id,
                     'kluster'       => $kluster ?: null,

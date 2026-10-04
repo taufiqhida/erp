@@ -494,7 +494,7 @@ class ProjectController extends Controller
             ['nomor_kavling', 'Ya', '1', 'Nomor unit di dalam bloknya (tanpa blok). Identitas unit = kluster + blok + nomor, jadi nomor yang sama boleh dipakai di blok/kluster berbeda. Kalau kombinasinya sudah ada atau duplikat dalam file, baris dilewati.'],
             ['kluster', 'Tidak', 'Melati', 'Kosongkan jika proyek/unit tidak punya kluster.'],
             ['blok', 'Ya', 'A1', 'Blok unit. Unit tampil sebagai "A1-1" (atau "Melati · A1-1" kalau ada kluster).'],
-            ['tipe_unit', 'Ya', '36/72', 'Nama Tipe Unit — dicocokkan dengan Tipe Unit yang sudah ada di proyek ini (menu "Kelola Tipe Unit"). Kalau namanya belum ada, Tipe baru otomatis dibuat (spek kosong, lengkapi belakangan).'],
+            ['tipe_unit', 'Ya', '36/72', 'Nama Tipe Unit — dicocokkan dengan Tipe Unit yang sudah ada di proyek ini (menu "Kelola Tipe Unit"). Namanya harus sudah ada — kalau belum, baris itu dilewati (buat dulu Tipe Unit-nya di "Kelola Tipe Unit").'],
             ['harga', 'Tidak', '250000000', 'Angka saja, tanpa "Rp" atau titik ribuan.'],
             ['status', 'Tidak (default: available)', 'available / not_for_sale', 'available = tersedia dijual, not_for_sale = ditahan/belum dijual dulu.'],
             ['status_bangun', "Tidak (default: {$defaultStageName})", StatusBangunStage::ordered()->pluck('nama')->implode(' / '), 'Isi kalau proyek sudah berjalan & sebagian unit progressnya bukan dari nol — harus persis sama dengan nama tahap di menu "Kelola Status Bangun". Kosongkan untuk unit yang belum mulai dibangun.'],
