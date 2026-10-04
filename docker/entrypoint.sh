@@ -25,6 +25,13 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
+# artisan di atas jalan sebagai root, jadi file yang dibuatnya (cache, log) milik root,
+# padahal PHP-FPM & scheduler jalan sebagai www-data -> tidak bisa menulis log/session/cache
+# (hasilnya HTTP 500 tanpa jejak di log). Samakan kepemilikan tiap container start,
+# termasuk isi volume lama.
+chown -R www-data:www-data storage bootstrap/cache
+chmod -R ug+rwX storage bootstrap/cache
+
 # Migrasi database TIDAK dijalankan otomatis di sini secara default — sengaja,
 # supaya container kedua (kalau nanti di-scale >1 replika) tidak balapan
 # migrate bersamaan. Jalankan manual sekali per deploy:
@@ -34,6 +41,7 @@ php artisan view:cache
 if [ "$RUN_MIGRATIONS" = "true" ]; then
     echo "RUN_MIGRATIONS=true — menjalankan migrate --force..."
     php artisan migrate --force
+    chown -R www-data:www-data storage bootstrap/cache
 fi
 
 exec "$@"
