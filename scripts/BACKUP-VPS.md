@@ -43,7 +43,7 @@ rclone config
    - Saat diminta `config_token>`: tempel token dari langkah (a)
    - Configure as Shared Drive: `n` → `y` (simpan)
 
-   Uji: `rclone mkdir gdrive:ERP-Backup && rclone lsd gdrive:`
+   Uji: `rclone mkdir gdrive:ERP-Backup-Staging && rclone lsd gdrive:`
 
 ### 3. Buat kata sandi enkripsi
 ```bash
@@ -76,7 +76,7 @@ DB_USER=erp_backup
 DB_PASS=GANTI_PASSWORD_KUAT_BEDA
 APP_CONTAINER=erp-app
 GPG_PASS_FILE=/opt/erp-backup/gpg.pass
-RCLONE_REMOTE=gdrive:ERP-Backup
+RCLONE_REMOTE=gdrive:ERP-Backup-Staging
 KEEP_LOCAL_DAYS=14
 KEEP_REMOTE_DAYS=30
 EOF
@@ -91,7 +91,7 @@ bash scripts/backup-vps.sh
 ```
 Harus berakhir dengan `=== Backup selesai ===`. Cek dua hal:
 - `ls -lh /opt/erp-backup/data/` — ada dua file `.gpg`.
-- `rclone ls gdrive:ERP-Backup` — dua file yang sama ada di Drive.
+- `rclone ls gdrive:ERP-Backup-Staging` — dua file yang sama ada di Drive.
 
 ### 7. Jadwalkan harian
 aaPanel → **Cron** → **Add task**: Type *Shell script*, name `Backup ERP`, period *Daily* jam **02:30**,
@@ -106,7 +106,7 @@ Klik **Execute** sekali untuk uji dari panel, lalu cek `/opt/erp-backup/backup.l
 ### 1. Ambil & dekripsi file
 ```bash
 cd /opt/erp-backup/data
-# kalau file ada di Drive saja:  rclone copy gdrive:ERP-Backup/erp-db-TANGGAL.sql.gz.gpg .
+# kalau file ada di Drive saja:  rclone copy gdrive:ERP-Backup-Staging/erp-db-TANGGAL.sql.gz.gpg .
 gpg --batch --pinentry-mode loopback --passphrase-file /opt/erp-backup/gpg.pass \
     -d erp-db-TANGGAL.sql.gz.gpg | gunzip > /tmp/erp-restore.sql
 head -c 300 /tmp/erp-restore.sql
