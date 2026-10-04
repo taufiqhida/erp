@@ -13,6 +13,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Di belakang reverse proxy (Nginx host/aaPanel -> container) Laravel harus
+        // percaya header X-Forwarded-*, kalau tidak URL aset dibuat http:// dan
+        // diblokir browser di halaman https (layar putih). Aktif lewat TRUSTED_PROXIES=*.
+        if ($proxies = env('TRUSTED_PROXIES')) {
+            $middleware->trustProxies(at: $proxies === '*' ? '*' : explode(',', $proxies));
+        }
+
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
