@@ -198,7 +198,6 @@ class BookingController extends Controller
             'booking_fee'         => 'nullable|numeric|min:0',
             'cara_bayar'          => 'required|in:cash,cash_bertahap,kpr_subsidi,kpr_komersil',
             'cicilan_kali'        => 'nullable|integer|min:1|max:360',
-            'skema_dp'            => 'nullable|string|max:100',
             'skema_dp_preset_id'  => 'nullable|exists:skema_dp_presets,id',
             'plafon_kpr'          => 'nullable|numeric|min:0',
             'catatan'             => 'nullable|string',
@@ -320,7 +319,6 @@ class BookingController extends Controller
             $dpNominal = ($skemaPreset && $skemaPreset->dp_aktif)
                 ? $resolveNominal($skemaPreset->dp_tipe, $skemaPreset->dp_nilai, $skemaPreset->dp_basis)
                 : 0;
-            $skemaDpString = $dpNominal > 0 ? "nominal:{$dpNominal}" : 'tanpa_dp';
 
             // ── Program All In: nominalnya sudah termasuk Booking Fee/DP kalau
             // preset-nya set begitu — sisanya (yang belum ter-cover) jadi
@@ -350,7 +348,6 @@ class BookingController extends Controller
                 'booking_fee'      => $bookingFee,
                 'cara_bayar'       => $validated['cara_bayar'],
                 'cicilan_kali'     => $validated['cicilan_kali'] ?? null,
-                'skema_dp'         => $skemaDpString,
                 'skema_dp_preset_id' => $skemaPreset?->id,
                 'plafon_kpr'       => $validated['plafon_kpr'] ?? null,
                 'sales_agent_id'   => $validated['sales_agent_id'],
@@ -480,13 +477,30 @@ class BookingController extends Controller
     public function updateStatus(Request $request, KavlingKonsumen $kk): RedirectResponse
     {
         $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('update status penjualan'), 403);
 
         $validated = $request->validate([
             'status_penjualan'       => 'required|in:booking,pemberkasan,proses_bank,rencana_akad,akad,batal',
             'catatan'                => 'nullable|string',
             'tanggal_pengajuan_bank' => 'nullable|date',
         ]);
+
+        // Wewenang dipecah per tahap tujuan — pemberkasan→proses_bank ranah Admin
+        // Pemberkasan, sisanya (termasuk pemberkasan→rencana_akad khusus cash yang
+        // tidak lewat bank sama sekali) ranah Admin Sales. 'booking'/'batal' bukan
+        // jalur yang dipakai UI manapun lagi (booking auto-complete saat dibuat,
+        // batal lewat CancellationRequestController) — izinkan siapa pun yang
+        // pegang salah satu dari 2 ability pipeline.
+        $requiredAbility = match ($validated['status_penjualan']) {
+            'proses_bank'              => 'kelola pemberkasan bank',
+            'rencana_akad', 'akad'     => 'kelola pipeline sales',
+            default                    => null,
+        };
+        abort_unless(
+            $requiredAbility
+                ? Auth::user()->can($requiredAbility)
+                : (Auth::user()->can('kelola pipeline sales') || Auth::user()->can('kelola pemberkasan bank')),
+            403
+        );
 
         // Jangan biarkan field ini numpang ke $kk->update() di transisi lain
         // (advanceForm selalu mengirim key ini walau kosong) — cuma relevan
@@ -506,7 +520,7 @@ class BookingController extends Controller
                 'Dokumen wajib belum lengkap — isi catatan alasan untuk tetap lanjut.'
             );
             abort_unless(
-                filled($kk->bank_rekanan_kpr),
+                filled($kk->bank_rekanan_preset_id),
                 422,
                 'Bank Rekanan KPR harus diisi terlebih dahulu sebelum lanjut ke Proses Bank.'
             );
@@ -581,7 +595,7 @@ class BookingController extends Controller
     public function updateBankDecision(Request $request, KavlingKonsumen $kk): RedirectResponse
     {
         $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('update status penjualan'), 403);
+        abort_unless(Auth::user()->can('kelola pemberkasan bank'), 403);
         abort_unless($kk->status_penjualan === 'proses_bank', 422, 'Transaksi tidak sedang di tahap Proses Bank.');
 
         $validated = $request->validate([
@@ -610,7 +624,7 @@ class BookingController extends Controller
     public function updateSp3kDecision(Request $request, KavlingKonsumen $kk): RedirectResponse
     {
         $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('update status penjualan'), 403);
+        abort_unless(Auth::user()->can('kelola pemberkasan bank'), 403);
         abort_unless($kk->status_penjualan === 'sp3k', 422, 'Transaksi tidak sedang di tahap SP3K.');
 
         $validated = $request->validate([
@@ -657,8 +671,15 @@ class BookingController extends Controller
     public function revertToPreviousStage(KavlingKonsumen $kk): RedirectResponse
     {
         $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('update status penjualan'), 403);
         abort_if($kk->status === 'cancelled', 422, 'Transaksi ini sudah batal.');
+
+        // Wewenang mundur tahap ikut siapa "pemilik" tahap yang SEDANG dijalani
+        // (bukan tahap tujuan) — mundur dari Proses Bank/SP3K itu keputusan
+        // Admin Pemberkasan, selain itu Admin Sales.
+        $requiredAbility = in_array($kk->status_penjualan, ['proses_bank', 'sp3k'], true)
+            ? 'kelola pemberkasan bank'
+            : 'kelola pipeline sales';
+        abort_unless(Auth::user()->can($requiredAbility), 403);
 
         $isBankFlow = in_array($kk->cara_bayar, ['kpr_subsidi', 'kpr_komersil']);
         $order = $this->pipelineOrder($isBankFlow);
@@ -694,7 +715,7 @@ class BookingController extends Controller
     public function updateRencanaAkad(Request $request, KavlingKonsumen $kk): RedirectResponse
     {
         $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('update status penjualan'), 403);
+        abort_unless(Auth::user()->can('kelola pipeline sales'), 403);
         abort_unless($kk->status_penjualan === 'rencana_akad', 422, 'Transaksi tidak sedang di tahap Rencana Akad.');
 
         $validated = $request->validate([
@@ -715,12 +736,12 @@ class BookingController extends Controller
     public function updateBankRekanan(Request $request, KavlingKonsumen $kk): RedirectResponse
     {
         $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('update status penjualan'), 403);
+        abort_unless(Auth::user()->can('isi bank rekanan kpr'), 403);
         abort_unless(in_array($kk->cara_bayar, ['kpr_subsidi', 'kpr_komersil']), 422, 'Bank Rekanan KPR hanya berlaku untuk cara bayar KPR.');
         $this->assertTransactionEditable($kk, 'Update Bank Rekanan KPR');
 
         $validated = $request->validate([
-            'bank_rekanan_kpr' => 'nullable|string|max:100',
+            'bank_rekanan_preset_id' => 'nullable|integer|exists:bank_rekanan_presets,id',
         ]);
 
         $kk->update($validated);

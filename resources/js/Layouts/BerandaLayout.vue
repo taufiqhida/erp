@@ -9,12 +9,15 @@ const { toasts } = useToasts();
 
 const roleLabel = computed(() => {
     const roleMap = {
-        superadmin:      { label: 'Super Admin',   color: 'bg-violet-500/20 text-violet-300' },
-        manajer:         { label: 'Manajer',        color: 'bg-blue-500/20 text-blue-300' },
-        sales:           { label: 'Sales',          color: 'bg-emerald-500/20 text-emerald-300' },
-        staff_lapangan:  { label: 'Staff Lapangan', color: 'bg-amber-500/20 text-amber-300' },
-        finance:         { label: 'Finance',        color: 'bg-teal-500/20 text-teal-300' },
-        staff_kpr:       { label: 'Staff KPR',      color: 'bg-fuchsia-500/20 text-fuchsia-300' },
+        superadmin:          { label: 'Superadmin',         color: 'bg-violet-500/20 text-violet-300' },
+        manager:             { label: 'Manager',            color: 'bg-blue-500/20 text-blue-300' },
+        spv:                 { label: 'SPV',                color: 'bg-sky-500/20 text-sky-300' },
+        leader:              { label: 'Leader',              color: 'bg-indigo-500/20 text-indigo-300' },
+        admin_sales:         { label: 'Admin Sales',         color: 'bg-emerald-500/20 text-emerald-300' },
+        admin_pemberkasan:   { label: 'Admin Pemberkasan',   color: 'bg-fuchsia-500/20 text-fuchsia-300' },
+        admin_proyek:        { label: 'Admin Proyek',        color: 'bg-amber-500/20 text-amber-300' },
+        pelaksana_lapangan:  { label: 'Pelaksana Lapangan',  color: 'bg-orange-500/20 text-orange-300' },
+        admin_keuangan:      { label: 'Admin Keuangan',      color: 'bg-teal-500/20 text-teal-300' },
     };
     const role = user.value?.roles?.[0];
     return roleMap[role] ?? { label: role ?? 'Tanpa Role', color: 'bg-slate-700 text-slate-400' };

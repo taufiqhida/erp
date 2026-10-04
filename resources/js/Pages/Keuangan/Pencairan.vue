@@ -38,6 +38,16 @@ const go = (override = {}) => {
     }, { preserveState: true, replace: true });
 };
 const setSort = (key, direction) => go({ sort: key, dir: direction });
+
+// Export Excel ikut filter & "tampil" yang sedang aktif — snapshot referensi.
+const exportUrl = computed(() => {
+    const params = new URLSearchParams(Object.fromEntries(Object.entries({
+        search: search.value, kluster: kluster.value, blok: blok.value,
+        cara_bayar: caraBayar.value, bank: bank.value,
+        tampil: tampil.value, belum_akad: belumAkad.value ? '1' : '',
+    }).filter(([, v]) => v)));
+    return route('keuangan.pencairan.export') + '?' + params.toString();
+});
 const setTampil = (value) => go({ tampil: value });
 const toggleBelumAkad = () => go({ belum_akad: belumAkad.value ? undefined : '1' });
 
@@ -80,15 +90,27 @@ const statusPenjualanConfig = computed(() => {
         </template>
 
         <div class="p-6 space-y-5">
-            <div>
-                <h1 class="text-white font-bold text-xl">Pencairan KPR</h1>
-                <p class="text-slate-400 text-sm mt-0.5">Dana bank &amp; pemerintah (pencairan KPR, SBUM, Dana Jaminan) khusus konsumen KPR. Default: yang sudah Akad dan belum cair penuh.</p>
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h1 class="text-white font-bold text-xl">Pencairan KPR</h1>
+                    <p class="text-slate-400 text-sm mt-0.5">Dana bank &amp; pemerintah (pencairan KPR, SBUM, Dana Jaminan) khusus konsumen KPR. Default: yang sudah Akad dan belum cair penuh.</p>
+                </div>
+                <a :href="exportUrl" class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 text-sky-400">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-4.5L12 16.5m0 0l4.5-4.5M12 16.5V3" />
+                    </svg>
+                    Export Excel
+                </a>
             </div>
 
-            <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
                     <div class="text-slate-500 text-[11px]">Jumlah transaksi</div>
                     <div class="text-white text-lg font-bold mt-0.5">{{ summary.jumlah }}</div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
+                    <div class="text-slate-500 text-[11px]">Sudah cair</div>
+                    <div class="text-emerald-400 text-lg font-bold mt-0.5">{{ formatRp(summary.total_terbayar) }}</div>
                 </div>
                 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
                     <div class="text-slate-500 text-[11px]">Total sisa pencairan</div>
@@ -136,7 +158,7 @@ const statusPenjualanConfig = computed(() => {
                     </select>
                     <select v-model="bank" class="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">
                         <option value="">Semua Bank</option>
-                        <option v-for="b in filterOptions.bank" :key="b" :value="b">{{ b }}</option>
+                        <option v-for="b in filterOptions.bank" :key="b.id" :value="b.id">{{ b.nama }}</option>
                     </select>
                     <button v-if="hasFilter" @click="resetFilters" class="px-3 py-1.5 text-slate-500 hover:text-slate-300 text-xs transition-colors">✕ Reset filter</button>
                 </div>

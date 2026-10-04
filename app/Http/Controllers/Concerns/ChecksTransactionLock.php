@@ -8,9 +8,10 @@ use Illuminate\Support\Facades\Auth;
 /**
  * Lock permanen begitu transaksi ditandai Selesai (bukan otomatis saat
  * Akad, lihat KavlingKonsumen::getIsLockedAttribute()): pemberkasan,
- * rincian biaya akad, & riwayat pembayaran dianggap final. Manajer/Admin
- * tetap bisa mengedit langsung (tanpa tombol "unlock" terpisah), tapi
- * setiap override dicatat ke activity log untuk jejak audit.
+ * rincian biaya akad, & riwayat pembayaran dianggap final. Pemegang
+ * permission 'override transaction lock' (Superadmin/SPV/Leader) tetap bisa
+ * mengedit langsung (tanpa tombol "unlock" terpisah), tapi setiap override
+ * dicatat ke activity log untuk jejak audit.
  */
 trait ChecksTransactionLock
 {
@@ -21,9 +22,9 @@ trait ChecksTransactionLock
         }
 
         abort_unless(
-            Auth::user()->hasAnyRole(['manajer', 'superadmin']),
+            Auth::user()->can('override transaction lock'),
             403,
-            'Transaksi ini sudah terkunci sejak ditandai Selesai. Hanya Manajer/Admin yang bisa mengubah data ini.'
+            'Transaksi ini sudah terkunci sejak ditandai Selesai. Hanya pengguna dengan wewenang override yang bisa mengubah data ini.'
         );
 
         activity()

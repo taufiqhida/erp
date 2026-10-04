@@ -1,7 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InlineSiteplanSvg from '@/Components/InlineSiteplanSvg.vue';
-import CsvImportModal from '@/Components/CsvImportModal.vue';
 import KavlingSearchSelect from '@/Components/KavlingSearchSelect.vue';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
@@ -16,11 +15,7 @@ const props = defineProps({
     statusBangunStages: Array,
 });
 
-// ── Can admin edit? ──────────────────────────────────────────────────────
-const page    = usePage();
-const isAdmin = computed(() =>
-    page.props.auth?.user?.roles?.some(r => ['superadmin','manajer'].includes(r))
-);
+const page = usePage();
 
 // ── View mode ────────────────────────────────────────────────────────────────
 const viewMode = ref('siteplan'); // 'siteplan' | 'table'
@@ -74,6 +69,14 @@ const resetFilters = () => {
 };
 
 const activeFilterCount = computed(() => Object.values(filters.value).filter(Boolean).length);
+
+// Export Excel ikut filter yang sedang aktif — snapshot referensi (bukan mode
+// kerja offline, lihat catatan di ExportsExcel.php sisi backend).
+const exportKavlingUrl = computed(() => {
+    const params = new URLSearchParams(Object.entries(filters.value).filter(([, v]) => v));
+    const qs = params.toString();
+    return route('projects.export-kavling', project.id) + (qs ? `?${qs}` : '');
+});
 
 // Edit status bangun pindah ke halaman Proses Bangun (Tahap 2) — Stok
 // Kavling sekarang murni tampilan read-only untuk kolom Pembangunan.
@@ -322,12 +325,6 @@ const submitImport = () => {
     });
 };
 
-// ── Import CSV dengan preview & mapping kolom ────────────────────────
-const showCsvImport = ref(false);
-const onCsvImported = () => {
-    router.reload({ only: ['kavlings', 'project'] });
-};
-
 // ── Upload / ganti gambar Siteplan ───────────────────────────────────────
 const showUploadSiteplan = ref(false);
 const siteplanUploadForm = useForm({ siteplan_image: null });
@@ -388,21 +385,21 @@ const submitUploadSiteplan = () => {
                         </div>
                     </div>
                     <div class="flex gap-2 flex-wrap">
+                        <!-- Export Excel: snapshot referensi (ikut filter aktif) -->
+                        <a :href="exportKavlingUrl"
+                            class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 text-sky-400">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-4.5L12 16.5m0 0l4.5-4.5M12 16.5V3" />
+                            </svg>
+                            Export Excel
+                        </a>
                         <!-- Import Excel (cepat, tanpa preview) -->
-                        <button v-if="isAdmin" @click="showImport = true"
+                        <button v-if="canEditKavlings" @click="showImport = true"
                             class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 text-emerald-400">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                             </svg>
                             Import Excel
-                        </button>
-                        <!-- Import CSV dengan preview & mapping kolom -->
-                        <button v-if="isAdmin" @click="showCsvImport = true"
-                            class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 text-violet-400">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            Import CSV (Preview)
                         </button>
                         <Link :href="route('projects.edit', project.id)"
                               class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">
@@ -471,7 +468,7 @@ const submitUploadSiteplan = () => {
                 <!-- Admin action buttons -->
                 <div class="flex items-center gap-2 flex-wrap">
                     <!-- Upload/ganti siteplan (admin only) -->
-                    <button v-if="isAdmin && viewMode === 'siteplan'" @click="showUploadSiteplan = true"
+                    <button v-if="canEditKavlings && viewMode === 'siteplan'" @click="showUploadSiteplan = true"
                         class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
@@ -479,7 +476,7 @@ const submitUploadSiteplan = () => {
                         {{ project.siteplan_image ? 'Ganti Siteplan' : 'Upload Siteplan' }}
                     </button>
                     <!-- Edit koordinat mode (admin only) -->
-                    <template v-if="isAdmin && viewMode === 'siteplan' && project.siteplan_image && !isSvgSiteplan">
+                    <template v-if="canEditKavlings && viewMode === 'siteplan' && project.siteplan_image && !isSvgSiteplan">
                         <div v-if="editingKoordinat" class="flex items-center gap-2">
                             <button @click="saveAllKoordinat"
                                 class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs rounded-lg font-medium transition-colors">
@@ -499,12 +496,12 @@ const submitUploadSiteplan = () => {
                             Atur Posisi Unit
                         </button>
                     </template>
-                    <Link v-if="isAdmin" :href="route('projects.tipe-unit.index', project.id)"
+                    <Link v-if="canEditKavlings" :href="route('projects.tipe-unit.index', project.id)"
                             class="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 text-indigo-400"><path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6z" /></svg>
                         Kelola Tipe Unit
                     </Link>
-                    <button v-if="isAdmin" @click="showAddModal = true"
+                    <button v-if="canEditKavlings" @click="showAddModal = true"
                             class="inline-flex items-center gap-2 px-3 py-2 bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 text-xs font-medium rounded-lg transition-colors border border-violet-500/20">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"/></svg>
                         Tambah Kavling
@@ -665,19 +662,19 @@ const submitUploadSiteplan = () => {
             <div v-else class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
-                        <thead>
-                            <tr class="border-b border-slate-800">
-                                <th class="text-left px-5 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Kluster</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Kavling</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Tipe</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Luas</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Harga</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Status Jual</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Pembangunan</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Konsumen</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">ID Rumah</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">No. HGB</th>
-                                <th class="text-right px-5 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Aksi</th>
+                        <thead class="border-b border-slate-800 text-xs text-slate-500 uppercase tracking-wide">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-medium">Kluster</th>
+                                <th class="px-4 py-3 text-left font-medium">Kavling</th>
+                                <th class="px-4 py-3 text-left font-medium">Tipe</th>
+                                <th class="px-4 py-3 text-left font-medium">Luas</th>
+                                <th class="px-4 py-3 text-left font-medium">Harga</th>
+                                <th class="px-4 py-3 text-left font-medium">Status Jual</th>
+                                <th class="px-4 py-3 text-left font-medium">Pembangunan</th>
+                                <th class="px-4 py-3 text-left font-medium">Konsumen</th>
+                                <th class="px-4 py-3 text-left font-medium">ID Rumah</th>
+                                <th class="px-4 py-3 text-left font-medium">No. HGB</th>
+                                <th class="px-4 py-3 text-right font-medium">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-800/60">
@@ -697,7 +694,7 @@ const submitUploadSiteplan = () => {
                                 </td>
                                 <td class="px-4 py-3.5 text-slate-300 text-xs font-mono">{{ formatRupiah(k.harga) }}</td>
                                 <td class="px-4 py-3.5">
-                                    <button v-if="isAdmin && ['available', 'hold'].includes(k.status_jual)"
+                                    <button v-if="canEditKavlings && ['available', 'hold'].includes(k.status_jual)"
                                         @click="toggleStatusJual(k)"
                                         :title="`Klik untuk ubah jadi ${k.status_jual === 'available' ? 'Tidak Tersedia' : 'Tersedia'}`"
                                         :style="statusConfig[k.status_jual]?.badgeStyle" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium hover:opacity-75 transition-opacity cursor-pointer">
@@ -709,10 +706,7 @@ const submitUploadSiteplan = () => {
                                     </span>
                                 </td>
                                 <td class="px-4 py-3.5">
-                                    <div class="flex items-center gap-2">
-                                        <div class="w-12 h-1 bg-slate-800 rounded-full overflow-hidden flex-shrink-0">
-                                            <div class="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full" :style="{ width: k.progress_bangun + '%' }"/>
-                                        </div>
+                                    <div>
                                         <select v-if="canUpdateStatusBangun"
                                             :value="k.status_bangun_stage_id"
                                             @change="updateStatusBangunInline(k, $event.target.value)"
@@ -720,6 +714,12 @@ const submitUploadSiteplan = () => {
                                             <option v-for="opt in statusBangunOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                                         </select>
                                         <span v-else class="text-slate-400 text-xs">{{ k.status_bangun_label }}</span>
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <div class="w-12 h-1 bg-slate-800 rounded-full overflow-hidden flex-shrink-0">
+                                                <div class="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full" :style="{ width: k.progress_bangun + '%' }"/>
+                                            </div>
+                                            <span class="text-slate-500 text-[11px] tabular-nums flex-shrink-0">{{ k.progress_bangun }}%</span>
+                                        </div>
                                     </div>
                                 </td>
                                 <td class="px-4 py-3.5 text-slate-400 text-xs">{{ k.konsumen_nama ?? '-' }}</td>
@@ -741,9 +741,9 @@ const submitUploadSiteplan = () => {
                                     <div class="inline-flex items-center gap-1 justify-end">
                                         <button @click="selectKavling(k)" title="Detail"
                                                 class="p-1.5 text-slate-400 hover:text-violet-400 hover:bg-violet-400/10 rounded-lg transition-colors">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                         </button>
-                                        <button v-if="isAdmin" @click="openEditKavling(k)" title="Edit"
+                                        <button v-if="canEditKavlings" @click="openEditKavling(k)" title="Edit"
                                                 class="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors">
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
                                         </button>
@@ -921,7 +921,7 @@ const submitUploadSiteplan = () => {
                         <div class="space-y-2">
                             <div class="flex items-center justify-between">
                                 <div class="text-slate-400 text-xs font-medium uppercase tracking-wider">Foto &amp; Denah Rumah (dari Tipe Unit)</div>
-                                <Link v-if="isAdmin" :href="route('projects.tipe-unit.index', project.id)" class="text-violet-400 hover:text-violet-300 text-xs">Kelola Tipe Unit →</Link>
+                                <Link v-if="canEditKavlings" :href="route('projects.tipe-unit.index', project.id)" class="text-violet-400 hover:text-violet-300 text-xs">Kelola Tipe Unit →</Link>
                             </div>
                             <div class="grid grid-cols-2 gap-3">
                                 <div class="rounded-xl overflow-hidden bg-slate-800 aspect-video">
@@ -1223,11 +1223,5 @@ const submitUploadSiteplan = () => {
             </div>
         </Teleport>
 
-        <CsvImportModal
-            :show="showCsvImport"
-            :project-id="project.id"
-            @close="showCsvImport = false"
-            @imported="onCsvImported"
-        />
     </AuthenticatedLayout>
 </template>

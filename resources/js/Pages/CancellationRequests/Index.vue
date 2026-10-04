@@ -88,15 +88,15 @@ const statusBadgeClass = {
             <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
-                        <thead>
-                            <tr class="border-b border-slate-800">
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Tipe</th>
-                                <th class="text-left px-5 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Kavling / Proyek</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Konsumen</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Alasan</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Pengaju</th>
-                                <th class="text-center px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Status</th>
-                                <th class="text-right px-5 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Aksi</th>
+                        <thead class="border-b border-slate-800 text-xs text-slate-500 uppercase tracking-wide">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-medium">Tipe</th>
+                                <th class="px-4 py-3 text-left font-medium">Kavling / Proyek</th>
+                                <th class="px-4 py-3 text-left font-medium">Konsumen</th>
+                                <th class="px-4 py-3 text-left font-medium">Alasan</th>
+                                <th class="px-4 py-3 text-left font-medium">Pengaju</th>
+                                <th class="px-4 py-3 text-center font-medium">Status</th>
+                                <th class="px-4 py-3 text-right font-medium">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-800/70">

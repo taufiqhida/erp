@@ -8,13 +8,13 @@ use App\Models\User;
 class ProjectPolicy
 {
     /**
-     * superadmin & manajer punya akses lintas-proyek (oversight role).
+     * Pemegang permission 'view all projects' (superadmin & manager) punya akses lintas-proyek.
      * Role lain (sales, staff_lapangan, finance, staff_kpr) hanya
      * boleh mengakses proyek yang di-assign lewat project_user.
      */
     protected function hasGlobalAccess(User $user): bool
     {
-        return $user->hasAnyRole(['superadmin', 'manajer']);
+        return $user->can('view all projects');
     }
 
     public function isAssignedTo(User $user, Project $project): bool

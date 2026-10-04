@@ -8,13 +8,13 @@ use App\Models\User;
 class KonsumenPolicy
 {
     /**
-     * superadmin & manajer punya akses lintas-proyek (oversight role).
+     * Pemegang permission 'view all projects' (superadmin & manager) punya akses lintas-proyek.
      * Role lain hanya boleh mengakses konsumen yang transaksinya terkait
      * proyek yang di-assign lewat project_user (konsisten dengan ProjectPolicy).
      */
     protected function hasProjectAccess(User $user, Konsumen $konsumen): bool
     {
-        if ($user->hasAnyRole(['superadmin', 'manajer'])) {
+        if ($user->can('view all projects')) {
             return true;
         }
 

@@ -18,9 +18,9 @@ const click = () => emit('sort', props.sortKey, active() ? (props.dir === 'asc' 
 <template>
     <th class="px-4 py-3 font-medium" :class="align === 'right' ? 'text-right' : 'text-left'">
         <button type="button" @click="click"
-            class="uppercase tracking-wide hover:text-slate-300 transition-colors"
-            :class="active() ? 'text-violet-400' : ''">
-            {{ label }} <span v-if="active()">{{ dir === 'asc' ? '▲' : '▼' }}</span>
+            class="uppercase tracking-wide hover:text-slate-300 transition-colors inline-flex items-center gap-1"
+            :class="active() ? 'text-violet-400' : 'text-slate-500'">
+            {{ label }} <span :class="active() ? '' : 'text-slate-700'">{{ active() ? (dir === 'asc' ? '▲' : '▼') : '⇅' }}</span>
         </button>
     </th>
 </template>

@@ -11,12 +11,9 @@ const props = defineProps({
 
 const canManagePembayaran = computed(() => usePage().props.auth.user?.permissions?.includes('manage pembayaran'));
 const canManageKpr = computed(() => usePage().props.auth.user?.permissions?.includes('manage kpr'));
-const isManajerOrAdmin = computed(() => {
-    const roles = usePage().props.auth.user?.roles ?? [];
-    return roles.includes('manajer') || roles.includes('superadmin');
-});
-const canPayItem = computed(() => canManagePembayaran.value && (!props.transaksi.is_locked || isManajerOrAdmin.value));
-const canPayDajamSbum = computed(() => canManageKpr.value && (!props.transaksi.is_locked || isManajerOrAdmin.value));
+const overrideLock = computed(() => usePage().props.auth.user?.permissions?.includes('override transaction lock'));
+const canPayItem = computed(() => canManagePembayaran.value && (!props.transaksi.is_locked || overrideLock.value));
+const canPayDajamSbum = computed(() => canManageKpr.value && (!props.transaksi.is_locked || overrideLock.value));
 
 // Tandai Selesai — pemicu lock (bukan status Akad), cuma aktif kalau semua
 // piutang konsumen & piutang bank sudah lunas (dicek ulang di server).
@@ -39,6 +36,12 @@ const nominalLabel = (nominal, dibayar, status) => status === 'sebagian' && diba
 
 const sbumItems = computed(() => (props.transaksi.rincian_biaya_akad || []).filter(i => i.kategori === 'sbum'));
 const dajamItems = computed(() => (props.transaksi.rincian_biaya_akad || []).filter(i => i.kategori === 'dajam'));
+
+// Soft gate: pencairan bank (SBUM/Dana Jaminan/tahap KPR) normalnya baru terjadi
+// setelah akad. Belum akad tetap bisa dicatat, tapi CatatPembayaran & form tahap
+// mewajibkan keterangan alasan — lihat KeuanganController::payDajamSbum()/storePencairanKprTahap().
+const pencairanBelumAkad = computed(() => !['akad', 'bast'].includes(props.transaksi.status_penjualan));
+const PENCAIRAN_WARNING = 'Konsumen belum akad — pencairan bank biasanya baru terjadi setelah akad. Isi alasan kalau memang perlu dicatat sekarang.';
 
 const totalKartuPiutang = computed(() => (props.transaksi.kartu_piutang_static || []).reduce((sum, i) => sum + Number(i.nominal), 0));
 
@@ -495,7 +498,8 @@ const deleteCicilanLain = (c) => {
                                         :url="route('rincian-biaya-akad.bayar', item.id)"
                                         :delete-url="route('rincian-biaya-akad.bayar.destroy', item.id)"
                                         :status="item.status" :tanggal-bayar="item.tanggal_bayar"
-                                        :default-jumlah="item.nominal" :paid-jumlah="item.jumlah_dibayar" :can-manage="canPayDajamSbum" />
+                                        :default-jumlah="item.nominal" :paid-jumlah="item.jumlah_dibayar" :can-manage="canPayDajamSbum"
+                                        :require-note="pencairanBelumAkad && item.status === 'belum_bayar'" :warning-message="PENCAIRAN_WARNING" />
                                 </span>
                             </div>
                         </div>
@@ -525,7 +529,8 @@ const deleteCicilanLain = (c) => {
                                     :url="route('rincian-biaya-akad.bayar', item.id)"
                                     :delete-url="route('rincian-biaya-akad.bayar.destroy', item.id)"
                                     :status="item.status" :tanggal-bayar="item.tanggal_bayar"
-                                    :default-jumlah="item.nominal" :paid-jumlah="item.jumlah_dibayar" :can-manage="canPayDajamSbum" />
+                                    :default-jumlah="item.nominal" :paid-jumlah="item.jumlah_dibayar" :can-manage="canPayDajamSbum"
+                                    :require-note="pencairanBelumAkad && item.status === 'belum_bayar'" :warning-message="PENCAIRAN_WARNING" />
                             </span>
                         </div>
                     </div>
@@ -590,19 +595,25 @@ const deleteCicilanLain = (c) => {
                                 class="text-xs text-violet-400 hover:text-violet-300 transition-colors">
                                 + Catat Pencairan
                             </button>
-                            <div v-else class="flex flex-wrap items-center gap-1.5">
+                            <div v-else class="space-y-1.5">
+                                <p v-if="pencairanBelumAkad" class="text-amber-400 text-[11px] bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 max-w-md">
+                                    ⚠ {{ PENCAIRAN_WARNING }}
+                                </p>
+                                <div class="flex flex-wrap items-center gap-1.5">
                                 <MoneyInput v-model="tambahTahapForm.nominal" placeholder="Nominal"
                                     class="w-32 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                 <input v-model="tambahTahapForm.tanggal_cair" type="date"
                                     class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                                <input v-model="tambahTahapForm.keterangan" type="text" placeholder="Keterangan (opsional)"
-                                    class="w-36 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                <input v-model="tambahTahapForm.keterangan" type="text" :placeholder="pencairanBelumAkad ? 'Alasan (wajib)' : 'Keterangan (opsional)'"
+                                    class="w-36 px-2 py-1 bg-slate-900 border rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                    :class="pencairanBelumAkad && !tambahTahapForm.keterangan.trim() ? 'border-amber-500/50' : 'border-slate-700'" />
                                 <button @click="submitTambahTahap"
-                                    :disabled="!tambahTahapForm.nominal || !tambahTahapForm.tanggal_cair || tambahTahapForm.processing"
+                                    :disabled="!tambahTahapForm.nominal || !tambahTahapForm.tanggal_cair || (pencairanBelumAkad && !tambahTahapForm.keterangan.trim()) || tambahTahapForm.processing"
                                     class="px-2.5 py-1 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
                                     Simpan
                                 </button>
                                 <button @click="showTambahTahap = false; tambahTahapForm.reset()" class="px-2 py-1 text-slate-400 hover:text-slate-200 text-xs">Batal</button>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -45,11 +45,17 @@ class StatusBangunStage extends Model
     /** @var array<int, array{sebelum: float, bobot: float}>|null */
     private static ?array $progressMap = null;
 
+    private static ?int $maxUrutan = null;
+
     protected static function booted(): void
     {
         // Bobot/urutan berubah → peta progres harus dihitung ulang.
-        static::saved(fn () => static::$progressMap = null);
-        static::deleted(fn () => static::$progressMap = null);
+        $reset = function () {
+            static::$progressMap = null;
+            static::$maxUrutan = null;
+        };
+        static::saved($reset);
+        static::deleted($reset);
     }
 
     /**
@@ -91,7 +97,11 @@ class StatusBangunStage extends Model
      */
     public function isFinalStage(): bool
     {
-        return $this->urutan === static::max('urutan');
+        // Dimemoize per request: dipanggil per kavling (accessor bangun_selesai) di listing,
+        // jadi tanpa ini jadi satu query MAX per baris.
+        static::$maxUrutan ??= (int) static::max('urutan');
+
+        return $this->urutan === static::$maxUrutan;
     }
 
     public static function finalStage(): ?self

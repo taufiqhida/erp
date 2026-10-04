@@ -22,11 +22,11 @@ class RencanaAkadController extends Controller
         $this->authorize('viewAny', Konsumen::class);
 
         $user = Auth::user();
-        $isGlobal = $user->hasAnyRole(['superadmin', 'manajer']);
+        $isGlobal = $user->can('view all projects');
         $projectId = session('current_project_id');
 
         $rows = KavlingKonsumen::query()
-            ->with(['konsumen:id,nama,no_hp', 'kavling.project:id,nama', 'notarisPreset:id,nama'])
+            ->with(['konsumen:id,nama,no_hp', 'kavling.project:id,nama', 'notarisPreset:id,nama', 'bankRekananPreset:id,nama'])
             ->where('status', 'active')
             ->where('status_penjualan', 'rencana_akad')
             ->whereHas('kavling', function ($q) use ($isGlobal, $projectId, $user) {
@@ -70,8 +70,9 @@ class RencanaAkadController extends Controller
             ->values();
 
         return Inertia::render('RencanaAkad/Index', [
-            'rows'           => $rows,
-            'notarisOptions' => NotarisPreset::ordered()->get(['id', 'nama']),
+            'rows'              => $rows,
+            'notarisOptions'    => NotarisPreset::ordered()->get(['id', 'nama']),
+            'canViewKeuangan'   => $user->can('view keuangan'),
         ]);
     }
 }

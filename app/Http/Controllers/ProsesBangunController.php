@@ -34,6 +34,7 @@ class ProsesBangunController extends Controller
             ->when($request->blok, fn($q) => $q->where('blok', $request->blok))
             ->when($request->tipe_unit_preset_id, fn($q) => $q->where('tipe_unit_preset_id', $request->tipe_unit_preset_id))
             ->when($request->status_bangun_stage_id, fn($q) => $q->where('status_bangun_stage_id', $request->status_bangun_stage_id))
+            ->when($request->kontraktor_id, fn($q) => $q->whereHas('spks', fn($sq) => $sq->where('kontraktor_id', $request->kontraktor_id)))
             ->with([
                 'tipeUnitPreset:id,nama',
                 'statusBangunStage',
@@ -63,19 +64,24 @@ class ProsesBangunController extends Controller
             'project'  => ['id' => $project->id, 'nama' => $project->nama],
             'kavlings' => $kavlings,
             'spkRiwayat' => $spkRiwayat,
-            'filters'  => $request->only(['kluster', 'blok', 'tipe_unit_preset_id', 'status_bangun_stage_id']),
+            'filters'  => $request->only(['kluster', 'blok', 'tipe_unit_preset_id', 'status_bangun_stage_id', 'kontraktor_id']),
             'klusterOptions' => $project->kavlings()->whereNotNull('kluster')->distinct()->orderBy('kluster')->pluck('kluster'),
             'blokOptions'    => $project->kavlings()->whereNotNull('blok')->distinct()->orderBy('blok')->pluck('blok'),
             'tipeUnitOptions' => $project->tipeUnitPresets()->active()->orderBy('nama')->get(['id', 'nama']),
             'statusBangunStages' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna', 'bobot', 'urutan']),
+            // Kontraktor yang PERNAH dapat SPK di proyek ini saja — bukan seluruh master
+            // Kontraktor global — supaya opsi filter tidak penuh nama yang tidak relevan.
+            'kontraktorOptions' => Kontraktor::whereHas('spks', fn($q) => $q->where('project_id', $project->id))
+                ->orderBy('nama')->get(['id', 'nama']),
             'canManage' => Auth::user()->can('update status bangun'),
+            'canCreateSpk' => Auth::user()->can('terbitkan spk'),
         ]);
     }
 
     public function createSpk(Project $project): Response
     {
         $this->authorizeProjectAccess($project);
-        abort_unless(Auth::user()->can('update status bangun'), 403);
+        abort_unless(Auth::user()->can('terbitkan spk'), 403);
 
         $kavlings = $project->kavlings()
             ->with('tipeUnitPreset:id,nama')
@@ -111,7 +117,7 @@ class ProsesBangunController extends Controller
     public function storeSpk(Request $request, Project $project): RedirectResponse
     {
         $this->authorizeProjectAccess($project);
-        abort_unless(Auth::user()->can('update status bangun'), 403);
+        abort_unless(Auth::user()->can('terbitkan spk'), 403);
 
         $validated = $request->validate([
             'nomor_spk'        => 'required|string|max:100',
@@ -161,6 +167,7 @@ class ProsesBangunController extends Controller
             'spk_deadline_raw'       => $spkAktif?->tanggal_deadline?->format('Y-m-d'),
             'bangun_selesai'         => $k->bangun_selesai,
             'spk_deadline_status'    => $spkAktif?->deadline_status,
+            'catatan'                => $k->catatan,
         ];
     }
 }

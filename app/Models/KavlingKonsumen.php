@@ -25,12 +25,10 @@ class KavlingKonsumen extends Model
         'tanggal_akad',
         'harga_deal',
         'harga_dasar',
-        'metode_bayar',
         'booking_fee',
         'cara_bayar',
-        'bank_rekanan_kpr',
+        'bank_rekanan_preset_id',
         'cicilan_kali',
-        'skema_dp',
         'skema_dp_preset_id',
         'plafon_kpr',
         'sales_agent_id',
@@ -58,8 +56,6 @@ class KavlingKonsumen extends Model
         'status_sp3k',
         'catatan_sp3k',
         'tanggal_bast',
-        'realisasi_cair',
-        'dajam_ditahan',
         'catatan',
         'created_by',
     ];
@@ -77,8 +73,6 @@ class KavlingKonsumen extends Model
         'harga_dasar'                          => 'decimal:2',
         'booking_fee'                          => 'decimal:2',
         'plafon_kpr'                           => 'decimal:2',
-        'realisasi_cair'                       => 'decimal:2',
-        'dajam_ditahan'                        => 'decimal:2',
         'biaya_kelebihan_tanah_aktif'          => 'boolean',
         'biaya_kelebihan_tanah_luas'           => 'decimal:2',
         'biaya_kelebihan_tanah_harga_per_m2'   => 'decimal:2',
@@ -176,9 +170,18 @@ class KavlingKonsumen extends Model
         return $this->belongsTo(ProgramAllInPreset::class);
     }
 
-    public function sbumRecord(): HasOne
+    public function bankRekananPreset(): BelongsTo
     {
-        return $this->hasOne(SbumRecord::class);
+        return $this->belongsTo(BankRekananPreset::class);
+    }
+
+    /**
+     * Nama bank rekanan KPR (turunan dari relasi master, bukan kolom). Eager-load
+     * `bankRekananPreset` di listing supaya tidak jadi query per baris.
+     */
+    public function getBankRekananKprAttribute(): ?string
+    {
+        return $this->bankRekananPreset?->nama;
     }
 
     public function swapHistories(): HasMany
@@ -714,9 +717,7 @@ class KavlingKonsumen extends Model
         $dpTotal = (float) $this->jadwalTagihans->where('jenis', 'dp')->sum('jumlah');
         $sbumTotal = (float) $this->rincianBiayaAkad->where('kategori', 'sbum')->sum('nominal');
         $plafonKpr = $this->kartuPiutangBreakdown()['pencairan_kpr']['plafon_hitung'] ?? null;
-        $bankPreset = $this->bank_rekanan_kpr
-            ? BankRekananPreset::where('nama', $this->bank_rekanan_kpr)->first()
-            : null;
+        $bankPreset = $this->bankRekananPreset;
         $developer = DeveloperProfile::getSingleton();
         $spkAktif = $this->kavling->spk_aktif;
 
@@ -741,7 +742,7 @@ class KavlingKonsumen extends Model
             'uang_muka'        => $rupiah($dpTotal),
             'sbum'             => $rupiah($sbumTotal),
             'kpr_diajukan'     => $plafonKpr !== null ? $rupiah($plafonKpr) : '',
-            'nama_bank'        => $this->bank_rekanan_kpr ?? '',
+            'nama_bank'        => $bankPreset?->nama ?? '',
             'nama_bank_pt'     => $bankPreset?->nama_pt ?? '',
             'kantor_cabang_bank' => $bankPreset?->kantor_cabang ?? '',
             'alamat_bank'      => $bankPreset?->alamat ?? '',

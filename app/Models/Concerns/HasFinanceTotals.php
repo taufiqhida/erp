@@ -76,6 +76,8 @@ trait HasFinanceTotals
         // Query builder langsung: tidak memicu event model (tanpa rekursi & tanpa noise activity log).
         static::query()->whereKey($this->getKey())->update($values);
 
+        \App\Support\FinanceCache::bump();
+
         foreach ($values as $key => $value) $this->setAttribute($key, $value);
         $this->syncOriginalAttributes(array_keys($values));
     }

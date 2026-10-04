@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Enums\StatusJual;
+use App\Http\Controllers\Concerns\AuthorizesProjectAccess;
+use App\Http\Controllers\Concerns\ExportsExcel;
 use App\Imports\KavlingImport;
 use App\Models\Kavling;
 use App\Models\Konsumen;
@@ -18,9 +20,12 @@ use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProjectController extends Controller
 {
+    use ExportsExcel, AuthorizesProjectAccess;
+
     public function index(Request $request): Response
     {
         $this->authorize('viewAny', Project::class);
@@ -28,7 +33,7 @@ class ProjectController extends Controller
         $user = Auth::user();
 
         $projects = Project::query()
-            ->when(!$user->hasAnyRole(['superadmin', 'manajer']), fn($q) =>
+            ->when(!$user->can('view all projects'), fn($q) =>
                 $q->whereHas('users', fn($q2) => $q2->where('users.id', $user->id))
             )
             ->when($request->search, fn($q) =>
@@ -376,13 +381,56 @@ class ProjectController extends Controller
     }
 
     /**
+     * Export Stok Kavling ke Excel — snapshot referensi (bukan mode kerja
+     * offline, lihat ExportsExcel). Ikut filter yang sedang aktif di tabel
+     * (kluster/blok/tipe/status), sama seperti kavlingsPage di show().
+     */
+    public function exportKavlingExcel(Request $request, Project $project): StreamedResponse
+    {
+        $this->authorize('view', $project);
+
+        $kavlings = $project->kavlings()
+            ->when($request->kluster, fn($q) => $q->where('kluster', $request->kluster))
+            ->when($request->blok, fn($q) => $q->where('blok', $request->blok))
+            ->when($request->tipe_unit_preset_id, fn($q) => $q->where('tipe_unit_preset_id', $request->tipe_unit_preset_id))
+            ->when($request->status_jual, fn($q) => $q->where('status_jual', $request->status_jual))
+            ->when($request->status_bangun_stage_id, fn($q) => $q->where('status_bangun_stage_id', $request->status_bangun_stage_id))
+            ->with(['activeTransaction.konsumen', 'tipeUnitPreset', 'statusBangunStage'])
+            ->orderByUnit()
+            ->get();
+
+        $headers = ['Kluster', 'Kavling', 'Tipe', 'Luas Tanah (m2)', 'Luas Bangunan (m2)', 'Harga', 'Status Jual', 'Status Bangun', 'Progress (%)', 'Konsumen', 'ID Rumah', 'No. HGB'];
+        $rows = $kavlings->map(fn($k) => [
+            $k->kluster,
+            $k->nomor_lengkap,
+            $k->tipeUnitPreset?->nama,
+            $k->tipeUnitPreset?->luas_tanah,
+            $k->tipeUnitPreset?->luas_bangunan,
+            (float) $k->harga,
+            $k->status_jual->label(),
+            $k->statusBangunStage?->nama,
+            $k->progress_bangun,
+            $k->activeTransaction?->konsumen?->nama,
+            $k->id_rumah,
+            $k->hgb_no,
+        ]);
+
+        return $this->streamExcelExport("stok-kavling-{$project->kode}.xlsx", $headers, $rows);
+    }
+
+    /**
      * Download template Excel untuk bulk import kavling — kolom & urutan
      * di sini HARUS persis sama dengan yang dibaca KavlingImport, supaya
      * template yang diunduh selalu sinkron dengan validasi backend.
      */
     public function downloadKavlingTemplate(Project $project)
     {
-        $this->authorize('update', $project);
+        // Sengaja BUKAN $this->authorize('update', $project) (butuh 'edit
+        // projects' — sekarang superadmin-only sejak restrukturisasi RBAC).
+        // Import Kavling itu ranah Admin Proyek ('create kavlings'), bukan
+        // ranah "kelola data proyek itu sendiri".
+        $this->authorizeProjectAccess($project);
+        abort_unless(Auth::user()->can('create kavlings'), 403);
 
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
 
@@ -478,7 +526,9 @@ class ProjectController extends Controller
      */
     public function importKavling(Request $request, Project $project): RedirectResponse
     {
-        $this->authorize('update', $project);
+        // Sama seperti downloadKavlingTemplate() — lihat komentar di sana.
+        $this->authorizeProjectAccess($project);
+        abort_unless(Auth::user()->can('create kavlings'), 403);
 
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls,csv|max:10240',
@@ -494,93 +544,6 @@ class ProjectController extends Controller
 
         if (!empty($import->errors)) {
             return back()->with('warning', $msg)->with('importErrors', $import->errors);
-        }
-
-        return back()->with('success', $msg . '.');
-    }
-
-    /**
-     * Import kavling dari baris CSV yang sudah di-parse & di-mapping kolomnya
-     * di client (lihat Components/CsvImportModal.vue). Reuse aturan bisnis
-     * yang sama dengan KavlingImport (cek duplikasi nomor_kavling per proyek).
-     */
-    public function importKavlingMapped(Request $request, Project $project): RedirectResponse
-    {
-        $this->authorize('update', $project);
-
-        $validated = $request->validate([
-            'rows'                    => 'required|array|min:1|max:1000',
-            'rows.*.nomor_kavling'    => 'required|string|max:20',
-            'rows.*.kluster'          => 'nullable|string|max:50',
-            'rows.*.blok'             => 'required|string|max:10',
-            'rows.*.tipe_unit'        => 'required|string|max:150',
-            'rows.*.luas_tanah'       => 'nullable|numeric|min:0',
-            'rows.*.luas_bangunan'    => 'nullable|numeric|min:0',
-            'rows.*.harga'            => 'nullable|numeric|min:0',
-            'rows.*.status_unit'      => 'nullable|in:available,not_for_sale',
-            'rows.*.keterangan'       => 'nullable|string|max:255',
-        ]);
-
-        $imported = 0;
-        $skipped = 0;
-        $errors = [];
-
-        DB::transaction(function () use ($project, $validated, &$imported, &$skipped, &$errors) {
-            // Identitas unit = kluster + blok + nomor (kluster boleh kosong); lacak
-            // juga yang baru dibuat dalam batch ini supaya tidak dobel dalam 1 file.
-            $seen = [];
-            $defaultStageId = StatusBangunStage::defaultStage()->id;
-
-            foreach ($validated['rows'] as $i => $row) {
-                $rowNum = $i + 1;
-                $noUnit = trim($row['nomor_kavling']);
-
-                $klusterRow = trim((string) ($row['kluster'] ?? ''));
-                $blokRow = trim($row['blok']);
-                $batchKey = mb_strtolower("{$klusterRow}|{$blokRow}|{$noUnit}");
-
-                if (isset($seen[$batchKey]) || Kavling::identitasExists($project->id, $klusterRow !== '' ? $klusterRow : null, $blokRow, $noUnit)) {
-                    $errors[] = "Baris {$rowNum}: Unit '{$blokRow}-{$noUnit}' sudah ada, dilewati.";
-                    $skipped++;
-                    continue;
-                }
-
-                $statusUnit = $row['status_unit'] ?? 'available';
-                $tipeNama = trim($row['tipe_unit']);
-
-                $tipePreset = TipeUnitPreset::firstOrCreate(
-                    ['project_id' => $project->id, 'nama' => $tipeNama],
-                    ['luas_tanah' => $row['luas_tanah'] ?: null, 'luas_bangunan' => $row['luas_bangunan'] ?: null]
-                );
-                if ($tipePreset->wasRecentlyCreated) {
-                    $errors[] = "Baris {$rowNum}: Tipe Unit '{$tipeNama}' belum ada di proyek ini, dibuat otomatis — lengkapi spek lengkapnya di halaman Kelola Tipe Unit.";
-                }
-
-                Kavling::create([
-                    'project_id'    => $project->id,
-                    'kluster'       => $row['kluster'] ?: null,
-                    'nomor_kavling' => $noUnit,
-                    'blok'          => $row['blok'] ?: null,
-                    'tipe_unit_preset_id' => $tipePreset->id,
-                    'harga'         => $row['harga'] ?: null,
-                    'keterangan'    => $row['keterangan'] ?: null,
-                    'status_unit'   => $statusUnit,
-                    'status_jual'   => $statusUnit === 'not_for_sale' ? StatusJual::Hold : StatusJual::Available,
-                    'status_bangun_stage_id' => $defaultStageId,
-                ]);
-
-                $seen[$batchKey] = true;
-                $imported++;
-            }
-        });
-
-        $msg = "Import selesai: {$imported} kavling berhasil ditambahkan";
-        if ($skipped > 0) {
-            $msg .= ", {$skipped} dilewati";
-        }
-
-        if (!empty($errors)) {
-            return back()->with('warning', $msg)->with('importErrors', $errors);
         }
 
         return back()->with('success', $msg . '.');

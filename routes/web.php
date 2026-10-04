@@ -12,6 +12,7 @@ use App\Http\Controllers\MediaController;
 use App\Http\Controllers\PengaturanController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\ProsesBangunController;
 use App\Http\Controllers\RencanaAkadController;
 use App\Http\Controllers\RoleController;
@@ -69,10 +70,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('projects.siteplan-marker-size');
     Route::get('projects/{project}/kavling-template', [ProjectController::class, 'downloadKavlingTemplate'])
         ->name('projects.kavling-template');
+    Route::get('projects/{project}/export-kavling', [ProjectController::class, 'exportKavlingExcel'])
+        ->name('projects.export-kavling');
     Route::post('projects/{project}/import-kavling', [ProjectController::class, 'importKavling'])
         ->name('projects.import-kavling');
-    Route::post('projects/{project}/import-kavling-mapped', [ProjectController::class, 'importKavlingMapped'])
-        ->name('projects.import-kavling-mapped');
 
     // Kavlings (nested under project) — index dihapus, sudah digabung ke
     // tabel di Projects/Show.vue (server-side paginated) supaya tidak ada
@@ -99,6 +100,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('kavlings.id-rumah');
     Route::patch('kavlings/{kavling}/hgb-no', [KavlingController::class, 'updateHgbNo'])
         ->name('kavlings.hgb-no');
+    Route::patch('kavlings/{kavling}/catatan', [KavlingController::class, 'updateCatatan'])
+        ->name('kavlings.catatan');
 
     // ── Proses Bangun (progress bangun + SPK) — terpisah dari Stok Kavling ──
     Route::get('proyek/{project}/proses-bangun', [ProsesBangunController::class, 'index'])
@@ -143,6 +146,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // ── Konsumens (CRUD) — tanpa create/store: konsumen baru cuma dibuat
     // lewat form booking, biar tidak ada row konsumen yatim tanpa transaksi.
+    // export DIDAFTAR SEBELUM resource() — kalau setelah, "konsumens/{konsumen}"
+    // dari resource() bakal duluan menangkap "konsumens/export" (1 segmen sama).
+    Route::get('konsumens/export', [KonsumenController::class, 'exportKonsumenExcel'])
+        ->name('konsumens.export');
     Route::resource('konsumens', KonsumenController::class)->except(['create', 'store']);
     Route::get('konsumens/{project}/import-template', [KonsumenController::class, 'downloadImportTemplate'])
         ->name('konsumens.import-template');
@@ -165,7 +172,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // ── Keuangan ──────────────────────────────────────────────────────
     Route::get('keuangan', [KeuanganController::class, 'index'])->name('keuangan.index');
+    Route::get('keuangan/export', [KeuanganController::class, 'exportPiutangExcel'])->name('keuangan.export');
     Route::get('keuangan/pencairan-kpr', [KeuanganController::class, 'pencairan'])->name('keuangan.pencairan');
+    Route::get('keuangan/pencairan-kpr/export', [KeuanganController::class, 'exportPencairanExcel'])->name('keuangan.pencairan.export');
     Route::get('keuangan/transaksi/{kk}', [KeuanganController::class, 'detail'])->name('keuangan.detail');
     Route::post('keuangan/transaksi/{kk}/selesai', [KeuanganController::class, 'markComplete'])->name('keuangan.mark-complete');
     Route::post('kavling-konsumen/{kk}/pembayaran', [KeuanganController::class, 'storePembayaran'])
@@ -204,10 +213,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('rincian-biaya-akad.bayar');
     Route::delete('rincian-biaya-akad/{item}/bayar', [KeuanganController::class, 'destroyDajamSbumPembayaran'])
         ->name('rincian-biaya-akad.bayar.destroy');
-    Route::patch('kavling-konsumen/{kk}/kpr', [KeuanganController::class, 'updateKpr'])
-        ->name('keuangan.update-kpr');
-    Route::patch('kavling-konsumen/{kk}/sbum', [KeuanganController::class, 'updateSbum'])
-        ->name('keuangan.update-sbum');
     Route::get('pembayaran/{pembayaran}/kuitansi', [KeuanganController::class, 'kuitansi'])
         ->name('pembayaran.kuitansi');
 
@@ -221,182 +226,199 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('cancellation-requests/{cancellationRequest}/reject', [CancellationRequestController::class, 'reject'])
         ->name('cancellation-requests.reject');
 
-    // ── Pengaturan (superadmin & manajer) ─────────────────────────────
-    Route::middleware('role:superadmin|manajer')->prefix('pengaturan')->name('pengaturan.')->group(function () {
-        // Profil Developer
-        Route::get('profil-developer', [PengaturanController::class, 'developerProfile'])
-            ->name('profil-developer');
-        Route::patch('profil-developer', [PengaturanController::class, 'updateDeveloperProfile'])
-            ->name('profil-developer.update');
+    // ── Pengaturan — permission granular per domain (lihat RolesAndPermissionsSeeder),
+    // menggantikan middleware blanket role:superadmin|manajer lama.
+    Route::prefix('pengaturan')->name('pengaturan.')->group(function () {
+        // Superadmin saja: Profil Developer, Dokumen Template, Surat Template,
+        // Biaya Tambahan, Sumber Lead, Promo, Skema DP, Warna Status.
+        Route::middleware('permission:manage system settings')->group(function () {
+            // Profil Developer
+            Route::get('profil-developer', [PengaturanController::class, 'developerProfile'])
+                ->name('profil-developer');
+            Route::patch('profil-developer', [PengaturanController::class, 'updateDeveloperProfile'])
+                ->name('profil-developer.update');
 
-        // Rekening Bank Developer (multi-bank)
-        Route::post('profil-developer/banks', [PengaturanController::class, 'storeDeveloperBank'])
-            ->name('profil-developer.banks.store');
-        Route::patch('profil-developer/banks/{bank}', [PengaturanController::class, 'updateDeveloperBank'])
-            ->name('profil-developer.banks.update');
-        Route::delete('profil-developer/banks/{bank}', [PengaturanController::class, 'destroyDeveloperBank'])
-            ->name('profil-developer.banks.destroy');
-        Route::patch('profil-developer/banks/{bank}/primary', [PengaturanController::class, 'setPrimaryDeveloperBank'])
-            ->name('profil-developer.banks.primary');
+            // Rekening Bank Developer (multi-bank)
+            Route::post('profil-developer/banks', [PengaturanController::class, 'storeDeveloperBank'])
+                ->name('profil-developer.banks.store');
+            Route::patch('profil-developer/banks/{bank}', [PengaturanController::class, 'updateDeveloperBank'])
+                ->name('profil-developer.banks.update');
+            Route::delete('profil-developer/banks/{bank}', [PengaturanController::class, 'destroyDeveloperBank'])
+                ->name('profil-developer.banks.destroy');
+            Route::patch('profil-developer/banks/{bank}/primary', [PengaturanController::class, 'setPrimaryDeveloperBank'])
+                ->name('profil-developer.banks.primary');
 
-        // Template Pemberkasan / Dokumen
-        Route::get('dokumen-templates', [PengaturanController::class, 'dokumenTemplates'])
-            ->name('dokumen-templates');
-        Route::post('dokumen-templates', [PengaturanController::class, 'storeDokumenTemplate'])
-            ->name('dokumen-templates.store');
-        Route::patch('dokumen-templates/{template}', [PengaturanController::class, 'updateDokumenTemplate'])
-            ->name('dokumen-templates.update');
-        Route::patch('dokumen-templates/{template}/move-up', [PengaturanController::class, 'moveUpDokumenTemplate'])
-            ->name('dokumen-templates.move-up');
-        Route::patch('dokumen-templates/{template}/move-down', [PengaturanController::class, 'moveDownDokumenTemplate'])
-            ->name('dokumen-templates.move-down');
-        Route::delete('dokumen-templates/{template}', [PengaturanController::class, 'destroyDokumenTemplate'])
-            ->name('dokumen-templates.destroy');
+            // Template Pemberkasan / Dokumen
+            Route::get('dokumen-templates', [PengaturanController::class, 'dokumenTemplates'])
+                ->name('dokumen-templates');
+            Route::post('dokumen-templates', [PengaturanController::class, 'storeDokumenTemplate'])
+                ->name('dokumen-templates.store');
+            Route::patch('dokumen-templates/{template}', [PengaturanController::class, 'updateDokumenTemplate'])
+                ->name('dokumen-templates.update');
+            Route::patch('dokumen-templates/{template}/move-up', [PengaturanController::class, 'moveUpDokumenTemplate'])
+                ->name('dokumen-templates.move-up');
+            Route::patch('dokumen-templates/{template}/move-down', [PengaturanController::class, 'moveDownDokumenTemplate'])
+                ->name('dokumen-templates.move-down');
+            Route::delete('dokumen-templates/{template}', [PengaturanController::class, 'destroyDokumenTemplate'])
+                ->name('dokumen-templates.destroy');
 
-        // Dana Jaminan & SBUM (global, tanpa nominal)
-        Route::get('dajam-sbum', [PengaturanController::class, 'dajamSbum'])
-            ->name('dajam-sbum');
-        Route::post('dajam-sbum', [PengaturanController::class, 'storeDajamSbum'])
-            ->name('dajam-sbum.store');
-        Route::patch('dajam-sbum/{dajamSbum}', [PengaturanController::class, 'updateDajamSbum'])
-            ->name('dajam-sbum.update');
-        Route::delete('dajam-sbum/{dajamSbum}', [PengaturanController::class, 'destroyDajamSbum'])
-            ->name('dajam-sbum.destroy');
+            // Template Surat
+            Route::get('surat-templates', [PengaturanController::class, 'suratTemplates'])
+                ->name('surat-templates');
+            Route::get('surat-templates/create', [PengaturanController::class, 'createSuratTemplate'])
+                ->name('surat-templates.create');
+            Route::post('surat-templates', [PengaturanController::class, 'storeSuratTemplate'])
+                ->name('surat-templates.store');
+            Route::get('surat-templates/{suratTemplate}/edit', [PengaturanController::class, 'editSuratTemplate'])
+                ->name('surat-templates.edit');
+            Route::patch('surat-templates/{suratTemplate}', [PengaturanController::class, 'updateSuratTemplate'])
+                ->name('surat-templates.update');
+            Route::delete('surat-templates/{suratTemplate}', [PengaturanController::class, 'destroySuratTemplate'])
+                ->name('surat-templates.destroy');
 
-        // Template Surat
-        Route::get('surat-templates', [PengaturanController::class, 'suratTemplates'])
-            ->name('surat-templates');
-        Route::get('surat-templates/create', [PengaturanController::class, 'createSuratTemplate'])
-            ->name('surat-templates.create');
-        Route::post('surat-templates', [PengaturanController::class, 'storeSuratTemplate'])
-            ->name('surat-templates.store');
-        Route::get('surat-templates/{suratTemplate}/edit', [PengaturanController::class, 'editSuratTemplate'])
-            ->name('surat-templates.edit');
-        Route::patch('surat-templates/{suratTemplate}', [PengaturanController::class, 'updateSuratTemplate'])
-            ->name('surat-templates.update');
-        Route::delete('surat-templates/{suratTemplate}', [PengaturanController::class, 'destroySuratTemplate'])
-            ->name('surat-templates.destroy');
+            // Preset Biaya Tambahan
+            Route::get('biaya-tambahan', [PengaturanController::class, 'biayaTambahan'])
+                ->name('biaya-tambahan');
+            Route::post('biaya-tambahan', [PengaturanController::class, 'storeBiayaTambahan'])
+                ->name('biaya-tambahan.store');
+            Route::patch('biaya-tambahan/{biayaTambahan}', [PengaturanController::class, 'updateBiayaTambahan'])
+                ->name('biaya-tambahan.update');
+            Route::delete('biaya-tambahan/{biayaTambahan}', [PengaturanController::class, 'destroyBiayaTambahan'])
+                ->name('biaya-tambahan.destroy');
 
-        // Preset Biaya Tambahan
-        Route::get('biaya-tambahan', [PengaturanController::class, 'biayaTambahan'])
-            ->name('biaya-tambahan');
-        Route::post('biaya-tambahan', [PengaturanController::class, 'storeBiayaTambahan'])
-            ->name('biaya-tambahan.store');
-        Route::patch('biaya-tambahan/{biayaTambahan}', [PengaturanController::class, 'updateBiayaTambahan'])
-            ->name('biaya-tambahan.update');
-        Route::delete('biaya-tambahan/{biayaTambahan}', [PengaturanController::class, 'destroyBiayaTambahan'])
-            ->name('biaya-tambahan.destroy');
+            // Master Sumber Lead
+            Route::get('sumber-lead', [PengaturanController::class, 'sumberLead'])
+                ->name('sumber-lead');
+            Route::post('sumber-lead', [PengaturanController::class, 'storeSumberLead'])
+                ->name('sumber-lead.store');
+            Route::patch('sumber-lead/{sumberLead}', [PengaturanController::class, 'updateSumberLead'])
+                ->name('sumber-lead.update');
+            Route::delete('sumber-lead/{sumberLead}', [PengaturanController::class, 'destroySumberLead'])
+                ->name('sumber-lead.destroy');
 
-        // Program All In
-        Route::get('program-all-in', [PengaturanController::class, 'programAllIn'])
-            ->name('program-all-in');
-        Route::post('program-all-in', [PengaturanController::class, 'storeProgramAllIn'])
-            ->name('program-all-in.store');
-        Route::patch('program-all-in/{programAllIn}', [PengaturanController::class, 'updateProgramAllIn'])
-            ->name('program-all-in.update');
-        Route::delete('program-all-in/{programAllIn}', [PengaturanController::class, 'destroyProgramAllIn'])
-            ->name('program-all-in.destroy');
+            // Preset Promo
+            Route::get('promo', [PengaturanController::class, 'promo'])
+                ->name('promo');
+            Route::post('promo', [PengaturanController::class, 'storePromo'])
+                ->name('promo.store');
+            Route::patch('promo/{promo}', [PengaturanController::class, 'updatePromo'])
+                ->name('promo.update');
+            Route::delete('promo/{promo}', [PengaturanController::class, 'destroyPromo'])
+                ->name('promo.destroy');
 
-        // Master Sumber Lead
-        Route::get('sumber-lead', [PengaturanController::class, 'sumberLead'])
-            ->name('sumber-lead');
-        Route::post('sumber-lead', [PengaturanController::class, 'storeSumberLead'])
-            ->name('sumber-lead.store');
-        Route::patch('sumber-lead/{sumberLead}', [PengaturanController::class, 'updateSumberLead'])
-            ->name('sumber-lead.update');
-        Route::delete('sumber-lead/{sumberLead}', [PengaturanController::class, 'destroySumberLead'])
-            ->name('sumber-lead.destroy');
+            // Preset Skema DP
+            Route::get('skema-dp', [PengaturanController::class, 'skemaDp'])
+                ->name('skema-dp');
+            Route::post('skema-dp', [PengaturanController::class, 'storeSkemaDp'])
+                ->name('skema-dp.store');
+            Route::patch('skema-dp/{skemaDp}', [PengaturanController::class, 'updateSkemaDp'])
+                ->name('skema-dp.update');
+            Route::delete('skema-dp/{skemaDp}', [PengaturanController::class, 'destroySkemaDp'])
+                ->name('skema-dp.destroy');
 
-        // Urutan master data (geser naik/turun)
+            // Warna Status (global, hanya warna — status_jual & pipeline KPR)
+            Route::get('status-colors', [PengaturanController::class, 'statusColors'])
+                ->name('status-colors');
+            Route::patch('status-colors/{statusColor}', [PengaturanController::class, 'updateStatusColor'])
+                ->name('status-colors.update');
+        });
+
+        // Admin Keuangan: Dana Jaminan & SBUM (preset), Notaris, Bank Rekanan.
+        Route::middleware('permission:manage dajam sbum preset')->group(function () {
+            Route::get('dajam-sbum', [PengaturanController::class, 'dajamSbum'])
+                ->name('dajam-sbum');
+            Route::post('dajam-sbum', [PengaturanController::class, 'storeDajamSbum'])
+                ->name('dajam-sbum.store');
+            Route::patch('dajam-sbum/{dajamSbum}', [PengaturanController::class, 'updateDajamSbum'])
+                ->name('dajam-sbum.update');
+            Route::delete('dajam-sbum/{dajamSbum}', [PengaturanController::class, 'destroyDajamSbum'])
+                ->name('dajam-sbum.destroy');
+        });
+
+        Route::middleware('permission:manage notaris')->group(function () {
+            Route::get('notaris', [PengaturanController::class, 'notaris'])
+                ->name('notaris');
+            Route::post('notaris', [PengaturanController::class, 'storeNotaris'])
+                ->name('notaris.store');
+            Route::patch('notaris/{notaris}', [PengaturanController::class, 'updateNotaris'])
+                ->name('notaris.update');
+            Route::delete('notaris/{notaris}', [PengaturanController::class, 'destroyNotaris'])
+                ->name('notaris.destroy');
+        });
+
+        Route::middleware('permission:manage bank rekanan')->group(function () {
+            Route::get('bank-rekanan', [PengaturanController::class, 'bankRekanan'])
+                ->name('bank-rekanan');
+            Route::post('bank-rekanan', [PengaturanController::class, 'storeBankRekanan'])
+                ->name('bank-rekanan.store');
+            Route::patch('bank-rekanan/{bankRekanan}', [PengaturanController::class, 'updateBankRekanan'])
+                ->name('bank-rekanan.update');
+            Route::delete('bank-rekanan/{bankRekanan}', [PengaturanController::class, 'destroyBankRekanan'])
+                ->name('bank-rekanan.destroy');
+        });
+
+        // Admin Proyek: Status Bangun (master), Kontraktor.
+        Route::middleware('permission:manage status bangun master')->group(function () {
+            Route::get('status-bangun', [PengaturanController::class, 'statusBangun'])
+                ->name('status-bangun');
+            Route::post('status-bangun', [PengaturanController::class, 'storeStatusBangunStage'])
+                ->name('status-bangun.store');
+            Route::patch('status-bangun/{statusBangunStage}', [PengaturanController::class, 'updateStatusBangunStage'])
+                ->name('status-bangun.update');
+            Route::delete('status-bangun/{statusBangunStage}', [PengaturanController::class, 'destroyStatusBangunStage'])
+                ->name('status-bangun.destroy');
+            Route::patch('status-bangun/{statusBangunStage}/move-up', [PengaturanController::class, 'moveUpStatusBangunStage'])
+                ->name('status-bangun.move-up');
+            Route::patch('status-bangun/{statusBangunStage}/move-down', [PengaturanController::class, 'moveDownStatusBangunStage'])
+                ->name('status-bangun.move-down');
+        });
+
+        Route::middleware('permission:manage kontraktor')->group(function () {
+            Route::get('kontraktor', [PengaturanController::class, 'kontraktor'])
+                ->name('kontraktor');
+            Route::post('kontraktor', [PengaturanController::class, 'storeKontraktor'])
+                ->name('kontraktor.store');
+            Route::patch('kontraktor/{kontraktor}', [PengaturanController::class, 'updateKontraktor'])
+                ->name('kontraktor.update');
+            Route::delete('kontraktor/{kontraktor}', [PengaturanController::class, 'destroyKontraktor'])
+                ->name('kontraktor.destroy');
+        });
+
+        // Leader: Program All In, Sales / Agent.
+        Route::middleware('permission:manage program all in')->group(function () {
+            Route::get('program-all-in', [PengaturanController::class, 'programAllIn'])
+                ->name('program-all-in');
+            Route::post('program-all-in', [PengaturanController::class, 'storeProgramAllIn'])
+                ->name('program-all-in.store');
+            Route::patch('program-all-in/{programAllIn}', [PengaturanController::class, 'updateProgramAllIn'])
+                ->name('program-all-in.update');
+            Route::delete('program-all-in/{programAllIn}', [PengaturanController::class, 'destroyProgramAllIn'])
+                ->name('program-all-in.destroy');
+        });
+
+        Route::middleware('permission:manage sales agent')->group(function () {
+            Route::get('sales-agents', [PengaturanController::class, 'salesAgents'])
+                ->name('sales-agents');
+            Route::get('sales-agents/create', [PengaturanController::class, 'createSalesAgent'])
+                ->name('sales-agents.create');
+            Route::post('sales-agents', [PengaturanController::class, 'storeSalesAgent'])
+                ->name('sales-agents.store');
+            Route::get('sales-agents/{salesAgent}/edit', [PengaturanController::class, 'editSalesAgent'])
+                ->name('sales-agents.edit');
+            Route::patch('sales-agents/{salesAgent}', [PengaturanController::class, 'updateSalesAgent'])
+                ->name('sales-agents.update');
+            Route::delete('sales-agents/{salesAgent}', [PengaturanController::class, 'destroySalesAgent'])
+                ->name('sales-agents.destroy');
+            Route::patch('sales-agents/{salesAgent}/toggle', [PengaturanController::class, 'toggleSalesAgent'])
+                ->name('sales-agents.toggle');
+        });
+
+        // Urutan (geser naik/turun) — dipakai 6 jenis master sekaligus (lihat
+        // moveUrutan()), jadi permission-nya dicek DI DALAM controller per
+        // $type, bukan lewat middleware route (satu endpoint, banyak domain).
         Route::patch('urutan/{type}/{id}/{direction}', [PengaturanController::class, 'moveUrutan'])
             ->whereNumber('id')->whereIn('direction', ['up', 'down'])
             ->name('urutan.move');
-
-        // Master Notaris
-        Route::get('notaris', [PengaturanController::class, 'notaris'])
-            ->name('notaris');
-        Route::post('notaris', [PengaturanController::class, 'storeNotaris'])
-            ->name('notaris.store');
-        Route::patch('notaris/{notaris}', [PengaturanController::class, 'updateNotaris'])
-            ->name('notaris.update');
-        Route::delete('notaris/{notaris}', [PengaturanController::class, 'destroyNotaris'])
-            ->name('notaris.destroy');
-
-        // Master Bank Rekanan KPR
-        Route::get('bank-rekanan', [PengaturanController::class, 'bankRekanan'])
-            ->name('bank-rekanan');
-        Route::post('bank-rekanan', [PengaturanController::class, 'storeBankRekanan'])
-            ->name('bank-rekanan.store');
-        Route::patch('bank-rekanan/{bankRekanan}', [PengaturanController::class, 'updateBankRekanan'])
-            ->name('bank-rekanan.update');
-        Route::delete('bank-rekanan/{bankRekanan}', [PengaturanController::class, 'destroyBankRekanan'])
-            ->name('bank-rekanan.destroy');
-
-        // Master Kontraktor
-        Route::get('kontraktor', [PengaturanController::class, 'kontraktor'])
-            ->name('kontraktor');
-        Route::post('kontraktor', [PengaturanController::class, 'storeKontraktor'])
-            ->name('kontraktor.store');
-        Route::patch('kontraktor/{kontraktor}', [PengaturanController::class, 'updateKontraktor'])
-            ->name('kontraktor.update');
-        Route::delete('kontraktor/{kontraktor}', [PengaturanController::class, 'destroyKontraktor'])
-            ->name('kontraktor.destroy');
-
-        // Preset Promo
-        Route::get('promo', [PengaturanController::class, 'promo'])
-            ->name('promo');
-        Route::post('promo', [PengaturanController::class, 'storePromo'])
-            ->name('promo.store');
-        Route::patch('promo/{promo}', [PengaturanController::class, 'updatePromo'])
-            ->name('promo.update');
-        Route::delete('promo/{promo}', [PengaturanController::class, 'destroyPromo'])
-            ->name('promo.destroy');
-
-        // Preset Skema DP
-        Route::get('skema-dp', [PengaturanController::class, 'skemaDp'])
-            ->name('skema-dp');
-        Route::post('skema-dp', [PengaturanController::class, 'storeSkemaDp'])
-            ->name('skema-dp.store');
-        Route::patch('skema-dp/{skemaDp}', [PengaturanController::class, 'updateSkemaDp'])
-            ->name('skema-dp.update');
-        Route::delete('skema-dp/{skemaDp}', [PengaturanController::class, 'destroySkemaDp'])
-            ->name('skema-dp.destroy');
-
-        // Warna Status (global, hanya warna — status_jual & pipeline KPR)
-        Route::get('status-colors', [PengaturanController::class, 'statusColors'])
-            ->name('status-colors');
-        Route::patch('status-colors/{statusColor}', [PengaturanController::class, 'updateStatusColor'])
-            ->name('status-colors.update');
-
-        // Master Status Bangun (global, bobot custom per tahap)
-        Route::get('status-bangun', [PengaturanController::class, 'statusBangun'])
-            ->name('status-bangun');
-        Route::post('status-bangun', [PengaturanController::class, 'storeStatusBangunStage'])
-            ->name('status-bangun.store');
-        Route::patch('status-bangun/{statusBangunStage}', [PengaturanController::class, 'updateStatusBangunStage'])
-            ->name('status-bangun.update');
-        Route::delete('status-bangun/{statusBangunStage}', [PengaturanController::class, 'destroyStatusBangunStage'])
-            ->name('status-bangun.destroy');
-        Route::patch('status-bangun/{statusBangunStage}/move-up', [PengaturanController::class, 'moveUpStatusBangunStage'])
-            ->name('status-bangun.move-up');
-        Route::patch('status-bangun/{statusBangunStage}/move-down', [PengaturanController::class, 'moveDownStatusBangunStage'])
-            ->name('status-bangun.move-down');
-
-        // Master Sales / Agent
-        Route::get('sales-agents', [PengaturanController::class, 'salesAgents'])
-            ->name('sales-agents');
-        Route::get('sales-agents/create', [PengaturanController::class, 'createSalesAgent'])
-            ->name('sales-agents.create');
-        Route::post('sales-agents', [PengaturanController::class, 'storeSalesAgent'])
-            ->name('sales-agents.store');
-        Route::get('sales-agents/{salesAgent}/edit', [PengaturanController::class, 'editSalesAgent'])
-            ->name('sales-agents.edit');
-        Route::patch('sales-agents/{salesAgent}', [PengaturanController::class, 'updateSalesAgent'])
-            ->name('sales-agents.update');
-        Route::delete('sales-agents/{salesAgent}', [PengaturanController::class, 'destroySalesAgent'])
-            ->name('sales-agents.destroy');
-        Route::patch('sales-agents/{salesAgent}/toggle', [PengaturanController::class, 'toggleSalesAgent'])
-            ->name('sales-agents.toggle');
     });
 
     // ── Role Management + User Management (superadmin only) ───────────
@@ -406,6 +428,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('users', [RoleController::class, 'storeUser'])->name('users.store');
         Route::post('projects/{project}/assign-users', [RoleController::class, 'assignProject'])
             ->name('projects.assign-users');
+    });
+
+    // ── Audit Trail (permission 'view audit trail', bukan hardcode superadmin
+    // — supaya konsisten dengan pola RBAC lainnya, walau hari ini cuma
+    // superadmin yang pegang permission itu) ──────────────────────────
+    Route::middleware('permission:view audit trail')->group(function () {
+        Route::get('audit-trail', [AuditTrailController::class, 'index'])->name('audit-trail.index');
     });
 });
 

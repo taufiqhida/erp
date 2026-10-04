@@ -104,12 +104,15 @@ const submitAddUser = () => {
 
 // ── Style helpers ────────────────────────────────────────────────────────────
 const roleColors = {
-    superadmin:      'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30',
-    manajer:         'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30',
-    sales:           'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30',
-    staff_lapangan:  'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30',
-    finance:         'bg-teal-500/20 text-teal-300 ring-1 ring-teal-500/30',
-    staff_kpr:       'bg-fuchsia-500/20 text-fuchsia-300 ring-1 ring-fuchsia-500/30',
+    superadmin:          'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30',
+    manager:             'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30',
+    spv:                 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/30',
+    leader:              'bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-500/30',
+    admin_sales:         'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30',
+    admin_pemberkasan:   'bg-fuchsia-500/20 text-fuchsia-300 ring-1 ring-fuchsia-500/30',
+    admin_proyek:        'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30',
+    pelaksana_lapangan:  'bg-orange-500/20 text-orange-300 ring-1 ring-orange-500/30',
+    admin_keuangan:      'bg-teal-500/20 text-teal-300 ring-1 ring-teal-500/30',
 };
 
 const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 ring-1 ring-slate-600';
@@ -148,12 +151,12 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
             <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
-                        <thead>
-                            <tr class="border-b border-slate-800">
-                                <th class="text-left px-5 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Pengguna</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Role Aktif</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Proyek Ditugaskan</th>
-                                <th class="text-right px-5 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Aksi</th>
+                        <thead class="border-b border-slate-800 text-xs text-slate-500 uppercase tracking-wide">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-medium">Pengguna</th>
+                                <th class="px-4 py-3 text-left font-medium">Role Aktif</th>
+                                <th class="px-4 py-3 text-left font-medium">Proyek Ditugaskan</th>
+                                <th class="px-4 py-3 text-right font-medium">Aksi</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-800/70">

@@ -37,12 +37,6 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 const basisLabels = { harga_dasar: 'Harga Dasar', harga_netto: 'Harga Jual Netto' };
 
 const page = usePage();
-const user = computed(() => page.props.auth.user);
-const isSalesOnly = computed(() =>
-    user.value?.roles?.includes('sales') &&
-    !user.value?.roles?.includes('superadmin') &&
-    !user.value?.roles?.includes('manajer')
-);
 
 // ── View mode ────────────────────────────────────────────────────────
 const viewMode = ref('siteplan');
@@ -109,17 +103,6 @@ const resetFilters = () => {
 };
 
 const activeFilterCount = computed(() => Object.values(filters.value).filter(Boolean).length);
-
-// ── Kavling grouped by blok ──────────────────────────────────────────
-const kavlingsByBlok = computed(() => {
-    const groups = {};
-    filteredKavlings.value.forEach(k => {
-        const blok = k.blok ?? '-';
-        if (!groups[blok]) groups[blok] = [];
-        groups[blok].push(k);
-    });
-    return groups;
-});
 
 const kavlingsWithKoordinat = computed(() =>
     filteredKavlings.value.filter(k => k.koordinat_x != null && k.koordinat_y != null)
@@ -274,13 +257,9 @@ watch(() => bookForm.skema_dp_preset_id, () => {
 
 const canChooseSkemaPembayaran = computed(() => hargaJualNetto.value > 0);
 
-// Build skema_dp string & biaya_tambahan array sebelum submit
+// Susun biaya_tambahan array sebelum submit
 const submitBooking = () => {
     const preset = selectedSkemaPreset.value;
-    const skema = (preset?.dp_aktif && bookForm.dp_nominal)
-        ? `nominal:${bookForm.dp_nominal}`
-        : 'tanpa_dp';
-
     const biayaTambahanPayload = bookForm.biaya_tambahan_selected.map(id => ({
         preset_id: id,
         nominal: Number(bookForm.biaya_tambahan_nominals[id]) || 0,
@@ -288,7 +267,6 @@ const submitBooking = () => {
 
     const payload = {
         ...bookForm.data(),
-        skema_dp: skema,
         booking_fee: preset?.booking_fee_aktif ? (Number(bookForm.booking_fee) || 0) : 0,
         biaya_tambahan: biayaTambahanPayload,
     };
@@ -475,26 +453,23 @@ const isBookable = (k) => k.status_jual === 'available';
                 <div v-if="!filteredKavlings.length" class="text-center py-12 text-slate-500 text-sm">
                     Tidak ada unit yang cocok dengan filter.
                 </div>
-                <div v-for="(kavlings, blok) in kavlingsByBlok" :key="blok" class="mb-0">
-                    <div class="px-4 py-2 bg-slate-800/50 border-b border-slate-800 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                        Blok {{ blok }}
-                    </div>
+                <div v-else class="overflow-x-auto">
                     <table class="w-full text-sm">
-                        <thead>
-                            <tr class="text-xs text-slate-500 border-b border-slate-800">
-                                <th class="px-4 py-2 text-left font-medium">Kluster</th>
-                                <th class="px-4 py-2 text-left font-medium">Kavling</th>
-                                <th class="px-4 py-2 text-left font-medium">Tipe</th>
-                                <th class="px-4 py-2 text-left font-medium">Luas</th>
-                                <th class="px-4 py-2 text-left font-medium">Harga</th>
-                                <th class="px-4 py-2 text-left font-medium">Status Jual</th>
-                                <th class="px-4 py-2 text-left font-medium">Pembangunan</th>
-                                <th class="px-4 py-2 text-left font-medium">Konsumen</th>
-                                <th class="px-4 py-2 text-right font-medium">Aksi</th>
+                        <thead class="border-b border-slate-800 text-xs text-slate-500 uppercase tracking-wide">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-medium">Kluster</th>
+                                <th class="px-4 py-3 text-left font-medium">Kavling</th>
+                                <th class="px-4 py-3 text-left font-medium">Tipe</th>
+                                <th class="px-4 py-3 text-left font-medium">Luas</th>
+                                <th class="px-4 py-3 text-left font-medium">Harga</th>
+                                <th class="px-4 py-3 text-left font-medium">Status Jual</th>
+                                <th class="px-4 py-3 text-left font-medium">Pembangunan</th>
+                                <th class="px-4 py-3 text-left font-medium">Konsumen</th>
+                                <th class="px-4 py-3 text-right font-medium">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="k in kavlings" :key="k.id" class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                            <tr v-for="k in filteredKavlings" :key="k.id" class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-400 text-xs">{{ k.kluster ?? '-' }}</td>
                                 <td class="px-4 py-2.5 text-slate-200 font-medium">{{ k.nomor_lengkap }}</td>
                                 <td class="px-4 py-2.5 text-slate-400 text-xs">{{ k.tipe_unit ?? '-' }}</td>
@@ -509,11 +484,12 @@ const isBookable = (k) => k.status_jual === 'available';
                                     </span>
                                 </td>
                                 <td class="px-4 py-2.5">
-                                    <div class="flex items-center gap-2">
+                                    <div class="text-slate-400 text-xs">{{ k.status_bangun_label }}</div>
+                                    <div class="flex items-center gap-2 mt-0.5">
                                         <div class="w-12 h-1 bg-slate-800 rounded-full overflow-hidden flex-shrink-0">
                                             <div class="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full" :style="{ width: (k.progress_bangun ?? 0) + '%' }"/>
                                         </div>
-                                        <span class="text-slate-400 text-xs">{{ k.status_bangun_label }}</span>
+                                        <span class="text-slate-500 text-[11px] tabular-nums flex-shrink-0">{{ k.progress_bangun ?? 0 }}%</span>
                                     </div>
                                 </td>
                                 <td class="px-4 py-2.5 text-slate-400 text-xs">{{ k.konsumen_nama ?? '-' }}</td>
@@ -521,7 +497,7 @@ const isBookable = (k) => k.status_jual === 'available';
                                     <div class="inline-flex items-center gap-1.5">
                                         <button @click="selectKavling(k)"
                                             class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/><path fill-rule="evenodd" d="M.664 10.59a1.651 1.651 0 010-1.186A10.004 10.004 0 0110 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0110 17c-4.257 0-7.893-2.66-9.336-6.41zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/></svg>
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                             Detail
                                         </button>
                                         <button
@@ -615,6 +591,7 @@ const isBookable = (k) => k.status_jual === 'available';
                             <div class="h-2.5 bg-slate-700 rounded-full overflow-hidden">
                                 <div class="h-full bg-gradient-to-r from-violet-500 to-indigo-400 rounded-full transition-all duration-700" :style="{ width: (selectedKavling.progress_bangun ?? 0) + '%' }"/>
                             </div>
+                            <div class="text-right text-xs text-violet-400 font-semibold">{{ selectedKavling.progress_bangun ?? 0 }}%</div>
                         </div>
 
                         <!-- Keterangan -->

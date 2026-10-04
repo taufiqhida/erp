@@ -41,7 +41,7 @@ class HandleInertiaRequests extends Middleware
                     'email'       => $request->user()->email,
                     'roles'       => $request->user()->getRoleNames(),
                     'permissions' => $request->user()->getAllPermissions()->pluck('name'),
-                    'projects'    => $request->user()->hasAnyRole(['superadmin', 'manajer'])
+                    'projects'    => $request->user()->can('view all projects')
                         ? null // null = akses semua proyek
                         : $request->user()->projects()->get(['projects.id', 'projects.nama', 'projects.kode']),
                 ] : null,

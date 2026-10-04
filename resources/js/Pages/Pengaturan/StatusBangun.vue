@@ -86,8 +86,8 @@ const destroyStage = (stage) => {
         <!-- Daftar tahap -->
         <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
             <table class="w-full text-sm">
-                <thead>
-                    <tr class="border-b border-slate-800 text-left text-slate-500 text-xs uppercase tracking-wider">
+                <thead class="border-b border-slate-800 text-xs text-slate-500 uppercase tracking-wide">
+                    <tr class="text-left font-medium">
                         <th class="px-4 py-3 w-10"></th>
                         <th class="px-2 py-3">Nama Tahap</th>
                         <th class="px-2 py-3 w-32">Bobot (%)</th>

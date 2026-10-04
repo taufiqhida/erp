@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\AuthorizesProjectAccess;
 use App\Http\Controllers\Concerns\BuildsKeuanganLists;
 use App\Http\Controllers\Concerns\ChecksTransactionLock;
+use App\Http\Controllers\Concerns\ExportsExcel;
 use App\Models\JadwalTagihan;
+use App\Models\BankRekananPreset;
 use App\Models\Kavling;
 use App\Models\KavlingKonsumen;
 use App\Models\KavlingKonsumenBiayaTambahan;
@@ -17,10 +19,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class KeuanganController extends Controller
 {
-    use AuthorizesProjectAccess, ChecksTransactionLock, BuildsKeuanganLists;
+    use AuthorizesProjectAccess, ChecksTransactionLock, BuildsKeuanganLists, ExportsExcel;
 
     private function caraBayarLabel(?string $caraBayar): string
     {
@@ -77,7 +80,7 @@ class KeuanganController extends Controller
         $query = $this->keuanganBaseQuery($request)
             ->when($request->status_penjualan, fn ($q) => $q->where('kavling_konsumen.status_penjualan', $request->status_penjualan))
             ->when($request->cara_bayar, fn ($q) => $q->where('kavling_konsumen.cara_bayar', $request->cara_bayar))
-            ->when($request->bank, fn ($q) => $q->where('kavling_konsumen.bank_rekanan_kpr', $request->bank))
+            ->when($request->bank, fn ($q) => $q->where('kavling_konsumen.bank_rekanan_preset_id', $request->bank))
             ->when($tampil === 'belum_lunas', fn ($q) => $q->where('kavling_konsumen.fin_sisa_konsumen', '>', $eps))
             ->when($tampil === 'siap_selesai', fn ($q) => $q
                 ->where('kavling_konsumen.status', 'active')
@@ -89,6 +92,7 @@ class KeuanganController extends Controller
         $summary = (clone $query)->toBase()->cloneWithout(['columns', 'orders'])->selectRaw(
             'COUNT(*) as jumlah,
              COALESCE(SUM(CASE WHEN kavling_konsumen.fin_sisa_konsumen > 0 THEN kavling_konsumen.fin_sisa_konsumen ELSE 0 END), 0) as total_sisa,
+             COALESCE(SUM(kavling_konsumen.fin_terbayar_konsumen), 0) as total_terbayar,
              COALESCE(SUM(CASE WHEN kavling_konsumen.fin_sisa_konsumen > ? AND kavling_konsumen.fin_jatuh_tempo_berikutnya < CURDATE() THEN 1 ELSE 0 END), 0) as terlambat,
              COALESCE(SUM(CASE WHEN kavling_konsumen.fin_sisa_konsumen < ? THEN 1 ELSE 0 END), 0) as kelebihan',
             [$eps, -$eps]
@@ -106,7 +110,7 @@ class KeuanganController extends Controller
         ], 'sisa');
 
         $rows = $query
-            ->with(['konsumen:id,nama', 'kavling.project:id,nama', 'skemaDpPreset', 'biayaTambahans'])
+            ->with(['konsumen:id,nama', 'kavling.project:id,nama', 'skemaDpPreset', 'biayaTambahans', 'bankRekananPreset:id,nama'])
             ->paginate(50)
             ->withQueryString()
             ->through(function ($kk) {
@@ -145,12 +149,58 @@ class KeuanganController extends Controller
             'filterOptions' => $this->keuanganFilterOptions() + [
                 'status_penjualan' => $this->statusPenjualanLabelMap(),
                 'cara_bayar'       => ['cash' => 'Cash', 'cash_bertahap' => 'Cash Bertahap', 'kpr_subsidi' => 'KPR Subsidi', 'kpr_komersil' => 'KPR Komersil'],
-                'bank'             => KavlingKonsumen::whereNotNull('bank_rekanan_kpr')->where('bank_rekanan_kpr', '!=', '')->distinct()->orderBy('bank_rekanan_kpr')->pluck('bank_rekanan_kpr'),
+                'bank'             => BankRekananPreset::ordered()->get(['id', 'nama']),
             ],
             'filters'       => $request->only(['search', 'kluster', 'blok', 'status_penjualan', 'cara_bayar', 'bank']) + [
                 'tampil' => $tampil, 'sort' => $sort, 'dir' => $dir,
             ],
         ]);
+    }
+
+    /**
+     * Export Piutang Konsumen ke Excel — snapshot referensi, ikut filter &
+     * "tampil" yang sedang aktif (bukan mode kerja offline, lihat ExportsExcel).
+     */
+    public function exportPiutangExcel(Request $request): StreamedResponse
+    {
+        abort_unless(Auth::user()->can('view keuangan'), 403);
+
+        $tampil = in_array($request->tampil, ['belum_lunas', 'siap_selesai', 'selesai', 'semua'], true)
+            ? $request->tampil
+            : ($request->search ? 'semua' : 'belum_lunas');
+        $eps = self::SISA_EPS;
+
+        $rows = $this->keuanganBaseQuery($request)
+            ->when($request->status_penjualan, fn ($q) => $q->where('kavling_konsumen.status_penjualan', $request->status_penjualan))
+            ->when($request->cara_bayar, fn ($q) => $q->where('kavling_konsumen.cara_bayar', $request->cara_bayar))
+            ->when($request->bank, fn ($q) => $q->where('kavling_konsumen.bank_rekanan_preset_id', $request->bank))
+            ->when($tampil === 'belum_lunas', fn ($q) => $q->where('kavling_konsumen.fin_sisa_konsumen', '>', $eps))
+            ->when($tampil === 'siap_selesai', fn ($q) => $q
+                ->where('kavling_konsumen.status', 'active')
+                ->where('kavling_konsumen.fin_piutang_konsumen', '>', 0)
+                ->where('kavling_konsumen.fin_sisa_konsumen', '<=', $eps)
+                ->where('kavling_konsumen.fin_sisa_bank', '<=', $eps))
+            ->when($tampil === 'selesai', fn ($q) => $q->where('kavling_konsumen.status', 'completed'))
+            ->with(['konsumen:id,nama', 'kavling.project:id,nama', 'bankRekananPreset:id,nama'])
+            ->orderBy('kavling_konsumen.fin_sisa_konsumen', 'desc')
+            ->get();
+
+        $headers = ['Konsumen', 'Unit', 'Proyek', 'Tahap', 'Cara Bayar', 'Bank', 'Tgl Akad', 'Total Piutang', 'Sudah Terbayar', 'Sisa', 'Jatuh Tempo Berikutnya'];
+        $mapped = $rows->map(fn ($kk) => [
+            $kk->konsumen->nama,
+            $kk->kavling->nomor_lengkap,
+            $kk->kavling->project->nama,
+            $this->statusPenjualanLabelMap()[$kk->status_penjualan] ?? $kk->status_penjualan_label,
+            $this->caraBayarLabel($kk->cara_bayar),
+            $kk->bank_rekanan_kpr,
+            $kk->tanggal_akad?->format('Y-m-d'),
+            (float) $kk->fin_piutang_konsumen,
+            (float) $kk->fin_terbayar_konsumen,
+            (float) $kk->fin_sisa_konsumen,
+            $kk->fin_jatuh_tempo_berikutnya,
+        ]);
+
+        return $this->streamExcelExport('piutang-konsumen.xlsx', $headers, $mapped);
     }
 
     /**
@@ -170,7 +220,7 @@ class KeuanganController extends Controller
         $query = $this->keuanganBaseQuery($request)
             ->whereIn('kavling_konsumen.cara_bayar', ['kpr_subsidi', 'kpr_komersil'])
             ->when(!$sertakanBelumAkad, fn ($q) => $q->whereIn('kavling_konsumen.status_penjualan', ['akad', 'bast']))
-            ->when($request->bank, fn ($q) => $q->where('kavling_konsumen.bank_rekanan_kpr', $request->bank))
+            ->when($request->bank, fn ($q) => $q->where('kavling_konsumen.bank_rekanan_preset_id', $request->bank))
             ->when($request->cara_bayar, fn ($q) => $q->where('kavling_konsumen.cara_bayar', $request->cara_bayar))
             ->when($tampil === 'belum_cair', fn ($q) => $q->where('kavling_konsumen.fin_sisa_bank', '>', $eps))
             ->when($tampil === 'cair_penuh', fn ($q) => $q
@@ -180,6 +230,7 @@ class KeuanganController extends Controller
         $summary = (clone $query)->toBase()->cloneWithout(['columns', 'orders'])->selectRaw(
             'COUNT(*) as jumlah,
              COALESCE(SUM(CASE WHEN kavling_konsumen.fin_sisa_bank > 0 THEN kavling_konsumen.fin_sisa_bank ELSE 0 END), 0) as total_sisa,
+             COALESCE(SUM(kavling_konsumen.fin_terbayar_bank), 0) as total_terbayar,
              COALESCE(SUM(CASE WHEN kavling_konsumen.fin_sisa_bank > ? AND kavling_konsumen.tanggal_akad IS NOT NULL AND DATEDIFF(CURDATE(), kavling_konsumen.tanggal_akad) > 30 THEN 1 ELSE 0 END), 0) as lewat_30_hari',
             [$eps]
         )->first();
@@ -189,13 +240,13 @@ class KeuanganController extends Controller
             'akad'   => fn ($q, $d) => $this->orderNullsLast($q, 'kavling_konsumen.tanggal_akad', $d),
             'persen' => fn ($q, $d) => $this->orderNullsLast($q, 'kavling_konsumen.fin_terbayar_bank / NULLIF(kavling_konsumen.fin_piutang_bank, 0)', $d),
             'plafon' => fn ($q, $d) => $this->orderNullsLast($q, 'kavling_konsumen.plafon_kpr', $d),
-            'bank'   => fn ($q, $d) => $this->orderNullsLast($q, 'kavling_konsumen.bank_rekanan_kpr', $d),
+            'bank'   => fn ($q, $d) => $this->orderNullsLast($q, '(select b.nama from bank_rekanan_presets b where b.id = kavling_konsumen.bank_rekanan_preset_id)', $d),
             'nama'   => fn ($q, $d) => $q->orderBy('konsumens.nama', $d),
             'unit'   => fn ($q, $d) => Kavling::applyUnitOrder($q, $d),
         ], 'sisa');
 
         $rows = $query
-            ->with(['konsumen:id,nama', 'kavling.project:id,nama'])
+            ->with(['konsumen:id,nama', 'kavling.project:id,nama', 'bankRekananPreset:id,nama'])
             ->paginate(50)
             ->withQueryString()
             ->through(function ($kk) {
@@ -223,12 +274,56 @@ class KeuanganController extends Controller
             'summary'       => $summary,
             'filterOptions' => $this->keuanganFilterOptions() + [
                 'cara_bayar' => ['kpr_subsidi' => 'KPR Subsidi', 'kpr_komersil' => 'KPR Komersil'],
-                'bank'       => KavlingKonsumen::whereNotNull('bank_rekanan_kpr')->where('bank_rekanan_kpr', '!=', '')->distinct()->orderBy('bank_rekanan_kpr')->pluck('bank_rekanan_kpr'),
+                'bank'       => BankRekananPreset::ordered()->get(['id', 'nama']),
             ],
             'filters'       => $request->only(['search', 'kluster', 'blok', 'cara_bayar', 'bank']) + [
                 'tampil' => $tampil, 'belum_akad' => $request->boolean('belum_akad') ? '1' : '', 'sort' => $sort, 'dir' => $dir,
             ],
         ]);
+    }
+
+    /**
+     * Export Pencairan KPR ke Excel — snapshot referensi, ikut filter &
+     * "tampil" yang sedang aktif.
+     */
+    public function exportPencairanExcel(Request $request): StreamedResponse
+    {
+        abort_unless(Auth::user()->can('view keuangan'), 403);
+
+        $tampil = in_array($request->tampil, ['belum_cair', 'cair_penuh', 'semua'], true)
+            ? $request->tampil
+            : ($request->search ? 'semua' : 'belum_cair');
+        $sertakanBelumAkad = $request->boolean('belum_akad') || $request->search;
+        $eps = self::SISA_EPS;
+
+        $rows = $this->keuanganBaseQuery($request)
+            ->whereIn('kavling_konsumen.cara_bayar', ['kpr_subsidi', 'kpr_komersil'])
+            ->when(!$sertakanBelumAkad, fn ($q) => $q->whereIn('kavling_konsumen.status_penjualan', ['akad', 'bast']))
+            ->when($request->bank, fn ($q) => $q->where('kavling_konsumen.bank_rekanan_preset_id', $request->bank))
+            ->when($request->cara_bayar, fn ($q) => $q->where('kavling_konsumen.cara_bayar', $request->cara_bayar))
+            ->when($tampil === 'belum_cair', fn ($q) => $q->where('kavling_konsumen.fin_sisa_bank', '>', $eps))
+            ->when($tampil === 'cair_penuh', fn ($q) => $q
+                ->where('kavling_konsumen.fin_piutang_bank', '>', 0)
+                ->where('kavling_konsumen.fin_sisa_bank', '<=', $eps))
+            ->with(['konsumen:id,nama', 'kavling.project:id,nama', 'bankRekananPreset:id,nama'])
+            ->orderBy('kavling_konsumen.fin_sisa_bank', 'desc')
+            ->get();
+
+        $headers = ['Konsumen', 'Unit', 'Proyek', 'Cara Bayar', 'Bank', 'Tgl Akad', 'Plafon KPR', 'Total Piutang Bank', 'Sudah Cair', 'Sisa Pencairan'];
+        $mapped = $rows->map(fn ($kk) => [
+            $kk->konsumen->nama,
+            $kk->kavling->nomor_lengkap,
+            $kk->kavling->project->nama,
+            $this->caraBayarLabel($kk->cara_bayar),
+            $kk->bank_rekanan_kpr,
+            $kk->tanggal_akad?->format('Y-m-d'),
+            $kk->plafon_kpr !== null ? (float) $kk->plafon_kpr : null,
+            (float) $kk->fin_piutang_bank,
+            (float) $kk->fin_terbayar_bank,
+            (float) $kk->fin_sisa_bank,
+        ]);
+
+        return $this->streamExcelExport('pencairan-kpr.xlsx', $headers, $mapped);
     }
 
     /**
@@ -742,10 +837,20 @@ class KeuanganController extends Controller
         abort_unless(Auth::user()->can('manage kpr'), 403);
         $this->assertTransactionEditable($kk, 'Catat pembayaran ' . $item->kategori);
 
+        // Soft gate: pencairan SBUM/Dana Jaminan (uang dari bank/pemerintah) normalnya
+        // baru masuk setelah akad. Belum akad TETAP bisa dicatat (kadang memang cair
+        // lebih awal, atau ini input susulan) — tapi wajib isi keterangan alasannya,
+        // supaya ada jejak kenapa dicatat di luar urutan normal. Tidak berlaku untuk
+        // kategori 'biaya_akad' (titipan sisi konsumen, tidak terkait pencairan bank),
+        // dan cuma dicek saat catatan BARU dibuat, bukan saat koreksi yang sudah ada.
+        $butuhAlasanAkad = !$item->pembayaran
+            && in_array($item->kategori, ['sbum', 'dajam'], true)
+            && !in_array($kk->status_penjualan, ['akad', 'bast'], true);
+
         $validated = $request->validate([
             'jumlah'        => 'required|numeric|min:1',
             'tanggal_bayar' => 'required|date',
-            'keterangan'    => 'nullable|string|max:500',
+            'keterangan'    => $butuhAlasanAkad ? 'required|string|max:500' : 'nullable|string|max:500',
         ]);
 
         if ($item->pembayaran) {
@@ -789,24 +894,6 @@ class KeuanganController extends Controller
     }
 
     /**
-     * Update data pencairan KPR & Dajam
-     */
-    public function updateKpr(Request $request, KavlingKonsumen $kk): RedirectResponse
-    {
-        $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('manage kpr'), 403);
-
-        $validated = $request->validate([
-            'realisasi_cair' => 'nullable|numeric|min:0',
-            'dajam_ditahan'  => 'nullable|numeric|min:0',
-        ]);
-
-        $kk->update($validated);
-
-        return back()->with('success', 'Data pencairan KPR diperbarui.');
-    }
-
-    /**
      * Catat satu tahap Pencairan KPR (uang cair dari bank ke developer).
      * Beda dari Booking Fee/DP/Pelunasan, bank tidak ikut skema/tenor apa
      * pun — jadi setiap tahap ditambahkan manual oleh admin (bisa
@@ -819,10 +906,14 @@ class KeuanganController extends Controller
         abort_unless(in_array($kk->cara_bayar, ['kpr_subsidi', 'kpr_komersil']), 422, 'Pencairan KPR cuma berlaku utk cara bayar KPR.');
         $this->assertTransactionEditable($kk, 'Catat tahap Pencairan KPR');
 
+        // Soft gate — sama seperti payDajamSbum(): pencairan sebelum akad tetap bisa
+        // dicatat, tapi wajib isi keterangan alasannya.
+        $butuhAlasanAkad = !in_array($kk->status_penjualan, ['akad', 'bast'], true);
+
         $validated = $request->validate([
             'nominal'      => 'required|numeric|min:1',
             'tanggal_cair' => 'required|date',
-            'keterangan'   => 'nullable|string|max:500',
+            'keterangan'   => $butuhAlasanAkad ? 'required|string|max:500' : 'nullable|string|max:500',
         ]);
 
         $kk->pencairanKprTahaps()->create([
@@ -867,30 +958,6 @@ class KeuanganController extends Controller
         $tahap->delete();
 
         return back()->with('success', 'Tahap Pencairan KPR berhasil dihapus.');
-    }
-
-    /**
-     * Update SBUM record
-     */
-    public function updateSbum(Request $request, KavlingKonsumen $kk): RedirectResponse
-    {
-        $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('manage sbum'), 403);
-
-        $validated = $request->validate([
-            'jumlah_sbum'       => 'nullable|numeric|min:0',
-            'status'            => 'required|in:belum,proses,cair,ditolak',
-            'tanggal_pengajuan' => 'nullable|date',
-            'tanggal_cair'      => 'nullable|date',
-            'catatan'           => 'nullable|string',
-        ]);
-
-        $kk->sbumRecord()->updateOrCreate(
-            ['kavling_konsumen_id' => $kk->id],
-            $validated
-        );
-
-        return back()->with('success', 'Data SBUM diperbarui.');
     }
 
     /**

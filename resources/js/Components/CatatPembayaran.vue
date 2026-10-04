@@ -11,6 +11,11 @@ const props = defineProps({
     paidJumlah: { type: [Number, String], default: null }, // nominal yang sudah tercatat — prefill saat edit
     extraPayload: { type: Object, default: () => ({}) },
     canManage: { type: Boolean, default: false },
+    // Soft gate: kalau true, tampilkan warningMessage & wajibkan keterangan diisi
+    // sebelum bisa Simpan (dipakai mis. pencairan KPR sebelum akad — tetap bisa
+    // dicatat, tapi harus ada alasan tertulis).
+    requireNote: { type: Boolean, default: false },
+    warningMessage: { type: String, default: null },
 });
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -61,15 +66,19 @@ const remove = () => {
             <span v-if="tanggalBayar" class="text-slate-600 text-[10px] whitespace-nowrap">{{ tanggalBayar }}</span>
         </div>
         <div v-else class="w-56 bg-slate-900 border border-slate-700 rounded-lg p-2.5 space-y-1.5">
+            <p v-if="requireNote && warningMessage" class="text-amber-400 text-[11px] bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5">
+                ⚠ {{ warningMessage }}
+            </p>
             <MoneyInput v-model="form.jumlah" placeholder="Jumlah"
                 class="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
             <input v-model="form.tanggal_bayar" type="date"
                 class="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
-            <input v-model="form.keterangan" type="text" placeholder="Keterangan (opsional)"
-                class="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+            <input v-model="form.keterangan" type="text" :placeholder="requireNote ? 'Alasan (wajib diisi)' : 'Keterangan (opsional)'"
+                class="w-full px-2 py-1 bg-slate-800 border rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500"
+                :class="requireNote && !form.keterangan.trim() ? 'border-amber-500/50' : 'border-slate-700'" />
             <div class="flex gap-1.5 justify-end pt-0.5">
                 <button @click="open = false" class="px-2 py-1 text-slate-400 hover:text-slate-200 text-xs">Batal</button>
-                <button @click="submit" :disabled="!form.jumlah || !form.tanggal_bayar || processing"
+                <button @click="submit" :disabled="!form.jumlah || !form.tanggal_bayar || (requireNote && !form.keterangan.trim()) || processing"
                     class="px-2.5 py-1 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
                     {{ processing ? '...' : 'Simpan' }}
                 </button>

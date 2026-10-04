@@ -22,7 +22,7 @@ trait BuildsKeuanganLists
     private function keuanganBaseQuery(Request $request): Builder
     {
         $user = Auth::user();
-        $isGlobal = $user->hasAnyRole(['superadmin', 'manajer']);
+        $isGlobal = $user->can('view all projects');
         $projectId = session('current_project_id');
         $projectScope = fn ($q) => $q->whereHas('project.users', fn ($q2) => $q2->where('users.id', $user->id));
 
@@ -52,7 +52,7 @@ trait BuildsKeuanganLists
     private function keuanganFilterOptions(): array
     {
         $user = Auth::user();
-        $isGlobal = $user->hasAnyRole(['superadmin', 'manajer']);
+        $isGlobal = $user->can('view all projects');
         $projectId = session('current_project_id');
         $projectScope = fn ($q) => $q->whereHas('project.users', fn ($q2) => $q2->where('users.id', $user->id));
 

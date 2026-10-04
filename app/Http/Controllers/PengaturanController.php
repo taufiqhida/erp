@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BankRekananPreset;
+use App\Models\KavlingKonsumen;
 use App\Models\BiayaTambahanPreset;
 use App\Models\DajamSbumPreset;
 use App\Models\DeveloperProfile;
@@ -758,6 +759,11 @@ class PengaturanController extends Controller
 
     public function destroyBankRekanan(BankRekananPreset $bankRekanan): RedirectResponse
     {
+        $dipakai = KavlingKonsumen::where('bank_rekanan_preset_id', $bankRekanan->id)->count();
+        if ($dipakai > 0) {
+            return back()->with('error', "Bank \"{$bankRekanan->nama}\" dipakai {$dipakai} transaksi dan tidak bisa dihapus. Nonaktifkan saja.");
+        }
+
         $bankRekanan->delete();
         return back()->with('success', 'Bank rekanan berhasil dihapus.');
     }
@@ -925,7 +931,20 @@ class PengaturanController extends Controller
             'sales-agent'    => SalesAgent::class,
         ];
 
+        // Satu endpoint dipakai 6 jenis master sekaligus, jadi permission-nya
+        // dicek di sini per $type (sama seperti permission CRUD masing-masing
+        // jenis di routes/web.php), bukan lewat middleware route.
+        $requiredPermission = [
+            'biaya-tambahan' => 'manage system settings',
+            'program-all-in' => 'manage program all in',
+            'sumber-lead'    => 'manage system settings',
+            'bank-rekanan'   => 'manage bank rekanan',
+            'notaris'        => 'manage notaris',
+            'sales-agent'    => 'manage sales agent',
+        ];
+
         abort_unless(isset($models[$type]) && in_array($direction, ['up', 'down'], true), 404);
+        abort_unless(Auth::user()->can($requiredPermission[$type]), 403);
 
         $models[$type]::findOrFail($id)->moveUrutan($direction);
 

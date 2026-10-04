@@ -12,7 +12,9 @@ const props = defineProps({
     blokOptions: Array,
     tipeUnitOptions: Array,
     statusBangunStages: Array,
+    kontraktorOptions: Array,
     canManage: Boolean,
+    canCreateSpk: Boolean,
 });
 
 const deadlineBadge = {
@@ -32,14 +34,19 @@ const setSort = (key) => {
     sortKey.value = key;
     sortDir.value = 'asc';
 };
-const sortArrow = (key) => sortKey.value === key ? (sortDir.value === 'asc' ? '▲' : '▼') : '';
+const sortArrow = (key) => sortKey.value === key ? (sortDir.value === 'asc' ? '▲' : '▼') : '⇅';
 const sortedKavlings = computed(() => {
-    if (sortKey.value !== 'deadline') return sortDir.value === 'asc' ? props.kavlings : [...props.kavlings].reverse();
     const dir = sortDir.value === 'asc' ? 1 : -1;
-    const aktif = props.kavlings.filter(k => k.spk_deadline_raw && !k.bangun_selesai)
-        .sort((a, b) => dir * a.spk_deadline_raw.localeCompare(b.spk_deadline_raw));
-    const sisanya = props.kavlings.filter(k => !(k.spk_deadline_raw && !k.bangun_selesai));
-    return [...aktif, ...sisanya];
+    if (sortKey.value === 'deadline') {
+        const aktif = props.kavlings.filter(k => k.spk_deadline_raw && !k.bangun_selesai)
+            .sort((a, b) => dir * a.spk_deadline_raw.localeCompare(b.spk_deadline_raw));
+        const sisanya = props.kavlings.filter(k => !(k.spk_deadline_raw && !k.bangun_selesai));
+        return [...aktif, ...sisanya];
+    }
+    if (sortKey.value === 'progress') {
+        return [...props.kavlings].sort((a, b) => dir * (Number(a.progress_bangun) - Number(b.progress_bangun)));
+    }
+    return sortDir.value === 'asc' ? props.kavlings : [...props.kavlings].reverse();
 });
 
 const filters = reactive({
@@ -47,12 +54,13 @@ const filters = reactive({
     blok: props.filters.blok ?? '',
     tipe_unit_preset_id: props.filters.tipe_unit_preset_id ?? '',
     status_bangun_stage_id: props.filters.status_bangun_stage_id ?? '',
+    kontraktor_id: props.filters.kontraktor_id ?? '',
 });
 const applyFilters = () => {
     router.get(route('proses-bangun.index', props.project.id), { ...filters }, { preserveState: true, replace: true });
 };
 const resetFilters = () => {
-    filters.kluster = ''; filters.blok = ''; filters.tipe_unit_preset_id = ''; filters.status_bangun_stage_id = '';
+    filters.kluster = ''; filters.blok = ''; filters.tipe_unit_preset_id = ''; filters.status_bangun_stage_id = ''; filters.kontraktor_id = '';
     applyFilters();
 };
 
@@ -93,6 +101,23 @@ const changePersen = (k, value) => {
 };
 const isDefaultStage = (k) => props.statusBangunStages.find(s => s.id === rowStage(k))?.urutan === 1;
 
+// ── Catatan bebas per kavling — tombol tanda ada/tidaknya, buka popover buat baca/isi.
+const catatanOpen = ref(null);
+const catatanDraft = reactive({});
+const catatanForms = reactive({});
+const toggleCatatan = (k) => {
+    if (catatanOpen.value === k.id) { catatanOpen.value = null; return; }
+    catatanDraft[k.id] = k.catatan ?? '';
+    catatanOpen.value = k.id;
+};
+const saveCatatan = (k) => {
+    catatanForms[k.id] = useForm({ catatan: catatanDraft[k.id] });
+    catatanForms[k.id].patch(route('kavlings.catatan', k.id), {
+        preserveScroll: true,
+        onSuccess: () => { catatanOpen.value = null; },
+    });
+};
+
 const updateStatusBangun = (k, value) => {
     changeStage(k, value);
 };
@@ -117,7 +142,7 @@ const showRiwayat = ref(false);
                     <h1 class="text-white text-xl font-bold">Proses Bangun</h1>
                     <p class="text-slate-400 text-sm mt-0.5">Progress pembangunan, kontraktor, dan SPK per unit.</p>
                 </div>
-                <Link v-if="canManage" :href="route('spk.create', project.id)"
+                <Link v-if="canCreateSpk" :href="route('spk.create', project.id)"
                     class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-violet-500/20">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
                         <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
@@ -178,7 +203,12 @@ const showRiwayat = ref(false);
                     <option value="">Semua Status Bangun</option>
                     <option v-for="s in statusBangunStages" :key="s.id" :value="s.id">{{ s.nama }}</option>
                 </select>
-                <button v-if="filters.kluster || filters.blok || filters.tipe_unit_preset_id || filters.status_bangun_stage_id" @click="resetFilters"
+                <select v-model="filters.kontraktor_id" @change="applyFilters"
+                    class="px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-300 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
+                    <option value="">Semua Kontraktor</option>
+                    <option v-for="k in kontraktorOptions" :key="k.id" :value="k.id">{{ k.nama }}</option>
+                </select>
+                <button v-if="filters.kluster || filters.blok || filters.tipe_unit_preset_id || filters.status_bangun_stage_id || filters.kontraktor_id" @click="resetFilters"
                     class="px-2.5 py-1.5 text-slate-400 hover:text-slate-200 text-xs rounded-lg transition-colors">
                     Reset
                 </button>
@@ -188,20 +218,23 @@ const showRiwayat = ref(false);
             <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
-                        <thead>
-                            <tr class="border-b border-slate-800">
-                                <th class="text-left px-5 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">
-                                    <button type="button" @click="setSort('unit')" class="uppercase tracking-wider hover:text-slate-200 transition-colors" :class="sortKey === 'unit' ? 'text-violet-400' : ''">Kavling {{ sortArrow('unit') }}</button>
+                        <thead class="border-b border-slate-800 text-xs text-slate-500 uppercase tracking-wide">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-medium">
+                                    <button type="button" @click="setSort('unit')" class="uppercase tracking-wide hover:text-slate-300 transition-colors inline-flex items-center gap-1" :class="sortKey === 'unit' ? 'text-violet-400' : ''">Kavling <span :class="sortKey === 'unit' ? '' : 'text-slate-700'">{{ sortArrow('unit') }}</span></button>
                                 </th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Tipe</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Tahap Bangun</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">% Tahap Ini</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Progress Total</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">Kontraktor</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">SPK</th>
-                                <th class="text-left px-4 py-3.5 text-slate-400 font-medium text-xs uppercase tracking-wider">
-                                    <button type="button" @click="setSort('deadline')" class="uppercase tracking-wider hover:text-slate-200 transition-colors" :class="sortKey === 'deadline' ? 'text-violet-400' : ''" title="Urutkan berdasarkan deadline terdekat">Deadline {{ sortArrow('deadline') }}</button>
+                                <th class="px-4 py-3 text-left font-medium">Tipe</th>
+                                <th class="px-4 py-3 text-left font-medium">Tahap Bangun</th>
+                                <th class="px-4 py-3 text-left font-medium">% Tahap Ini</th>
+                                <th class="px-4 py-3 text-left font-medium">
+                                    <button type="button" @click="setSort('progress')" class="uppercase tracking-wide hover:text-slate-300 transition-colors inline-flex items-center gap-1" :class="sortKey === 'progress' ? 'text-violet-400' : ''">Progress Total <span :class="sortKey === 'progress' ? '' : 'text-slate-700'">{{ sortArrow('progress') }}</span></button>
                                 </th>
+                                <th class="px-4 py-3 text-left font-medium">Kontraktor</th>
+                                <th class="px-4 py-3 text-left font-medium">SPK</th>
+                                <th class="px-4 py-3 text-left font-medium">
+                                    <button type="button" @click="setSort('deadline')" class="uppercase tracking-wide hover:text-slate-300 transition-colors inline-flex items-center gap-1" :class="sortKey === 'deadline' ? 'text-violet-400' : ''" title="Urutkan berdasarkan deadline terdekat">Deadline <span :class="sortKey === 'deadline' ? '' : 'text-slate-700'">{{ sortArrow('deadline') }}</span></button>
+                                </th>
+                                <th class="px-4 py-3 text-center font-medium">Catatan</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -244,9 +277,32 @@ const showRiwayat = ref(false);
                                     </span>
                                     <span v-else class="text-slate-600 text-xs">-</span>
                                 </td>
+                                <td class="px-4 py-3.5 text-center relative">
+                                    <button type="button" @click="toggleCatatan(k)"
+                                        :title="k.catatan ? 'Ada catatan — klik untuk baca' : 'Belum ada catatan — klik untuk isi'"
+                                        class="inline-flex p-1.5 rounded-lg transition-colors"
+                                        :class="k.catatan ? 'text-amber-400 hover:bg-amber-400/10' : 'text-slate-600 hover:text-slate-400 hover:bg-slate-800'">
+                                        <svg v-if="k.catatan" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
+                                            <path fill-rule="evenodd" d="M4.804 21.644A6.707 6.707 0 006 21.75a6.721 6.721 0 003.583-1.029c.774.182 1.584.279 2.417.279 5.322 0 9.75-3.97 9.75-9 0-5.03-4.428-9-9.75-9s-9.75 3.97-9.75 9c0 2.409 1.025 4.587 2.674 6.192.232.226.277.428.254.543a3.73 3.73 0 01-.814 1.686.75.75 0 00.44 1.223zM8.25 10.875a1.125 1.125 0 100 2.25 1.125 1.125 0 000-2.25zM10.875 12a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zm4.875-1.125a1.125 1.125 0 100 2.25 1.125 1.125 0 000-2.25z" clip-rule="evenodd" />
+                                        </svg>
+                                        <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+                                        </svg>
+                                    </button>
+                                    <div v-if="catatanOpen === k.id" class="absolute right-0 top-full z-20 mt-1 w-72 bg-slate-800 border border-slate-700 rounded-xl shadow-xl p-3 space-y-2 text-left">
+                                        <div class="text-slate-300 text-xs font-medium">Catatan — {{ k.nomor_lengkap }}</div>
+                                        <textarea v-if="canManage" v-model="catatanDraft[k.id]" rows="3" placeholder="Tulis catatan..."
+                                            class="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500"></textarea>
+                                        <p v-else class="text-slate-400 text-xs whitespace-pre-wrap">{{ k.catatan || 'Belum ada catatan.' }}</p>
+                                        <div v-if="canManage" class="flex justify-end gap-2">
+                                            <button type="button" @click="catatanOpen = null" class="px-2 py-1 text-slate-500 hover:text-slate-300 text-xs">Batal</button>
+                                            <button type="button" @click="saveCatatan(k)" class="px-2.5 py-1 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-lg transition-colors">Simpan</button>
+                                        </div>
+                                    </div>
+                                </td>
                             </tr>
                             <tr v-if="!kavlings.length">
-                                <td colspan="8" class="px-5 py-8 text-center text-slate-600 text-sm">Tidak ada kavling yang cocok dengan filter.</td>
+                                <td colspan="9" class="px-5 py-8 text-center text-slate-600 text-sm">Tidak ada kavling yang cocok dengan filter.</td>
                             </tr>
                         </tbody>
                     </table>

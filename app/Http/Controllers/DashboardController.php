@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
+use App\Models\SalesAgent;
+use App\Support\FinanceCache;
 use App\Models\Kavling;
 use App\Models\KavlingKonsumen;
 use App\Models\CancellationRequest;
@@ -29,7 +31,7 @@ class DashboardController extends Controller
     public function index(Request $request): Response
     {
         $user = Auth::user();
-        $isGlobal = $user->hasAnyRole(['superadmin', 'manajer']);
+        $isGlobal = $user->can('view all projects');
         // Proyek aktif (Halaman Utama Pilih Proyek) — kosong berarti mode
         // "Semua Proyek". RBAC (project.users) tetap ditegakkan terlepas
         // dari proyek aktif, sama seperti pola scoping di Konsumen/Keuangan.
@@ -72,17 +74,10 @@ class DashboardController extends Controller
         ]);
 
         // ── Transaksi aktif (dasar bersama funnel, cara bayar, & finansial) ──
-        $activeTransaksi = $scopeViaKavling(KavlingKonsumen::query())
-            ->where('status', '!=', 'cancelled')
-            ->with([
-                'konsumen:id,nama', 'kavling.project:id,nama', 'skemaDpPreset', 'pembayarans',
-                'jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans',
-                'rincianBiayaAkad.pembayaran', 'pencairanKprTahaps',
-            ])
-            ->get();
+        $activeBase = fn() => $scopeViaKavling(KavlingKonsumen::query())->where('status', '!=', 'cancelled');
 
         // ── Pipeline funnel ───────────────────────────────────────────────
-        $pipelineCounts = $activeTransaksi->countBy('status_penjualan');
+        $pipelineCounts = $activeBase()->selectRaw('status_penjualan, count(*) as total')->groupBy('status_penjualan')->pluck('total', 'status_penjualan');
         $pipelineFunnel = collect(self::PIPELINE_STAGES)->map(fn($stage) => [
             'key'   => $stage,
             'label' => (new KavlingKonsumen(['status_penjualan' => $stage]))->status_penjualan_label,
@@ -90,7 +85,7 @@ class DashboardController extends Controller
         ]);
 
         // ── Cara bayar breakdown ──────────────────────────────────────────
-        $caraBayarCounts = $activeTransaksi->countBy('cara_bayar');
+        $caraBayarCounts = $activeBase()->selectRaw('cara_bayar, count(*) as total')->groupBy('cara_bayar')->pluck('total', 'cara_bayar');
         $caraBayarLabels = [
             'cash' => 'Cash', 'cash_bertahap' => 'Cash Bertahap',
             'kpr_subsidi' => 'KPR Subsidi', 'kpr_komersil' => 'KPR Komersil',
@@ -110,59 +105,87 @@ class DashboardController extends Controller
         // Total headline sekarang mencakup Booking Fee & Titipan Biaya Akad
         // juga (sebelumnya cuma harga_deal), supaya benar-benar merefleksikan
         // seluruh uang yang terkait transaksi, bukan cuma harga rumah.
-        $totalPendapatan = 0.0;
-        $nilaiTransaksiBreakdown = [
-            'resmi'   => ['harga_dasar' => 0.0, 'booking_fee' => 0.0, 'diskon' => 0.0],
-            'titipan' => ['biaya_tanah' => 0.0, 'biaya_tambahan_lain' => 0.0, 'titipan_biaya_akad' => 0.0, 'booking_fee' => 0.0],
-        ];
-        $piutangTotals = ['piutang_konsumen' => 0.0, 'terbayar_konsumen' => 0.0, 'piutang_bank' => 0.0, 'terbayar_bank' => 0.0];
-        $piutangKonsumenByNama = [];
-        $piutangBankByNama = [];
+        // Perhitungan ini O(jumlah transaksi) di PHP (kartuPiutangBreakdown per transaksi),
+        // jadi hasilnya di-cache per (cakupan user/proyek) dan otomatis kedaluwarsa begitu
+        // ada perubahan keuangan — lihat FinanceCache::bump() yang dipanggil AppServiceProvider.
+        $cacheScope = ($isGlobal ? 'all' : 'u' . $user->id) . ':p' . ($projectId ?: 'all');
+        $ringkasan = FinanceCache::remember('dashboard:ringkasan:' . $cacheScope, function () use ($activeBase) {
+            $activeTransaksi = $activeBase()->with([
+                'konsumen:id,nama', 'kavling.project:id,nama', 'skemaDpPreset', 'pembayarans',
+                'jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans',
+                'rincianBiayaAkad.pembayaran', 'pencairanKprTahaps',
+            ])->get();
 
-        foreach ($activeTransaksi as $kk) {
-            $kategori = $kk->kategoriPendapatan();
-            $totalPendapatan += $kategori['resmi_total'] + $kategori['titipan_total'];
-            foreach ($kategori['resmi_rincian'] as $key => $val) {
-                $nilaiTransaksiBreakdown['resmi'][$key] += $val;
-            }
-            foreach ($kategori['titipan_rincian'] as $key => $val) {
-                $nilaiTransaksiBreakdown['titipan'][$key] += $val;
-            }
+            $totalPendapatan = 0.0;
+            $nilaiTransaksiBreakdown = [
+                'resmi'   => ['harga_dasar' => 0.0, 'booking_fee' => 0.0, 'diskon' => 0.0],
+                'titipan' => ['biaya_tanah' => 0.0, 'biaya_tambahan_lain' => 0.0, 'titipan_biaya_akad' => 0.0, 'booking_fee' => 0.0],
+            ];
+            $piutangTotals = ['piutang_konsumen' => 0.0, 'terbayar_konsumen' => 0.0, 'piutang_bank' => 0.0, 'terbayar_bank' => 0.0];
+            $piutangKonsumenByNama = [];
+            $piutangBankByNama = [];
 
-            $breakdown = $kk->kartuPiutangBreakdown();
-            $piutangTotals['piutang_konsumen']  += $breakdown['total_piutang_konsumen'];
-            $piutangTotals['terbayar_konsumen'] += $breakdown['total_terbayar_konsumen'];
-            $piutangTotals['piutang_bank']      += $breakdown['total_piutang_bank'];
-            $piutangTotals['terbayar_bank']     += $breakdown['total_terbayar_bank'];
-
-            foreach ($breakdown['kartu_piutang_static'] as $item) {
-                $piutangKonsumenByNama[$item['nama']] ??= ['nominal' => 0.0, 'terbayar' => 0.0];
-                $piutangKonsumenByNama[$item['nama']]['nominal']  += $item['nominal'];
-                $piutangKonsumenByNama[$item['nama']]['terbayar'] += $item['jumlah_dibayar'] ?? 0;
-            }
-
-            $isKpr = in_array($kk->cara_bayar, ['kpr_subsidi', 'kpr_komersil']);
-            if ($isKpr) {
-                foreach (['sbum' => 'SBUM', 'dajam' => 'Dana Jaminan'] as $kategori => $label) {
-                    $items = $kk->rincianBiayaAkad->where('kategori', $kategori);
-                    $piutangBankByNama[$label] ??= ['nominal' => 0.0, 'terbayar' => 0.0];
-                    $piutangBankByNama[$label]['nominal']  += (float) $items->sum('nominal');
-                    $piutangBankByNama[$label]['terbayar'] += (float) $items->filter(fn($i) => $i->pembayaran)->sum(fn($i) => $i->pembayaran->jumlah);
+            foreach ($activeTransaksi as $kk) {
+                $kategori = $kk->kategoriPendapatan();
+                $totalPendapatan += $kategori['resmi_total'] + $kategori['titipan_total'];
+                foreach ($kategori['resmi_rincian'] as $key => $val) {
+                    $nilaiTransaksiBreakdown['resmi'][$key] += $val;
                 }
-                if ($breakdown['pencairan_kpr']) {
-                    $piutangBankByNama['Pencairan KPR'] ??= ['nominal' => 0.0, 'terbayar' => 0.0];
-                    $piutangBankByNama['Pencairan KPR']['nominal']  += $breakdown['pencairan_kpr']['pencairan_nominal'];
-                    $piutangBankByNama['Pencairan KPR']['terbayar'] += $breakdown['pencairan_kpr']['pencairan_tercatat'];
+                foreach ($kategori['titipan_rincian'] as $key => $val) {
+                    $nilaiTransaksiBreakdown['titipan'][$key] += $val;
+                }
+
+                $breakdown = $kk->kartuPiutangBreakdown();
+                $piutangTotals['piutang_konsumen']  += $breakdown['total_piutang_konsumen'];
+                $piutangTotals['terbayar_konsumen'] += $breakdown['total_terbayar_konsumen'];
+                $piutangTotals['piutang_bank']      += $breakdown['total_piutang_bank'];
+                $piutangTotals['terbayar_bank']     += $breakdown['total_terbayar_bank'];
+
+                foreach ($breakdown['kartu_piutang_static'] as $item) {
+                    $piutangKonsumenByNama[$item['nama']] ??= ['nominal' => 0.0, 'terbayar' => 0.0];
+                    $piutangKonsumenByNama[$item['nama']]['nominal']  += $item['nominal'];
+                    $piutangKonsumenByNama[$item['nama']]['terbayar'] += $item['jumlah_dibayar'] ?? 0;
+                }
+
+                $isKpr = in_array($kk->cara_bayar, ['kpr_subsidi', 'kpr_komersil']);
+                if ($isKpr) {
+                    foreach (['sbum' => 'SBUM', 'dajam' => 'Dana Jaminan'] as $kategori => $label) {
+                        $items = $kk->rincianBiayaAkad->where('kategori', $kategori);
+                        $piutangBankByNama[$label] ??= ['nominal' => 0.0, 'terbayar' => 0.0];
+                        $piutangBankByNama[$label]['nominal']  += (float) $items->sum('nominal');
+                        $piutangBankByNama[$label]['terbayar'] += (float) $items->filter(fn($i) => $i->pembayaran)->sum(fn($i) => $i->pembayaran->jumlah);
+                    }
+                    if ($breakdown['pencairan_kpr']) {
+                        $piutangBankByNama['Pencairan KPR'] ??= ['nominal' => 0.0, 'terbayar' => 0.0];
+                        $piutangBankByNama['Pencairan KPR']['nominal']  += $breakdown['pencairan_kpr']['pencairan_nominal'];
+                        $piutangBankByNama['Pencairan KPR']['terbayar'] += $breakdown['pencairan_kpr']['pencairan_tercatat'];
+                    }
                 }
             }
-        }
+
+            return compact('totalPendapatan', 'nilaiTransaksiBreakdown', 'piutangTotals', 'piutangKonsumenByNama', 'piutangBankByNama');
+        });
+        extract($ringkasan);
 
         $toBreakdownList = fn($byNama) => collect($byNama)->map(fn($v, $nama) => [
             'nama' => $nama, 'nominal' => $v['nominal'], 'terbayar' => $v['terbayar'],
         ])->values();
 
+        // Transaksi yang dibatalkan TIDAK ikut $activeTransaksi (status != cancelled
+        // di atas) — sengaja, karena piutangnya sudah tidak relevan lagi. TAPI kalau
+        // pembatalannya sudah disetujui dengan sebagian nominal dinyatakan "hangus"
+        // (lihat CancellationRequestController::approve()), nominal itu TETAP jadi
+        // pendapatan riil developer & harus ikut dihitung di sini — cuma bagian yang
+        // benar-benar dikembalikan ke konsumen yang tidak dihitung.
+        $hangusDariPembatalan = (float) $scopeViaKavling(CancellationRequest::query())
+            ->where('type', 'cancellation')
+            ->where('status', 'approved')
+            ->sum('nominal_hangus');
+        $totalPendapatan += $hangusDariPembatalan;
+
         $financials = [
             'total_pendapatan'       => $totalPendapatan,
+            'hangus_dari_pembatalan' => $hangusDariPembatalan,
             'nilai_transaksi_rincian' => $nilaiTransaksiBreakdown,
             'piutang_konsumen'       => $piutangTotals['piutang_konsumen'],
             'terbayar_konsumen'      => $piutangTotals['terbayar_konsumen'],
@@ -175,20 +198,24 @@ class DashboardController extends Controller
         ];
 
         // ── Piutang jatuh tempo (cicilan lewat tanggal jatuh tempo, belum lunas) ──
-        $overdueJadwal = JadwalTagihan::query()
+        // Hitung total lewat SQL (count/sum); hanya 10 teratas yang dimuat lengkap dengan relasi.
+        $overdueQuery = fn() => JadwalTagihan::query()
             ->whereIn('status', ['belum_bayar', 'sebagian'])
             ->where('tanggal_jatuh_tempo', '<', now()->toDateString())
             ->whereHas('kavlingKonsumen', function ($q) use ($scopeViaKavling) {
                 $scopeViaKavling($q->where('status', '!=', 'cancelled'));
-            })
+            });
+        $overdueTotals = $overdueQuery()->selectRaw('count(*) as total_count, coalesce(sum(jumlah), 0) as total_nominal')->first();
+        $overdueJadwal = $overdueQuery()
             ->with(['kavlingKonsumen.konsumen:id,nama', 'kavlingKonsumen.kavling.project:id,nama'])
             ->orderBy('tanggal_jatuh_tempo')
+            ->limit(10)
             ->get();
 
         $piutangJatuhTempo = [
-            'total_count'   => $overdueJadwal->count(),
-            'total_nominal' => $overdueJadwal->sum('jumlah'),
-            'items'         => $overdueJadwal->take(10)->map(fn($j) => [
+            'total_count'   => (int) $overdueTotals->total_count,
+            'total_nominal' => (float) $overdueTotals->total_nominal,
+            'items'         => $overdueJadwal->map(fn($j) => [
                 'id'                  => $j->id,
                 'konsumen_nama'       => $j->kavlingKonsumen->konsumen->nama,
                 'kavling'             => $j->kavlingKonsumen->kavling->nomor_lengkap,
@@ -326,7 +353,7 @@ class DashboardController extends Controller
         // rentang (bukan transaksi aktif sekarang seperti versi live).
         $caraBayarCountsPeriodic = $scopeViaKavling(KavlingKonsumen::query())
             ->whereBetween('tanggal_booking', [$periodFrom, $periodTo])
-            ->get()->countBy('cara_bayar');
+            ->selectRaw('cara_bayar, count(*) as total')->groupBy('cara_bayar')->pluck('total', 'cara_bayar');
         $caraBayarBreakdownPeriodic = collect(self::CARA_BAYAR_KEYS)->map(fn($key) => [
             'key'   => $key,
             'label' => $caraBayarLabels[$key],
@@ -359,29 +386,29 @@ class DashboardController extends Controller
         // cuma simpan tanggal_cair AKTUAL, tidak ada kolom tanggal estimasi.
         $jatuhTempoPencairanBank = null;
 
-        $transaksiPeriode = $scopeViaKavling(KavlingKonsumen::query())
+        $transaksiPeriodeQuery = fn() => $scopeViaKavling(KavlingKonsumen::query())
             ->whereBetween('tanggal_booking', [$periodFrom, $periodTo])
-            ->where('status', '!=', 'cancelled')
-            ->with('kavling.project:id,nama')
-            ->get(['id', 'harga_deal', 'kavling_id']);
+            ->where('status', '!=', 'cancelled');
+        $transaksiPeriodeAgg = $transaksiPeriodeQuery()->selectRaw('count(*) as jumlah, avg(harga_deal) as rata_rata')->first();
+        // Hanya relevan di mode "Semua Proyek" — di-group di SQL, bukan memuat semua transaksi.
+        $revenuePerProyek = $projectId ? collect() : $transaksiPeriodeQuery()
+            ->join('kavlings', 'kavlings.id', '=', 'kavling_konsumen.kavling_id')
+            ->join('projects', 'projects.id', '=', 'kavlings.project_id')
+            ->selectRaw('projects.nama as project, sum(kavling_konsumen.harga_deal) as total, count(*) as count')
+            ->groupBy('projects.id', 'projects.nama')
+            ->orderByDesc('total')
+            ->get()
+            ->map(fn($r) => ['project' => $r->project, 'total' => (float) $r->total, 'count' => (int) $r->count])
+            ->values();
 
         $financialsPeriodic = [
             'total_pembayaran_diterima'     => (float) $totalPembayaranDiterima,
             'jatuh_tempo_piutang_konsumen'  => (float) $jatuhTempoPiutangKonsumen,
             'total_pencairan_kpr_diterima'  => (float) $totalPencairanKprDiterima,
             'jatuh_tempo_pencairan_bank'    => $jatuhTempoPencairanBank,
-            'rata_rata_nilai_transaksi'     => (float) ($transaksiPeriode->avg('harga_deal') ?? 0),
-            'jumlah_transaksi'              => $transaksiPeriode->count(),
-            // Hanya relevan di mode "Semua Proyek", sama seperti projectsSummary di atas.
-            'revenue_per_proyek' => $projectId ? [] : $transaksiPeriode
-                ->groupBy(fn($kk) => $kk->kavling->project->nama)
-                ->map(fn($group, $nama) => [
-                    'project' => $nama,
-                    'total'   => (float) $group->sum('harga_deal'),
-                    'count'   => $group->count(),
-                ])
-                ->sortByDesc('total')
-                ->values(),
+            'rata_rata_nilai_transaksi'     => (float) ($transaksiPeriodeAgg->rata_rata ?? 0),
+            'jumlah_transaksi'              => (int) $transaksiPeriodeAgg->jumlah,
+            'revenue_per_proyek'            => $revenuePerProyek,
         ];
 
         // ── Kecepatan Pipeline — rata-rata durasi (hari) antar milestone,
@@ -389,15 +416,14 @@ class DashboardController extends Controller
         // yang dipilih (mis. "akad yang terjadi bulan ini, rata-rata makan
         // waktu berapa hari dari booking-nya").
         $avgDurationDays = function (string $startCol, string $endCol, string $filterCol) use ($scopeViaKavling, $periodFrom, $periodTo) {
-            $rows = $scopeViaKavling(KavlingKonsumen::query())
+            $avg = $scopeViaKavling(KavlingKonsumen::query())
                 ->whereNotNull($startCol)
                 ->whereNotNull($endCol)
                 ->whereBetween($filterCol, [$periodFrom, $periodTo])
-                ->get([$startCol, $endCol]);
+                ->selectRaw("avg(abs(datediff($endCol, $startCol))) as rata_rata")
+                ->value('rata_rata');
 
-            if ($rows->isEmpty()) return null;
-
-            return round($rows->avg(fn($r) => Carbon::parse($r->$startCol)->diffInDays(Carbon::parse($r->$endCol))), 1);
+            return $avg === null ? null : round((float) $avg, 1);
         };
 
         // Rangkaian penuh (KPR): Booking -> Pemberkasan -> Proses Bank -> SP3K
@@ -417,27 +443,26 @@ class DashboardController extends Controller
 
         // ── Performa Sales — ranking by jumlah booking dalam rentang, plus
         // conversion rate (dari booking itu, berapa % sudah akad/bast SEKARANG).
-        $performaSales = $scopeViaKavling(KavlingKonsumen::query())
+        $salesRows = $scopeViaKavling(KavlingKonsumen::query())
             ->whereBetween('tanggal_booking', [$periodFrom, $periodTo])
             ->whereNotNull('sales_agent_id')
-            ->with('salesAgent:id,nama,tipe')
-            ->get()
+            ->selectRaw("sales_agent_id, count(*) as total_booking, sum(status_penjualan in ('akad', 'bast')) as total_akad")
             ->groupBy('sales_agent_id')
-            ->map(function ($group) {
-                $agent = $group->first()->salesAgent;
-                $totalBooking = $group->count();
-                $totalAkadKeAtas = $group->whereIn('status_penjualan', ['akad', 'bast'])->count();
-                return [
-                    'sales_agent_id'  => $agent?->id,
-                    'nama'            => $agent?->nama ?? '-',
-                    'tipe_label'      => $agent?->tipe_label,
-                    'jumlah_booking'  => $totalBooking,
-                    'conversion_rate' => $totalBooking > 0 ? round($totalAkadKeAtas / $totalBooking * 100, 1) : 0,
-                ];
-            })
-            ->sortByDesc('jumlah_booking')
-            ->take(10)
-            ->values();
+            ->orderByDesc('total_booking')
+            ->limit(10)
+            ->get();
+        $salesAgents = SalesAgent::whereIn('id', $salesRows->pluck('sales_agent_id'))->get(['id', 'nama', 'tipe'])->keyBy('id');
+        $performaSales = $salesRows->map(function ($row) use ($salesAgents) {
+            $agent = $salesAgents[$row->sales_agent_id] ?? null;
+            $totalBooking = (int) $row->total_booking;
+            return [
+                'sales_agent_id'  => $agent?->id,
+                'nama'            => $agent?->nama ?? '-',
+                'tipe_label'      => $agent?->tipe_label,
+                'jumlah_booking'  => $totalBooking,
+                'conversion_rate' => $totalBooking > 0 ? round((int) $row->total_akad / $totalBooking * 100, 1) : 0,
+            ];
+        })->values();
 
         // ── Cancellation Rate — pembatalan (bukan tukar unit) yang DISETUJUI
         // dalam rentang, dibanding jumlah booking di rentang yang sama

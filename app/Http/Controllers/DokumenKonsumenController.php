@@ -53,12 +53,19 @@ class DokumenKonsumenController extends Controller
                 'tanggal_akad'         => $kk->tanggal_akad?->format('Y-m-d'),
                 'tanggal_bast'         => $kk->tanggal_bast?->format('Y-m-d'),
                 'sp3k_expiry_status'   => $kk->sp3k_expiry_status,
-                'can_update_status'    => Auth::user()->can('update status penjualan'),
+                // Dulu 1 flag flat 'can_update_status', sekarang dipecah per fase
+                // (lihat RolesAndPermissionsSeeder) — Admin Pemberkasan pegang
+                // Proses Bank/SP3K, Admin Sales pegang sisanya.
+                'can_pemberkasan_bank' => Auth::user()->can('kelola pemberkasan bank'),
+                'can_pipeline_sales'   => Auth::user()->can('kelola pipeline sales'),
+                'can_bank_rekanan'     => Auth::user()->can('isi bank rekanan kpr'),
+                'can_manage_dokumen'   => Auth::user()->can('manage dokumen'),
                 'dokumen_wajib_lengkap' => $kk->dokumen_wajib_lengkap,
                 'dp_lunas'             => $kk->dp_lunas,
                 'piutang_lunas'        => $kk->piutang_lunas,
                 'is_locked'            => $kk->is_locked,
                 'bank_rekanan_kpr'     => $kk->bank_rekanan_kpr,
+                'bank_rekanan_preset_id' => $kk->bank_rekanan_preset_id,
                 // Proses Bank
                 'tanggal_pengajuan_bank' => $kk->tanggal_pengajuan_bank?->format('Y-m-d'),
                 'tanggal_keputusan_bank' => $kk->tanggal_keputusan_bank?->format('Y-m-d'),

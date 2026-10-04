@@ -239,7 +239,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                             <button @click="toggleFinansial('nilai')" class="text-slate-500 hover:text-slate-300 text-[11px] transition-colors">{{ expandedFinansial.nilai ? '▲ Tutup' : '▼ Rincian' }}</button>
                         </div>
                         <div class="text-white font-bold text-xl">{{ formatRp(financials?.total_pendapatan) }}</div>
-                        <div class="text-slate-600 text-xs mt-1">Harga deal, semua transaksi berjalan</div>
+                        <div class="text-slate-600 text-xs mt-1">Harga deal transaksi berjalan + hangus dari pembatalan</div>
                         <div v-if="expandedFinansial.nilai" class="mt-3 pt-3 border-t border-slate-800 space-y-3">
                             <div>
                                 <div class="flex items-center justify-between text-[11px] text-slate-500 uppercase tracking-wide mb-1">
@@ -284,6 +284,13 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                                         <span class="text-slate-300">{{ formatRp(financials?.nilai_transaksi_rincian?.titipan?.booking_fee) }}</span>
                                     </div>
                                 </div>
+                            </div>
+                            <div v-if="financials?.hangus_dari_pembatalan > 0">
+                                <div class="flex items-center justify-between text-[11px] text-slate-500 uppercase tracking-wide mb-1">
+                                    <span>Hangus dari Pembatalan</span>
+                                    <span class="text-amber-400 normal-case">{{ formatRp(financials?.hangus_dari_pembatalan) }}</span>
+                                </div>
+                                <p class="text-slate-600 text-[11px] pl-2">Nominal yang dinyatakan hangus (tidak dikembalikan) saat menyetujui pengajuan pembatalan — lihat menu Pembatalan untuk rinciannya per transaksi.</p>
                             </div>
                         </div>
                     </div>
@@ -579,11 +586,11 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                     </div>
                     <div v-if="!performaSales?.length" class="text-center text-slate-600 text-xs py-8">Belum ada booking dengan sales/agent di periode ini.</div>
                     <table v-else class="w-full text-sm">
-                        <thead>
-                            <tr class="border-b border-slate-800 text-left text-slate-500 text-xs uppercase tracking-wider">
-                                <th class="px-5 py-2.5">Sales / Agent</th>
-                                <th class="px-4 py-2.5 text-right">Booking</th>
-                                <th class="px-5 py-2.5 text-right">Conversion Rate</th>
+                        <thead class="border-b border-slate-800 text-xs text-slate-500 uppercase tracking-wide">
+                            <tr class="font-medium">
+                                <th class="px-4 py-3 text-left">Sales / Agent</th>
+                                <th class="px-4 py-3 text-right">Booking</th>
+                                <th class="px-4 py-3 text-right">Conversion Rate</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-800/60">

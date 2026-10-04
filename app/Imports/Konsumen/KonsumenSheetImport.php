@@ -170,13 +170,14 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
             if (!$allInPreset) $errors[] = "Program All In '{$allInLabel}' tidak dikenal.";
         }
 
-        $bankNama = null;
+        $bankPreset = null;
         if ($this->isKpr) {
             $bankNama = $str('bank');
             if (!$bankNama) {
                 $errors[] = 'Bank Rekanan KPR kosong (wajib untuk cara bayar KPR).';
-            } elseif (!BankRekananPreset::whereRaw('LOWER(nama) = ?', [mb_strtolower($bankNama)])->exists()) {
-                $errors[] = "Bank Rekanan KPR '{$bankNama}' tidak dikenal.";
+            } else {
+                $bankPreset = BankRekananPreset::whereRaw('LOWER(nama) = ?', [mb_strtolower($bankNama)])->first();
+                if (!$bankPreset) $errors[] = "Bank Rekanan KPR '{$bankNama}' tidak dikenal.";
             }
         }
 
@@ -278,7 +279,6 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
         $dpBayar = $num('dp_bayar');
         $dpTgl = $dateOf('dp_tgl');
         if ($dpBayar !== null && $dpBayar > 0 && !$dpTgl) $errors[] = 'DP Tgl Terakhir wajib diisi karena Terbayar terisi.';
-        $skemaDpString = $dpNominal > 0 ? "nominal:{$dpNominal}" : 'tanpa_dp';
 
         // ── Pelunasan (cash/cash bertahap) ──
         $pelunasanNominal = 0.0;
@@ -395,8 +395,8 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
         try {
             KavlingKonsumen::withoutFinanceRefresh(fn () => DB::transaction(function () use (
                 $rowNum, $nama, $nik, $npwp, $str, $kluster, $blok, $unit, $kavling, $tglBooking, $tahapKey,
-                $skemaPreset, $skemaDpString, $sumberLead, $referralKeterangan, $pekerjaanKey, $nikahKey,
-                $salesAgent, $notaris, $promo, $allInPreset, $bankNama, $hargaDasar, $hargaJualNetto,
+                $skemaPreset, $sumberLead, $referralKeterangan, $pekerjaanKey, $nikahKey,
+                $salesAgent, $notaris, $promo, $allInPreset, $bankPreset, $hargaDasar, $hargaJualNetto,
                 $diskonMode, $diskonNilai, $diskonNominal, $tanahAktif, $tanahMode, $tanahLuas, $tanahHarga,
                 $tanahNominal, $tanahBayar, $tanahTgl, $totalBiayaTambahan, $biayaTambahanItems,
                 $bookingFee, $bfBayar, $bfTgl, $dpNominal, $dpBayar, $dpTgl,
@@ -442,7 +442,6 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                     'booking_fee' => $bookingFee,
                     'cara_bayar' => $this->caraBayar,
                     'cicilan_kali' => $this->caraBayar === 'cash_bertahap' ? $pelunasanTenor : null,
-                    'skema_dp' => $skemaDpString,
                     'skema_dp_preset_id' => $skemaPreset->id,
                     'plafon_kpr' => $plafon,
                     'sales_agent_id' => $salesAgent?->id,
@@ -467,7 +466,7 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                     'tanggal_sp3k' => $tglSp3k,
                     'tanggal_expired_sp3k' => $tglExp,
                     'status_sp3k' => $sp3kKey,
-                    'bank_rekanan_kpr' => $bankNama,
+                    'bank_rekanan_preset_id' => $bankPreset?->id,
                     'catatan' => $catatan,
                     'created_by' => Auth::id(),
                 ]);

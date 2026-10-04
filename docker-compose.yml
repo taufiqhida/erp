@@ -1,0 +1,80 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      # File yang di-upload user (foto siteplan, dokumen konsumen, dll) harus
+      # bertahan lintas rebuild image — bukan bagian dari kode, jadi jangan
+      # dibiarkan cuma hidup di layer image.
+      - storage_app:/var/www/html/storage/app
+      - storage_logs:/var/www/html/storage/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - erp
+
+  # Jalankan scheduler Laravel (finance:recompute harian jam 02:00 — lihat
+  # routes/console.php) — container terpisah dari `app` supaya proses cron
+  # tidak mati kalau container app di-restart untuk keperluan lain, dan
+  # sebaliknya. Pakai image YANG SAMA (cache build), cuma override command.
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - storage_app:/var/www/html/storage/app
+      - storage_logs:/var/www/html/storage/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    # Sengaja TIDAK pakai entrypoint.sh (itu punya `app` — migrate/cache di
+    # sana saja) supaya `app` & `scheduler` tidak balapan migrate bersamaan
+    # saat pertama kali start. Scheduler cuma butuh nunggu config sudah
+    # di-cache oleh `app`, lalu loop schedule:run tiap menit.
+    entrypoint: ["sh", "-c"]
+    command: >
+      "sleep 15 && while true; do php artisan schedule:run --verbose --no-interaction >> storage/logs/scheduler.log 2>&1; sleep 60; done"
+    networks:
+      - erp
+
+  db:
+    # WAJIB MySQL 8 (bukan MariaDB) — lihat catatan di Dockerfile & .env.docker.example.
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - erp
+    # Sengaja TIDAK expose port 3306 ke host secara default (staging = akses
+    # publik ke VPS, jangan buka port DB ke luar). Kalau perlu akses langsung
+    # sementara (mis. lewat DBeaver/mysqldump dari luar VPS), tambahkan baris
+    # "ports: [\"3306:3306\"]" di sini SEMENTARA saja, lalu hapus lagi.
+
+networks:
+  erp:
+    driver: bridge
+
+volumes:
+  db_data:
+  storage_app:
+  storage_logs:

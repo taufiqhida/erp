@@ -6,6 +6,7 @@ use App\Enums\StatusJual;
 use App\Models\StatusBangunStage;
 use App\Http\Controllers\Concerns\AuthorizesProjectAccess;
 use App\Http\Controllers\Concerns\ChecksTransactionLock;
+use App\Http\Controllers\Concerns\ExportsExcel;
 use App\Models\BiayaTambahanPreset;
 use App\Models\CancellationRequest;
 use App\Models\DajamSbumPreset;
@@ -26,6 +27,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
@@ -36,7 +38,7 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class KonsumenController extends Controller
 {
-    use AuthorizesProjectAccess, ChecksTransactionLock;
+    use AuthorizesProjectAccess, ChecksTransactionLock, ExportsExcel;
 
     private function caraBayarLabel(?string $caraBayar): string
     {
@@ -54,7 +56,7 @@ class KonsumenController extends Controller
         $this->authorize('viewAny', Konsumen::class);
 
         $user = Auth::user();
-        $isGlobal = $user->hasAnyRole(['superadmin', 'manajer']);
+        $isGlobal = $user->can('view all projects');
         $viewMode = $request->view === 'konsumen' ? 'konsumen' : 'unit';
 
         // Proyek aktif (Halaman Utama Pilih Proyek) — bukan lagi filter
@@ -100,15 +102,16 @@ class KonsumenController extends Controller
 
         // Sort daftar unit dilakukan di server (daftar dipaginasi, jadi sort di browser
         // cuma mengurutkan 1 halaman). Kolom sort dibatasi whitelist, bukan input bebas.
-        $sort = in_array($request->sort, ['unit', 'booking'], true) ? $request->sort : 'booking';
-        $dir = $request->dir === 'asc' ? 'asc' : 'desc';
-        if (!$request->sort) $dir = 'desc';
+        // Default: urut natural unit (blok+nomor) seperti Stok Kavling — bukan
+        // booking terbaru — supaya daftar unit konsisten & tidak "acak" antar halaman.
+        $sort = in_array($request->sort, ['unit', 'booking'], true) ? $request->sort : 'unit';
+        $dir = in_array($request->dir, ['asc', 'desc'], true) ? $request->dir : ($sort === 'unit' ? 'asc' : 'desc');
 
         if ($viewMode === 'unit') {
             $rows = KavlingKonsumen::query()
                 ->join('kavlings', 'kavlings.id', '=', 'kavling_konsumen.kavling_id')
                 ->select('kavling_konsumen.*')
-                ->with(['konsumen', 'kavling.project', 'kavling.tipeUnitPreset', 'kavling.statusBangunStage', 'dokumens'])
+                ->with(['konsumen', 'kavling.project', 'kavling.tipeUnitPreset', 'kavling.statusBangunStage', 'dokumens', 'bankRekananPreset:id,nama'])
                 ->whereHas('kavling', function ($q) use ($unitFilter, $isGlobal, $projectScope) {
                     $unitFilter($q);
                     if (!$isGlobal) $projectScope($q);
@@ -144,6 +147,7 @@ class KonsumenController extends Controller
                     'status_jual_label' => $trx->kavling->status_jual_label,
                     'status_bangun_stage_id' => $trx->kavling->status_bangun_stage_id,
                     'status_bangun_label' => $trx->kavling->status_bangun_label,
+                    'progress_bangun'   => $trx->kavling->progress_bangun,
                     'harga_deal'        => $trx->harga_deal,
                     'cara_bayar_label'  => $this->caraBayarLabel($trx->cara_bayar),
                     'bank_rekanan_kpr'  => $trx->bank_rekanan_kpr,
@@ -176,7 +180,7 @@ class KonsumenController extends Controller
                 ->with(['kavlingKonsumens' => fn($q) =>
                     $q->when($hasUnitFilter, fn($q2) => $q2->whereHas('kavling', $unitFilter))
                       ->when($request->status_penjualan, fn($q2) => $q2->where('status_penjualan', $request->status_penjualan))
-                      ->with('kavling.project')
+                      ->with(['kavling.project', 'bankRekananPreset:id,nama'])
                 ])
                 ->withCount('kavlingKonsumens as transaksi_count')
                 ->orderBy('nama')
@@ -196,7 +200,11 @@ class KonsumenController extends Controller
                         'project_nama'           => $trx->kavling->project->nama,
                         'status_jual'            => $trx->kavling->status_jual->value,
                         'status_jual_label'      => $trx->kavling->status_jual_label,
+                        'status_bangun_stage_id' => $trx->kavling->status_bangun_stage_id,
+                        'status_bangun_label'    => $trx->kavling->status_bangun_label,
+                        'progress_bangun'        => $trx->kavling->progress_bangun,
                         'cara_bayar_label'       => $this->caraBayarLabel($trx->cara_bayar),
+                        'bank_rekanan_kpr'       => $trx->bank_rekanan_kpr,
                         'status_penjualan'       => $trx->status_penjualan,
                         'status_penjualan_label' => $trx->status_penjualan_label,
                         'pipeline_progress'      => $trx->pipeline_progress_info,
@@ -212,6 +220,65 @@ class KonsumenController extends Controller
         ]);
     }
 
+    /**
+     * Export Daftar Konsumen (mode Per Unit) ke Excel — snapshot referensi,
+     * ikut filter & pencarian yang sedang aktif.
+     */
+    public function exportKonsumenExcel(Request $request): StreamedResponse
+    {
+        $this->authorize('viewAny', Konsumen::class);
+
+        $user = Auth::user();
+        $isGlobal = $user->can('view all projects');
+        $activeProjectId = session('current_project_id');
+
+        $unitFilter = function ($q) use ($request, $activeProjectId) {
+            if ($activeProjectId) $q->where('project_id', $activeProjectId);
+            if ($request->kluster) $q->where('kluster', $request->kluster);
+            if ($request->blok) $q->where('blok', $request->blok);
+            if ($request->tipe_unit_preset_id) $q->where('tipe_unit_preset_id', $request->tipe_unit_preset_id);
+            if ($request->status_jual) $q->where('status_jual', $request->status_jual);
+            if ($request->status_bangun_stage_id) $q->where('status_bangun_stage_id', $request->status_bangun_stage_id);
+        };
+        $projectScope = fn($q) => $q->whereHas('project.users', fn($q2) => $q2->where('users.id', $user->id));
+
+        $rows = KavlingKonsumen::query()
+            ->join('kavlings', 'kavlings.id', '=', 'kavling_konsumen.kavling_id')
+            ->select('kavling_konsumen.*')
+            ->with(['konsumen', 'kavling.project', 'kavling.statusBangunStage', 'bankRekananPreset:id,nama'])
+            ->whereHas('kavling', function ($q) use ($unitFilter, $isGlobal, $projectScope) {
+                $unitFilter($q);
+                if (!$isGlobal) $projectScope($q);
+            })
+            ->when($request->status_penjualan, fn($q) => $q->where('status_penjualan', $request->status_penjualan))
+            ->when($request->search, fn($q) =>
+                $q->whereHas('konsumen', fn($q2) => $q2->where(fn($q3) => $q3
+                    ->where('nama', 'like', "%{$request->search}%")
+                    ->orWhere('no_hp', 'like', "%{$request->search}%")
+                    ->orWhere('nik', 'like', "%{$request->search}%")
+                ))
+            )
+            ->tap(fn($q) => Kavling::applyUnitOrder($q, 'asc'))
+            ->get();
+
+        $headers = ['Konsumen', 'No. HP', 'Unit', 'Proyek', 'Tgl Booking', 'Harga Deal', 'Cara Bayar', 'Bank', 'Status Bangun', 'ID Rumah', 'Tahap'];
+        $mapped = $rows->map(fn($trx) => [
+            $trx->konsumen->nama,
+            $trx->konsumen->no_hp,
+            $trx->kavling->nomor_lengkap,
+            $trx->kavling->project->nama,
+            $trx->tanggal_booking?->format('Y-m-d'),
+            (float) $trx->harga_deal,
+            $this->caraBayarLabel($trx->cara_bayar),
+            $trx->bank_rekanan_kpr,
+            $trx->kavling->statusBangunStage?->nama,
+            $trx->kavling->id_rumah,
+            $trx->status_penjualan_label,
+        ]);
+
+        return $this->streamExcelExport('daftar-konsumen.xlsx', $headers, $mapped);
+    }
+
     public function show(Request $request, Konsumen $konsumen): Response
     {
         $this->authorize('view', $konsumen);
@@ -219,7 +286,7 @@ class KonsumenController extends Controller
         $transaksis = $konsumen->kavlingKonsumens()
             ->with([
                 'kavling.project:id,nama', 'kavling.tipeUnitPreset', 'kavling.statusBangunStage', 'dokumens', 'pembayarans', 'biayaTambahans.pembayarans',
-                'promoPreset:id,nama', 'programAllInPreset:id,nama', 'skemaDpPreset',
+                'promoPreset:id,nama', 'programAllInPreset:id,nama', 'skemaDpPreset', 'bankRekananPreset:id,nama',
                 'jadwalTagihans' => fn($q) => $q->orderBy('jenis')->orderBy('nomor_cicilan'),
                 'jadwalTagihans.pembayaran',
                 'rincianBiayaAkad' => fn($q) => $q->orderBy('kategori')->orderBy('nama'),
@@ -403,7 +470,7 @@ class KonsumenController extends Controller
     public function storeRincianBiayaAkad(Request $request, KavlingKonsumen $transaksi): RedirectResponse
     {
         $this->authorizeProjectAccess($transaksi->kavling->project);
-        abort_unless(Auth::user()->can('manage kpr'), 403);
+        abort_unless(Auth::user()->can('manage rincian biaya akad'), 403);
         $this->assertTransactionEditable($transaksi, 'Tambah rincian biaya akad');
 
         $validated = $request->validate([
@@ -426,7 +493,7 @@ class KonsumenController extends Controller
     public function updateRincianBiayaAkad(Request $request, KavlingKonsumenDajamSbum $rincian): RedirectResponse
     {
         $this->authorizeProjectAccess($rincian->kavlingKonsumen->kavling->project);
-        abort_unless(Auth::user()->can('manage kpr'), 403);
+        abort_unless(Auth::user()->can('manage rincian biaya akad'), 403);
         $this->assertTransactionEditable($rincian->kavlingKonsumen, 'Update nominal biaya akad');
 
         $validated = $request->validate([
@@ -441,7 +508,7 @@ class KonsumenController extends Controller
     public function destroyRincianBiayaAkad(KavlingKonsumenDajamSbum $rincian): RedirectResponse
     {
         $this->authorizeProjectAccess($rincian->kavlingKonsumen->kavling->project);
-        abort_unless(Auth::user()->can('manage kpr'), 403);
+        abort_unless(Auth::user()->can('manage rincian biaya akad'), 403);
         $this->assertTransactionEditable($rincian->kavlingKonsumen, 'Hapus rincian biaya akad');
 
         $rincian->delete();

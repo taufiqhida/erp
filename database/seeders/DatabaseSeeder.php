@@ -12,7 +12,6 @@ use App\Models\StatusBangunStage;
 use App\Models\TipeUnitPreset;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -21,42 +20,15 @@ class DatabaseSeeder extends Seeder
         // 1. Roles & Permissions
         $this->call(RolesAndPermissionsSeeder::class);
 
-        // 2. Users
-        $admin = User::firstOrCreate(
-            ['email' => 'admin@erp.local'],
-            ['name' => 'Super Admin', 'password' => Hash::make('password')]
-        );
-        $admin->assignRole('superadmin');
+        // 2. Users sungguhan (menggantikan 6 dummy lama — lihat RealUsersSeeder)
+        $this->call(RealUsersSeeder::class);
 
-        $manajer = User::firstOrCreate(
-            ['email' => 'manajer@erp.local'],
-            ['name' => 'Budi Manajer', 'password' => Hash::make('password')]
-        );
-        $manajer->assignRole('manajer');
-
-        $sales = User::firstOrCreate(
-            ['email' => 'sales@erp.local'],
-            ['name' => 'Sari Sales', 'password' => Hash::make('password')]
-        );
-        $sales->assignRole('sales');
-
-        $lapangan = User::firstOrCreate(
-            ['email' => 'lapangan@erp.local'],
-            ['name' => 'Dedi Lapangan', 'password' => Hash::make('password')]
-        );
-        $lapangan->assignRole('staff_lapangan');
-
-        $finance = User::firstOrCreate(
-            ['email' => 'finance@erp.local'],
-            ['name' => 'Fitri Finance', 'password' => Hash::make('password')]
-        );
-        $finance->assignRole('finance');
-
-        $staffKpr = User::firstOrCreate(
-            ['email' => 'kpr@erp.local'],
-            ['name' => 'Kiki Staff KPR', 'password' => Hash::make('password')]
-        );
-        $staffKpr->assignRole('staff_kpr');
+        $admin    = User::where('email', 'annaz@erp.local')->first();   // superadmin
+        $manajer  = User::where('email', 'ferry@erp.local')->first();   // manager
+        $sales    = User::where('email', 'melza@erp.local')->first();  // admin_sales
+        $lapangan = User::where('email', 'fathoni@erp.local')->first(); // pelaksana_lapangan
+        $finance  = User::where('email', 'nia@erp.local')->first();     // admin_keuangan
+        $staffKpr = User::where('email', 'yunita@erp.local')->first();  // admin_pemberkasan
 
         // 3. Projects
         $project1 = Project::firstOrCreate(
@@ -173,7 +145,6 @@ class DatabaseSeeder extends Seeder
                 'status'       => 'active',
                 'tanggal_akad' => '2025-03-15',
                 'harga_deal'   => $soldKavling->harga,
-                'metode_bayar' => 'KPR',
                 'created_by'   => $sales->id,
             ]);
         }
@@ -188,18 +159,18 @@ class DatabaseSeeder extends Seeder
                 'status'       => 'active',
                 'tanggal_akad' => null,
                 'harga_deal'   => $bookedKavling->harga,
-                'metode_bayar' => 'Cash',
                 'created_by'   => $sales->id,
             ]);
         }
 
         $this->command->info('✅ Seeder selesai!');
-        $this->command->info('👤 Login: admin@erp.local / password');
-        $this->command->info('👤 Login: manajer@erp.local / password');
-        $this->command->info('👤 Login: sales@erp.local / password');
-        $this->command->info('👤 Login: lapangan@erp.local / password');
-        $this->command->info('👤 Login: finance@erp.local / password');
-        $this->command->info('👤 Login: kpr@erp.local / password');
+        $this->command->info('👤 Semua login pakai password: password');
+        $this->command->info('   annaz@erp.local (superadmin)      toro@erp.local (superadmin)');
+        $this->command->info('   ferry@erp.local (manager)         icha@erp.local (manager)        eko@erp.local (manager)');
+        $this->command->info('   umi@erp.local (spv)                ridwan@erp.local (leader)');
+        $this->command->info('   melza@erp.local (admin_sales)      yunita@erp.local (admin_pemberkasan)');
+        $this->command->info('   dinda@erp.local (admin_proyek)     fathoni@erp.local (pelaksana_lapangan)');
+        $this->command->info('   nia@erp.local (admin_keuangan)');
 
         // 7. Profil Developer (default)
         DeveloperProfile::firstOrCreate(['id' => 1], [

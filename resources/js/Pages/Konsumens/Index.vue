@@ -33,15 +33,25 @@ const statusJual  = ref(props.filters?.status_jual ?? '');
 const statusBangun = ref(props.filters?.status_bangun_stage_id ?? '');
 const statusPenjualan = ref(props.filters?.status_penjualan ?? '');
 
+// Export Excel (mode Per Unit) ikut filter & pencarian yang sedang aktif.
+const exportKonsumenUrl = computed(() => {
+    const params = new URLSearchParams(Object.fromEntries(Object.entries({
+        search: search.value, kluster: kluster.value, blok: blok.value,
+        tipe_unit_preset_id: tipeUnit.value, status_jual: statusJual.value,
+        status_bangun_stage_id: statusBangun.value, status_penjualan: statusPenjualan.value,
+    }).filter(([, v]) => v)));
+    return route('konsumens.export') + '?' + params.toString();
+});
+
 // Sort dilakukan di server (daftar dipaginasi) — klik judul kolom untuk urut,
-// klik lagi untuk membalik. Default: booking terbaru di atas.
-const sortKey = computed(() => props.filters?.sort ?? 'booking');
-const sortDir = computed(() => props.filters?.sort ? (props.filters?.dir === 'asc' ? 'asc' : 'desc') : 'desc');
+// klik lagi untuk membalik. Default: urut unit (blok+nomor), sama seperti Stok Kavling.
+const sortKey = computed(() => props.filters?.sort ?? 'unit');
+const sortDir = computed(() => props.filters?.sort ? (props.filters?.dir === 'desc' ? 'desc' : 'asc') : 'asc');
 const setSort = (key) => {
     const dir = sortKey.value === key ? (sortDir.value === 'asc' ? 'desc' : 'asc') : (key === 'unit' ? 'asc' : 'desc');
     applyFilter({ sort: key, dir });
 };
-const sortArrow = (key) => sortKey.value === key ? (sortDir.value === 'asc' ? '▲' : '▼') : '';
+const sortArrow = (key) => sortKey.value === key ? (sortDir.value === 'asc' ? '▲' : '▼') : '⇅';
 
 const applyFilter = (sortOverride = null) => {
     const sortParams = sortOverride ?? (props.filters?.sort ? { sort: props.filters.sort, dir: props.filters.dir } : {});
@@ -162,11 +172,20 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                     <h1 class="text-white font-bold text-xl">Data Konsumen</h1>
                     <p class="text-slate-400 text-sm mt-0.5">Daftar semua konsumen &amp; unit properti — konsumen baru ditambahkan lewat form Booking di halaman Penjualan.</p>
                 </div>
-                <button v-if="currentProject" @click="showImport = true"
-                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium rounded-lg transition-colors border border-slate-700 whitespace-nowrap">
-                    📥 Import Konsumen
-                </button>
-                <div v-else class="text-slate-500 text-xs">Pilih proyek aktif dulu untuk Import Konsumen.</div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <a v-if="mode === 'unit'" :href="exportKonsumenUrl"
+                        class="inline-flex items-center gap-1.5 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors border border-slate-700 whitespace-nowrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 text-sky-400">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-4.5L12 16.5m0 0l4.5-4.5M12 16.5V3" />
+                        </svg>
+                        Export Excel
+                    </a>
+                    <button v-if="currentProject" @click="showImport = true"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium rounded-lg transition-colors border border-slate-700 whitespace-nowrap">
+                        📥 Import Konsumen
+                    </button>
+                    <div v-else class="text-slate-500 text-xs">Pilih proyek aktif dulu untuk Import Konsumen.</div>
+                </div>
             </div>
 
             <!-- View Mode Toggle -->
@@ -263,14 +282,13 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                             <tr>
                                 <th class="px-4 py-3 text-left font-medium">Konsumen</th>
                                 <th class="px-4 py-3 text-left font-medium">
-                                    <button type="button" @click="setSort('unit')" class="uppercase tracking-wide hover:text-slate-300 transition-colors" :class="sortKey === 'unit' ? 'text-violet-400' : ''">Unit {{ sortArrow('unit') }}</button>
+                                    <button type="button" @click="setSort('unit')" class="uppercase tracking-wide hover:text-slate-300 transition-colors inline-flex items-center gap-1" :class="sortKey === 'unit' ? 'text-violet-400' : 'text-slate-500'">Unit <span :class="sortKey === 'unit' ? '' : 'text-slate-700'">{{ sortArrow('unit') }}</span></button>
                                 </th>
                                 <th class="px-4 py-3 text-left font-medium">
-                                    <button type="button" @click="setSort('booking')" class="uppercase tracking-wide hover:text-slate-300 transition-colors" :class="sortKey === 'booking' ? 'text-violet-400' : ''">Tgl Booking {{ sortArrow('booking') }}</button>
+                                    <button type="button" @click="setSort('booking')" class="uppercase tracking-wide hover:text-slate-300 transition-colors inline-flex items-center gap-1" :class="sortKey === 'booking' ? 'text-violet-400' : 'text-slate-500'">Tgl Booking <span :class="sortKey === 'booking' ? '' : 'text-slate-700'">{{ sortArrow('booking') }}</span></button>
                                 </th>
                                 <th class="px-4 py-3 text-right font-medium">Harga</th>
                                 <th class="px-4 py-3 text-left font-medium">Cara Bayar</th>
-                                <th class="px-4 py-3 text-left font-medium">Bank</th>
                                 <th class="px-4 py-3 text-left font-medium">Status Bangun</th>
                                 <th class="px-4 py-3 text-left font-medium">ID Rumah</th>
                                 <th class="px-4 py-3 text-left font-medium">Pemberkasan</th>
@@ -291,13 +309,16 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                 </td>
                                 <td class="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{{ row.tanggal_booking ?? '-' }}</td>
                                 <td class="px-4 py-3 text-slate-300 text-right font-medium">{{ formatRp(row.harga_deal) }}</td>
-                                <td class="px-4 py-3 text-slate-400">{{ row.cara_bayar_label }}</td>
-                                <td class="px-4 py-3 text-slate-400 text-xs">{{ row.bank_rekanan_kpr ?? '-' }}</td>
+                                <td class="px-4 py-3 text-slate-400">
+                                    {{ row.cara_bayar_label }}
+                                    <div v-if="row.bank_rekanan_kpr" class="text-slate-600 text-xs">{{ row.bank_rekanan_kpr }}</div>
+                                </td>
                                 <td class="px-4 py-3">
                                     <span :style="`background:${statusBangunColorHex[row.status_bangun_stage_id]}25; color:${statusBangunColorHex[row.status_bangun_stage_id]}`"
                                         class="px-2 py-0.5 text-xs rounded-full font-medium">
                                         {{ row.status_bangun_label }}
                                     </span>
+                                    <span class="text-slate-500 text-[11px] ml-1">{{ row.progress_bangun }}%</span>
                                 </td>
                                 <td class="px-4 py-3">
                                     <span class="text-slate-400 text-xs font-mono">{{ row.id_rumah ?? '-' }}</span>
@@ -317,14 +338,14 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                     <div v-if="row.pipeline_progress" class="text-slate-500 text-[11px] mt-1">{{ formatPipelineProgress(row.pipeline_progress) }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-right">
-                                    <Link :href="`${route('konsumens.show', row.konsumen_id)}?transaksi=${row.id}`"
-                                        class="text-xs text-violet-400 hover:text-violet-300 transition-colors whitespace-nowrap">
-                                        Detail →
+                                    <Link :href="`${route('konsumens.show', row.konsumen_id)}?transaksi=${row.id}`" title="Detail"
+                                        class="inline-flex p-1.5 text-slate-500 hover:text-violet-400 hover:bg-violet-400/10 rounded-md transition-colors">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                     </Link>
                                 </td>
                             </tr>
                             <tr v-if="!rows.data.length">
-                                <td colspan="10" class="px-4 py-12 text-center text-slate-600">Tidak ada unit konsumen ditemukan.</td>
+                                <td colspan="9" class="px-4 py-12 text-center text-slate-600">Tidak ada unit konsumen ditemukan.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -392,16 +413,17 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                             class="flex items-center justify-between px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs">
                                             <div>
                                                 <span class="text-slate-300">{{ unit.kavling_nomor }}</span>
-                                                <span class="text-slate-600 ml-2">{{ unit.project_nama }} · {{ unit.cara_bayar_label }}</span>
+                                                <span class="text-slate-600 ml-2">{{ unit.project_nama }} · {{ unit.cara_bayar_label }}<template v-if="unit.bank_rekanan_kpr"> ({{ unit.bank_rekanan_kpr }})</template></span>
                                             </div>
                                             <div class="flex items-center gap-2">
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-medium" :style="`background:${statusBangunColorHex[unit.status_bangun_stage_id]}25; color:${statusBangunColorHex[unit.status_bangun_stage_id]}`">{{ unit.status_bangun_label }} · {{ unit.progress_bangun }}%</span>
                                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-medium" :style="statusJualBadgeStyle[unit.status_jual]">{{ unit.status_jual_label }}</span>
                                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-medium" :style="statusPenjualanConfig[unit.status_penjualan]?.style">
                                                     {{ statusPenjualanConfig[unit.status_penjualan]?.label ?? unit.status_penjualan_label }}
                                                 </span>
-                                                <Link :href="`${route('konsumens.show', k.id)}?transaksi=${unit.id}`"
-                                                    class="text-violet-400 hover:text-violet-300 transition-colors">
-                                                    Detail →
+                                                <Link :href="`${route('konsumens.show', k.id)}?transaksi=${unit.id}`" title="Detail"
+                                                    class="inline-flex p-1 text-slate-500 hover:text-violet-400 hover:bg-violet-400/10 rounded-md transition-colors">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                                 </Link>
                                             </div>
                                         </div>

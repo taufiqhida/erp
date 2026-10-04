@@ -167,6 +167,25 @@ class KavlingController extends Controller
     /**
      * Update status pembangunan (khusus staff lapangan)
      */
+    /**
+     * Catatan bebas per kavling (dipakai di Proses Bangun) — dipisah dari
+     * updateStatusBangun supaya bisa disimpan sendiri tanpa ikut mengubah
+     * tahap/persen. Sama polanya dengan updateIdRumah()/updateHgbNo().
+     */
+    public function updateCatatan(Request $request, Kavling $kavling): RedirectResponse
+    {
+        $this->authorizeProjectAccess($kavling->project);
+        abort_unless(Auth::user()->can('update status bangun'), 403);
+
+        $validated = $request->validate([
+            'catatan' => 'nullable|string|max:2000',
+        ]);
+
+        $kavling->update(['catatan' => $validated['catatan'] ?: null]);
+
+        return back()->with('success', "Catatan kavling {$kavling->nomor_lengkap} disimpan.");
+    }
+
     public function updateStatusBangun(Request $request, Kavling $kavling): RedirectResponse
     {
         $this->authorizeProjectAccess($kavling->project);

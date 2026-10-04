@@ -14,13 +14,14 @@ const props = defineProps({
     notarisPresets: { type: Array, default: () => [] },
 });
 
-// Kalau bank yang sudah tersimpan belum ada di master data (mis. data lama
-// sebelum master ini ada), tetap disisipkan ke opsi biar nilainya tidak
-// hilang diam-diam — tinggal pilih ulang dari master kalau perlu dirapikan.
+// Bank yang sudah tersimpan tapi kini nonaktif di master tetap disisipkan ke opsi
+// supaya pilihannya tidak hilang diam-diam dari dropdown.
 const bankRekananOptions = computed(() => {
-    const current = props.transaksi.bank_rekanan_kpr;
-    const names = props.bankRekananPresets.map(b => b.nama);
-    return (current && !names.includes(current)) ? [current, ...names] : names;
+    const currentId = props.transaksi.bank_rekanan_preset_id;
+    const list = props.bankRekananPresets;
+    return (currentId && !list.some(b => b.id === currentId))
+        ? [{ id: currentId, nama: props.transaksi.bank_rekanan_kpr }, ...list]
+        : list;
 });
 
 // Status config
@@ -136,19 +137,38 @@ const dokumenIncomplete = computed(() =>
 // Tanggal Rencana Akad sudah diisi (lihat kartu Rencana Akad) — "Lanjutkan
 // ke Akad" cuma konfirmasi bahwa akad terlaksana di tanggal itu.
 const advanceBlockedReason = computed(() => {
-    if (nextStage.value?.key === 'proses_bank' && !props.transaksi.bank_rekanan_kpr) return 'Isi Bank Rekanan KPR dulu';
+    if (nextStage.value?.key === 'proses_bank' && !props.transaksi.bank_rekanan_preset_id) return 'Isi Bank Rekanan KPR dulu';
     if (nextStage.value?.key === 'rencana_akad' && !isBankFlow.value && !props.transaksi.piutang_lunas) return 'Seluruh Kartu Piutang harus lunas dulu';
     if (nextStage.value?.key === 'akad' && !props.transaksi.tanggal_rencana_akad) return 'Isi Tanggal Rencana Akad dulu';
     return '';
 });
 const advanceBlocked = computed(() => advanceBlockedReason.value !== '');
 
-// ── Auto-Lock pasca Akad ────────────────────────────────────────────────
-const isManajerOrAdmin = computed(() => {
-    const roles = usePage().props.auth.user?.roles ?? [];
-    return roles.includes('manajer') || roles.includes('superadmin');
+// ── Auto-Lock pasca Akad + wewenang per fase pipeline ────────────────────
+// Dulu 1 flag flat 'can_update_status', sekarang dipecah per fase (lihat
+// DokumenKonsumenController::index): Admin Pemberkasan pegang Proses
+// Bank/SP3K, Admin Sales pegang sisanya (Rencana Akad/Akad/BAST + pemberkasan
+// →rencana_akad khusus cash). 'override transaction lock' (Superadmin/SPV/
+// Leader) tetap bisa edit walau transaksi sudah terkunci.
+const overrideLock = computed(() =>
+    (usePage().props.auth.user?.permissions ?? []).includes('override transaction lock')
+);
+const isManajerOrAdmin = overrideLock; // alias lama, dipertahankan buat teks di bawah
+const lockOk = computed(() => !props.transaksi.is_locked || overrideLock.value);
+const canPemberkasanBank = computed(() => props.transaksi.can_pemberkasan_bank && lockOk.value);
+const canPipelineSales   = computed(() => props.transaksi.can_pipeline_sales && lockOk.value);
+const canBankRekanan     = computed(() => props.transaksi.can_bank_rekanan && lockOk.value);
+const canManageDokumen   = computed(() => props.transaksi.can_manage_dokumen && lockOk.value);
+// Lanjut ke tahap berikutnya: ability pemilik tahap TUJUAN.
+const canAdvance = computed(() => {
+    if (!nextStage.value) return false;
+    return nextStage.value.key === 'proses_bank' ? canPemberkasanBank.value : canPipelineSales.value;
 });
-const isEditable = computed(() => props.transaksi.can_update_status && (!props.transaksi.is_locked || isManajerOrAdmin.value));
+// Mundur tahap: ability pemilik tahap yang SEDANG dijalani (sama seperti backend).
+const canRevert = computed(() =>
+    ['proses_bank', 'sp3k'].includes(props.transaksi.status_penjualan) ? canPemberkasanBank.value : canPipelineSales.value
+);
+const isEditable = computed(() => canPemberkasanBank.value || canPipelineSales.value);
 
 const sp3kBadge = {
     safe:     { label: 'Berlaku',  cls: 'bg-emerald-500/15 text-emerald-400' },
@@ -195,7 +215,7 @@ const submitAdvance = () => {
 // ── Bank Rekanan KPR — diisi sales di tahap Pemberkasan, jadi syarat wajib
 // sebelum lanjut ke Proses Bank (lihat advanceBlockedReason di atas).
 const bankRekananForm = useForm({
-    bank_rekanan_kpr: props.transaksi.bank_rekanan_kpr ?? '',
+    bank_rekanan_preset_id: props.transaksi.bank_rekanan_preset_id ?? '',
 });
 const submitBankRekanan = () => {
     bankRekananForm.patch(route('bookings.bank-rekanan', props.transaksi.id), { preserveScroll: true });
@@ -357,13 +377,13 @@ const submitBast = () => {
                 <div class="flex flex-wrap items-end gap-3">
                     <div class="flex-1 min-w-[200px]">
                         <label class="block text-slate-400 text-xs font-medium mb-1.5">Nama Bank</label>
-                        <select v-model="bankRekananForm.bank_rekanan_kpr" :disabled="!isEditable"
+                        <select v-model="bankRekananForm.bank_rekanan_preset_id" :disabled="!canBankRekanan"
                             class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60">
                             <option value="">— Pilih Bank —</option>
-                            <option v-for="nama in bankRekananOptions" :key="nama" :value="nama">{{ nama }}</option>
+                            <option v-for="b in bankRekananOptions" :key="b.id" :value="b.id">{{ b.nama }}</option>
                         </select>
                     </div>
-                    <button v-if="isEditable" @click="submitBankRekanan" :disabled="bankRekananForm.processing"
+                    <button v-if="canBankRekanan" @click="submitBankRekanan" :disabled="bankRekananForm.processing"
                         class="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
                         {{ bankRekananForm.processing ? 'Menyimpan...' : 'Simpan' }}
                     </button>
@@ -425,18 +445,18 @@ const submitBast = () => {
                 <div v-if="!isBatal" class="mt-4 pt-4 border-t border-slate-800 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500">
                     <span v-if="transaksi.tanggal_expired_sp3k">Expired SP3K: {{ transaksi.tanggal_expired_sp3k }}</span>
                     <div v-if="isEditable && !transaksi.has_pending_request" class="ml-auto flex flex-wrap items-center gap-2">
-                        <button v-if="previousStage && transaksi.status_penjualan !== 'akad'"
+                        <button v-if="canRevert && previousStage && transaksi.status_penjualan !== 'akad'"
                             @click="revertToPreviousStage(`Kembalikan transaksi ke tahap ${previousStage.label}?`)"
                             class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors">
                             ↩ Kembali ke {{ previousStage.label }}
                         </button>
-                        <template v-if="transaksi.status_penjualan === 'pemberkasan'">
+                        <template v-if="canPipelineSales && transaksi.status_penjualan === 'pemberkasan'">
                             <button @click="openPengajuanBatal"
                                 class="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 text-xs font-medium rounded-lg transition-colors">
                                 🚫 Ajukan Batal
                             </button>
                         </template>
-                        <template v-if="nextStage">
+                        <template v-if="nextStage && canAdvance">
                             <span v-if="advanceBlocked" class="text-amber-400 text-xs">{{ advanceBlockedReason }}</span>
                             <button @click="openAdvance" :disabled="advanceBlocked"
                                 class="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium rounded-lg transition-colors">
@@ -451,7 +471,7 @@ const submitBast = () => {
             <div v-if="transaksi.status_penjualan === 'akad'" class="bg-slate-900 border border-slate-800 rounded-2xl p-5">
                 <h2 class="text-slate-300 font-medium text-sm mb-2">Akad</h2>
                 <p class="text-slate-400 text-sm mb-4">Akad telah dikonfirmasi terlaksana{{ transaksi.tanggal_akad ? ` pada ${transaksi.tanggal_akad}` : '' }}. Lengkapi BAST di bawah untuk menyelesaikan transaksi.</p>
-                <div v-if="isEditable && !transaksi.has_pending_request" class="flex flex-wrap gap-2">
+                <div v-if="canPipelineSales && !transaksi.has_pending_request" class="flex flex-wrap gap-2">
                     <button @click="revertToPreviousStage('Akad ternyata belum/tidak terlaksana? Transaksi akan dikembalikan ke tahap Rencana Akad untuk dijadwalkan ulang.')"
                         class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors">
                         🔁 Reschedule (akad ternyata belum terlaksana)
@@ -469,18 +489,18 @@ const submitBast = () => {
                 <div class="flex flex-wrap items-end gap-3">
                     <div>
                         <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Rencana Akad</label>
-                        <input v-model="rencanaAkadForm.tanggal_rencana_akad" type="date" :disabled="!transaksi.can_update_status"
+                        <input v-model="rencanaAkadForm.tanggal_rencana_akad" type="date" :disabled="!canPipelineSales"
                             class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
                     </div>
                     <div>
                         <label class="block text-slate-400 text-xs font-medium mb-1.5">Notaris</label>
-                        <select v-model="rencanaAkadForm.notaris_preset_id" :disabled="!transaksi.can_update_status"
+                        <select v-model="rencanaAkadForm.notaris_preset_id" :disabled="!canPipelineSales"
                             class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60 min-w-[220px]">
                             <option value="">— Belum dipilih —</option>
                             <option v-for="n in notarisPresets" :key="n.id" :value="n.id">{{ n.nama }}</option>
                         </select>
                     </div>
-                    <button v-if="transaksi.can_update_status" @click="submitRencanaAkad" :disabled="rencanaAkadForm.processing"
+                    <button v-if="canPipelineSales" @click="submitRencanaAkad" :disabled="rencanaAkadForm.processing"
                         class="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
                         {{ rencanaAkadForm.processing ? 'Menyimpan...' : 'Simpan' }}
                     </button>
@@ -498,7 +518,7 @@ const submitBast = () => {
                 <!-- Pengajuan — fakta submit ke bank, bukan keputusan -->
                 <div class="mb-4">
                     <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Pengajuan</label>
-                    <input v-model="bankForm.tanggal_pengajuan_bank" type="date" :disabled="!transaksi.can_update_status"
+                    <input v-model="bankForm.tanggal_pengajuan_bank" type="date" :disabled="!canPemberkasanBank"
                         class="w-full sm:w-1/2 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
                 </div>
 
@@ -509,7 +529,7 @@ const submitBast = () => {
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                     <div>
                         <label class="block text-slate-400 text-xs font-medium mb-1.5">Status Keputusan</label>
-                        <select v-model="bankForm.status_bank" :disabled="!transaksi.can_update_status"
+                        <select v-model="bankForm.status_bank" :disabled="!canPemberkasanBank"
                             class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60">
                             <option value="disetujui">Disetujui</option>
                             <option value="ditolak">Ditolak</option>
@@ -517,14 +537,14 @@ const submitBast = () => {
                     </div>
                     <div>
                         <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Keputusan</label>
-                        <input v-model="bankForm.tanggal_keputusan_bank" type="date" :disabled="!transaksi.can_update_status"
+                        <input v-model="bankForm.tanggal_keputusan_bank" type="date" :disabled="!canPemberkasanBank"
                             class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
                     </div>
                 </div>
 
                 <div class="mb-4">
                     <label class="block text-slate-400 text-xs font-medium mb-1.5">Catatan</label>
-                    <textarea v-model="bankForm.catatan_bank" rows="2" :disabled="!transaksi.can_update_status"
+                    <textarea v-model="bankForm.catatan_bank" rows="2" :disabled="!canPemberkasanBank"
                         class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
                 </div>
 
@@ -533,11 +553,11 @@ const submitBast = () => {
                 </p>
 
                 <div class="flex flex-wrap items-center gap-3">
-                    <button v-if="transaksi.can_update_status" @click="submitBankDecision" :disabled="bankForm.processing"
+                    <button v-if="canPemberkasanBank" @click="submitBankDecision" :disabled="bankForm.processing"
                         class="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
                         {{ bankForm.processing ? 'Menyimpan...' : 'Simpan Keputusan' }}
                     </button>
-                    <template v-if="transaksi.can_update_status && transaksi.status_bank === 'ditolak' && !transaksi.has_pending_request">
+                    <template v-if="canPemberkasanBank && transaksi.status_bank === 'ditolak' && !transaksi.has_pending_request">
                         <button @click="revertToPreviousStage('Kembalikan transaksi ke tahap Pemberkasan untuk revisi berkas?')"
                             class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium rounded-lg transition-colors">
                             ↩ Kembali ke Pemberkasan
@@ -559,19 +579,19 @@ const submitBast = () => {
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                     <div>
                         <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Terbit SP3K</label>
-                        <input v-model="sp3kForm.tanggal_sp3k" type="date" :disabled="!transaksi.can_update_status"
+                        <input v-model="sp3kForm.tanggal_sp3k" type="date" :disabled="!canPemberkasanBank"
                             class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
                     </div>
                     <div>
                         <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Expired SP3K</label>
-                        <input v-model="sp3kForm.tanggal_expired_sp3k" type="date" :disabled="!transaksi.can_update_status"
+                        <input v-model="sp3kForm.tanggal_expired_sp3k" type="date" :disabled="!canPemberkasanBank"
                             class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
                     </div>
                 </div>
 
                 <div class="mb-4">
                     <label class="block text-slate-400 text-xs font-medium mb-1.5">Keputusan</label>
-                    <select v-model="sp3kForm.status_sp3k" :disabled="!transaksi.can_update_status"
+                    <select v-model="sp3kForm.status_sp3k" :disabled="!canPemberkasanBank"
                         class="w-full sm:w-1/2 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60">
                         <option value="approved">Approved</option>
                         <option value="turun_plafon">Turun Plafon</option>
@@ -580,7 +600,7 @@ const submitBast = () => {
 
                 <div v-if="sp3kForm.status_sp3k === 'turun_plafon'" class="mb-4">
                     <label class="block text-slate-400 text-xs font-medium mb-1.5">Plafon Baru</label>
-                    <MoneyInput v-model="sp3kForm.plafon_baru" :disabled="!transaksi.can_update_status"
+                    <MoneyInput v-model="sp3kForm.plafon_baru" :disabled="!canPemberkasanBank"
                         placeholder="cth. 250000000"
                         class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
                     <p v-if="transaksi.plafon_kpr" class="text-slate-600 text-xs mt-1">Plafon sebelumnya: {{ formatRp(transaksi.plafon_kpr) }}</p>
@@ -588,7 +608,7 @@ const submitBast = () => {
 
                 <div class="mb-4">
                     <label class="block text-slate-400 text-xs font-medium mb-1.5">Catatan</label>
-                    <textarea v-model="sp3kForm.catatan_sp3k" rows="2" :disabled="!transaksi.can_update_status"
+                    <textarea v-model="sp3kForm.catatan_sp3k" rows="2" :disabled="!canPemberkasanBank"
                         class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
                 </div>
 
@@ -597,7 +617,7 @@ const submitBast = () => {
                 </p>
 
                 <div class="flex flex-wrap items-center gap-3">
-                    <button v-if="transaksi.can_update_status" @click="submitSp3kDecision" :disabled="sp3kForm.processing"
+                    <button v-if="canPemberkasanBank" @click="submitSp3kDecision" :disabled="sp3kForm.processing"
                         class="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
                         {{ sp3kForm.processing ? 'Menyimpan...' : 'Simpan Keputusan' }}
                     </button>
@@ -634,13 +654,13 @@ const submitBast = () => {
 
                 <div class="mb-4">
                     <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal BAST</label>
-                    <input v-model="bastForm.tanggal_bast" type="date" :disabled="!transaksi.can_update_status"
+                    <input v-model="bastForm.tanggal_bast" type="date" :disabled="!canPipelineSales"
                         class="w-full sm:w-64 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
                 </div>
 
                 <div class="mb-4">
                     <label class="block text-slate-400 text-xs font-medium mb-1.5">Status Tanda Tangan</label>
-                    <select v-model="bastForm.status_ttd" :disabled="!transaksi.can_update_status"
+                    <select v-model="bastForm.status_ttd" :disabled="!canPipelineSales"
                         class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60">
                         <option value="belum_ttd">Belum Tanda Tangan</option>
                         <option value="sudah_ttd">Sudah Tanda Tangan</option>
@@ -649,20 +669,20 @@ const submitBast = () => {
 
                 <div class="mb-4">
                     <label class="block text-slate-400 text-xs font-medium mb-1.5">Catatan</label>
-                    <textarea v-model="bastForm.catatan" rows="2" :disabled="!transaksi.can_update_status"
+                    <textarea v-model="bastForm.catatan" rows="2" :disabled="!canPipelineSales"
                         class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
                 </div>
 
                 <div class="flex flex-wrap items-center gap-3">
-                    <button v-if="transaksi.can_update_status" @click="submitBast" :disabled="bastForm.processing"
+                    <button v-if="canPipelineSales" @click="submitBast" :disabled="bastForm.processing"
                         class="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
                         {{ bastForm.processing ? 'Menyimpan...' : 'Simpan BAST' }}
                     </button>
-                    <button v-if="transaksi.can_update_status && bastReadyToConfirm" @click="confirmBastSelesai"
+                    <button v-if="canPipelineSales && bastReadyToConfirm" @click="confirmBastSelesai"
                         class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors">
                         ✅ Konfirmasi Transaksi Selesai
                     </button>
-                    <span v-else-if="transaksi.can_update_status && !bastSelesai" class="text-slate-600 text-xs">
+                    <span v-else-if="canPipelineSales && !bastSelesai" class="text-slate-600 text-xs">
                         Checklist & tanda tangan harus lengkap dulu untuk konfirmasi selesai
                     </span>
                 </div>
@@ -709,7 +729,7 @@ const submitBast = () => {
                         </div>
 
                         <!-- Status Update Buttons -->
-                        <div v-if="isEditable" class="flex items-center gap-1.5 flex-shrink-0">
+                        <div v-if="canManageDokumen" class="flex items-center gap-1.5 flex-shrink-0">
                             <button
                                 v-for="(cfg, st) in statusConfig" :key="st"
                                 @click="updateStatus(dok, st)"
@@ -754,6 +774,12 @@ const submitBast = () => {
                         <p v-if="dokumenIncomplete" class="text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                             ⚠ Dokumen wajib belum lengkap. Tetap bisa lanjut, tapi wajib isi catatan alasannya di bawah.
                         </p>
+                        <div v-if="advanceForm.status_penjualan === 'akad'" class="bg-violet-500/10 border border-violet-500/20 rounded-xl px-3 py-3">
+                            <p class="text-violet-300 text-sm font-medium">
+                                ✓ Akad akan dikonfirmasi terlaksana pada <span class="font-bold">{{ formatTanggalPendek(transaksi.tanggal_rencana_akad) }}</span>.
+                            </p>
+                            <p class="text-slate-400 text-xs mt-1">Setelah dikonfirmasi, status transaksi berubah menjadi Akad dan lanjut ke pengisian kesiapan BAST di bawah.</p>
+                        </div>
                         <div v-if="advanceForm.status_penjualan === 'proses_bank'">
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Pengajuan ke Bank</label>
                             <input v-model="advanceForm.tanggal_pengajuan_bank" type="date"
@@ -773,7 +799,7 @@ const submitBast = () => {
                         <button @click="showAdvanceModal = false" class="px-4 py-2.5 text-slate-400 hover:text-slate-200 text-sm">Batal</button>
                         <button @click="submitAdvance" :disabled="advanceForm.processing || (dokumenIncomplete && !advanceForm.catatan.trim())"
                             class="px-5 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-violet-500/20">
-                            {{ advanceForm.processing ? 'Menyimpan...' : 'Konfirmasi' }}
+                            {{ advanceForm.processing ? 'Menyimpan...' : (advanceForm.status_penjualan === 'akad' ? 'Konfirmasi Akad' : 'Konfirmasi') }}
                         </button>
                     </div>
                 </div>

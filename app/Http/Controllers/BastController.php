@@ -21,7 +21,7 @@ class BastController extends Controller
     public function update(Request $request, KavlingKonsumen $kk): RedirectResponse
     {
         $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('update status penjualan'), 403);
+        abort_unless(Auth::user()->can('kelola pipeline sales'), 403);
 
         $validated = $request->validate([
             'tanggal_bast' => 'nullable|date',
@@ -49,7 +49,7 @@ class BastController extends Controller
     public function confirmSelesai(KavlingKonsumen $kk): RedirectResponse
     {
         $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('update status penjualan'), 403);
+        abort_unless(Auth::user()->can('kelola pipeline sales'), 403);
 
         $bast = $kk->bastRecord;
         abort_unless(

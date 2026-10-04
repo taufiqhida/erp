@@ -24,7 +24,7 @@ class CancellationRequestController extends Controller
     {
         $user = Auth::user();
         abort_unless($user->can('request cancellation') || $user->can('review cancellation') || $user->can('swap kavling'), 403);
-        $isGlobal = $user->hasAnyRole(['superadmin', 'manajer']);
+        $isGlobal = $user->can('view all projects');
 
         $requests = CancellationRequest::with([
             'kavling.project',

@@ -18,7 +18,7 @@ const props = defineProps({
     suratTemplates: { type: Array, default: () => [] },
 });
 
-const canManageKpr = computed(() => usePage().props.auth.user?.permissions?.includes('manage kpr'));
+const canManageRincianBiayaAkad = computed(() => usePage().props.auth.user?.permissions?.includes('manage rincian biaya akad'));
 const canManagePembayaran = computed(() => usePage().props.auth.user?.permissions?.includes('manage pembayaran'));
 const canViewKeuangan = computed(() => usePage().props.auth.user?.permissions?.includes('view keuangan'));
 const canRequestCancellation = computed(() => usePage().props.auth.user?.permissions?.includes('request cancellation'));
@@ -32,18 +32,15 @@ const openPengajuan = (trx, type) => {
 };
 const closePengajuan = () => { pengajuanModal.show = false; };
 const onPengajuanSuccess = () => { pengajuanModal.show = false; router.reload({ only: ['transaksis'] }); };
-const isManajerOrAdmin = computed(() => {
-    const roles = usePage().props.auth.user?.roles ?? [];
-    return roles.includes('manajer') || roles.includes('superadmin');
-});
-const canEditBiayaAkad = (trx) => canManageKpr.value && (!trx.is_locked || isManajerOrAdmin.value);
+const overrideLock = computed(() => usePage().props.auth.user?.permissions?.includes('override transaction lock'));
+const canEditBiayaAkad = (trx) => canManageRincianBiayaAkad.value && (!trx.is_locked || overrideLock.value);
 
 // ── Edit Rincian Pesanan — sengaja dibatasi cuma boleh mengubah komponen
 // yang BELUM ada pembayaran tercatat (Biaya Kelebihan Tanah, Biaya Tambahan
 // per-item, Diskon/Promo). Cara Bayar & Skema DP tidak bisa diganti di sini
 // sama sekali (lihat BookingController::updateRincianPesanan).
 const canBookKavling = computed(() => usePage().props.auth.user?.permissions?.includes('book kavling'));
-const canEditRincian = (trx) => canBookKavling.value && (!trx.is_locked || isManajerOrAdmin.value);
+const canEditRincian = (trx) => canBookKavling.value && (!trx.is_locked || overrideLock.value);
 const biayaKelebihanLocked = (trx) => !!trx.biaya_kelebihan_tanah_locked;
 const titipanBiayaAkadLocked = (trx) => !!trx.titipan_biaya_akad_locked;
 
