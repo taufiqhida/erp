@@ -32,7 +32,7 @@ RUN npm run build
 # staging. Kalau nanti perlu scale horizontal, pisahkan lagi + pakai object
 # storage/shared volume buat public/build.
 ##############################################
-FROM php:8.3-fpm-alpine AS runtime
+FROM php:8.4-fpm-alpine AS runtime
 
 # Extension yang dipakai project ini:
 # - pdo_mysql: DB utama (project ini MySQL 8 ONLY — migrasi pakai
