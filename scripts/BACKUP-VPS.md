@@ -113,19 +113,22 @@ head -c 300 /tmp/erp-restore.sql
 ```
 
 ### 2. UJI: impor ke database sementara (tidak menyentuh data asli)
+Password root diberikan lewat variabel (JANGAN pakai `mysql -p` dengan `< file`: password dibaca dari file SQL dan login gagal).
 ```bash
-docker exec -it ecommerce-db mysql -uroot -p -e "CREATE DATABASE erp_restore_test CHARACTER SET utf8mb4;"
-docker exec -i ecommerce-db mysql -uroot -p erp_restore_test < /tmp/erp-restore.sql
-docker exec -it ecommerce-db mysql -uroot -p -e "SELECT COUNT(*) FROM erp_restore_test.users;"
-docker exec -it ecommerce-db mysql -uroot -p -e "DROP DATABASE erp_restore_test;"
-rm /tmp/erp-restore.sql
+read -rs -p "Password root MySQL: " ROOTPW; echo
+docker exec -e MYSQL_PWD="$ROOTPW" ecommerce-db mysql -uroot -e "CREATE DATABASE erp_restore_test CHARACTER SET utf8mb4;"
+docker exec -i -e MYSQL_PWD="$ROOTPW" ecommerce-db mysql -uroot erp_restore_test < /tmp/erp-restore.sql
+docker exec -e MYSQL_PWD="$ROOTPW" ecommerce-db mysql -uroot -e "SELECT COUNT(*) FROM erp_restore_test.users;"
+docker exec -e MYSQL_PWD="$ROOTPW" ecommerce-db mysql -uroot -e "DROP DATABASE erp_restore_test;"
+rm /tmp/erp-restore.sql; unset ROOTPW
 ```
 Jumlah user harus sesuai harapan. Kalau begitu, backup terbukti bisa dipulihkan.
 
 ### 3. Pemulihan sungguhan (data rusak/hilang)
 **Berbahaya: menimpa data sekarang.** Backup dulu kondisi saat ini, lalu:
 ```bash
-docker exec -i ecommerce-db mysql -uroot -p erp < /tmp/erp-restore.sql
+read -rs -p "Password root MySQL: " ROOTPW; echo
+docker exec -i -e MYSQL_PWD="$ROOTPW" ecommerce-db mysql -uroot erp < /tmp/erp-restore.sql; unset ROOTPW
 docker exec erp-app php artisan cache:clear
 ```
 
