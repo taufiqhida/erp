@@ -75,7 +75,7 @@ const activeFilterCount = computed(() => Object.values(filters.value).filter(Boo
 const exportKavlingUrl = computed(() => {
     const params = new URLSearchParams(Object.entries(filters.value).filter(([, v]) => v));
     const qs = params.toString();
-    return route('projects.export-kavling', project.id) + (qs ? `?${qs}` : '');
+    return route('projects.export-kavling', props.project.id) + (qs ? `?${qs}` : '');
 });
 
 // Edit status bangun pindah ke halaman Proses Bangun (Tahap 2) — Stok
