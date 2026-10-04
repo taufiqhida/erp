@@ -13,7 +13,9 @@ services:
     env_file:
       - .env
     ports:
-      - "${APP_PORT:-8083}:80"
+      # Hanya localhost: ERP diakses pengunjung lewat Nginx host (domain/HTTPS), bukan
+      # langsung lewat IP:port. Docker melewati firewall panel, jadi pembatasan harus di sini.
+      - "127.0.0.1:${APP_PORT:-8083}:80"
     volumes:
       # Upload user (siteplan, dokumen konsumen) harus bertahan lintas rebuild image.
       - storage_app:/var/www/html/storage/app
