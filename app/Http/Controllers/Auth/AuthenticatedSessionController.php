@@ -24,13 +24,7 @@ class AuthenticatedSessionController extends Controller
             'canResetPassword' => Route::has('password.request') && \App\Support\Branding::data()['email_enabled'],
             'status' => session('status'),
             // Pengumuman (Pengaturan → Pengumuman) — publik, tampil di sebelah kotak login.
-            'pengumuman' => \App\Models\Pengumuman::untukLogin()->get()->map(fn ($p) => [
-                'id'         => $p->id,
-                'judul'      => $p->judul,
-                'isi'        => $p->isi,
-                'tanggal'    => $p->tanggal->translatedFormat('d F Y'),
-                'disematkan' => $p->disematkan,
-            ]),
+            'pengumuman' => $this->pengumuman(),
         ]);
     }
 
@@ -58,5 +52,21 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerateToken();
 
         return redirect('/');
+    }
+
+    /** Gagal diam-diam (daftar kosong) kalau tabel belum dimigrasi, supaya halaman login tidak pernah ikut error. */
+    private function pengumuman(): array
+    {
+        try {
+            return \App\Models\Pengumuman::untukLogin()->get()->map(fn ($p) => [
+                'id'         => $p->id,
+                'judul'      => $p->judul,
+                'isi'        => $p->isi,
+                'tanggal'    => $p->tanggal->translatedFormat('d F Y'),
+                'disematkan' => $p->disematkan,
+            ])->all();
+        } catch (\Illuminate\Database\QueryException) {
+            return [];
+        }
     }
 }
