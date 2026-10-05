@@ -159,4 +159,20 @@ class PaginasiTest extends TestCase
         $this->assertSame(0, $tak['kavlingsPage']['total']);
         $this->assertSame(['A'], $tak['filterOptions']['blok']); // opsi tetap utuh walau hasil filter kosong
     }
+
+    public function test_urutan_sort_dan_per_halaman_terbawa_di_tautan_halaman_berikutnya(): void
+    {
+        $url = route('proses-bangun.index', $this->project, false) . '?urut=progress&arah=desc&per_page=20';
+        $links = $this->props($url)['kavlings']['links'];
+
+        $halaman2 = collect($links)->firstWhere('label', '2');
+        $this->assertStringContainsString('urut=progress', $halaman2['url']);
+        $this->assertStringContainsString('arah=desc', $halaman2['url']);
+        $this->assertStringContainsString('per_page=20', $halaman2['url']);
+
+        // Dan halaman 2 benar-benar lanjutan urutan yang sama (bukan diurutkan ulang per halaman).
+        $h1 = array_column($this->props($url)['kavlings']['data'], 'progress_bangun');
+        $h2 = array_column($this->props($url . '&page=2')['kavlings']['data'], 'progress_bangun');
+        $this->assertTrue((float) max($h2) <= (float) min($h1) + 0.0001, 'halaman 2 harus berisi nilai <= minimum halaman 1 (urut menurun)');
+    }
 }

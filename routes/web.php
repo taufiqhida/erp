@@ -376,6 +376,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('dajam-sbum.destroy');
         });
 
+        Route::middleware('permission:manage system settings')->group(function () {
+            Route::get('pengumuman', [\App\Http\Controllers\PengumumanController::class, 'index'])->name('pengumuman');
+            Route::post('pengumuman', [\App\Http\Controllers\PengumumanController::class, 'store'])->name('pengumuman.store');
+            Route::patch('pengumuman/{pengumuman}', [\App\Http\Controllers\PengumumanController::class, 'update'])->name('pengumuman.update');
+            Route::delete('pengumuman/{pengumuman}', [\App\Http\Controllers\PengumumanController::class, 'destroy'])->name('pengumuman.destroy');
+        });
+
         Route::middleware('permission:manage notaris')->group(function () {
             Route::get('notaris', [PengaturanController::class, 'notaris'])
                 ->name('notaris');
@@ -472,6 +479,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('roles/{user}/assign', [RoleController::class, 'assign'])->name('roles.assign');
         Route::post('users', [RoleController::class, 'storeUser'])->name('users.store');
         Route::post('users/{user}/reset-password', [RoleController::class, 'resetPassword'])->name('users.reset-password');
+        Route::patch('users/{user}/aktif', [RoleController::class, 'toggleAktif'])->name('users.toggle-aktif');
+        Route::delete('users/{user}', [RoleController::class, 'destroyUser'])->name('users.destroy');
         Route::post('projects/{project}/assign-users', [RoleController::class, 'assignProject'])
             ->name('projects.assign-users');
     });

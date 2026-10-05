@@ -5,6 +5,7 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
+import PengumumanBox from '@/Components/PengumumanBox.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -14,6 +15,10 @@ defineProps({
     },
     status: {
         type: String,
+    },
+    pengumuman: {
+        type: Array,
+        default: () => [],
     },
 });
 
@@ -109,5 +114,9 @@ const submit = () => {
                 <span v-else class="text-gray-500">Lupa password? Hubungi administrator sistem.</span>
             </div>
         </form>
+
+        <template v-if="pengumuman.length" #samping>
+            <PengumumanBox :items="pengumuman" />
+        </template>
     </GuestLayout>
 </template>

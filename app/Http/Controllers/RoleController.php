@@ -25,6 +25,7 @@ class RoleController extends Controller
                 'initials' => $u->initials,
                 'roles'    => $u->roles->pluck('name'),
                 'must_change_password' => (bool) $u->must_change_password,
+                'is_active' => (bool) $u->is_active,
                 'projects' => $u->projects->map(fn($p) => ['id' => $p->id, 'nama' => $p->nama, 'kode' => $p->kode]),
             ]);
 
@@ -109,6 +110,60 @@ class RoleController extends Controller
             'email'    => $user->email,
             'password' => $sementara,
         ]);
+    }
+
+    /**
+     * Aktifkan / nonaktifkan user. Nonaktif = tidak bisa login dan sesi yang sedang aktif langsung
+     * dikeluarkan, tapi nama & riwayatnya tetap utuh di Audit Trail dan data transaksi.
+     */
+    public function toggleAktif(Request $request, User $user): RedirectResponse
+    {
+        abort_if($user->id === $request->user()->id, 422, 'Akun sendiri tidak bisa dinonaktifkan.');
+
+        $user->is_active = !$user->is_active;
+        $user->remember_token = null;
+        $user->save();
+
+        if (!$user->is_active) {
+            \Illuminate\Support\Facades\DB::table('sessions')->where('user_id', $user->id)->delete();
+        }
+
+        activity('akun')
+            ->performedOn($user)
+            ->causedBy($request->user())
+            ->log(($user->is_active ? 'Mengaktifkan' : 'Menonaktifkan') . " pengguna {$user->email}");
+
+        return back()->with('success', $user->is_active
+            ? "Akun {$user->name} diaktifkan kembali."
+            : "Akun {$user->name} dinonaktifkan dan tidak bisa login.");
+    }
+
+    /**
+     * Hapus permanen — HANYA untuk akun yang belum punya jejak apa pun (mis. salah buat). Akun yang
+     * pernah bekerja di sistem harus dinonaktifkan supaya riwayatnya tidak kehilangan nama.
+     */
+    public function destroyUser(Request $request, User $user): RedirectResponse
+    {
+        abort_if($user->id === $request->user()->id, 422, 'Akun sendiri tidak bisa dihapus.');
+
+        $pesan = "Akun {$user->name} sudah punya riwayat kerja di sistem, jadi tidak bisa dihapus. Nonaktifkan saja.";
+
+        $punyaJejak = \Spatie\Activitylog\Models\Activity::where('causer_type', User::class)->where('causer_id', $user->id)->exists();
+        if ($punyaJejak) {
+            return back()->with('error', $pesan);
+        }
+
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($user) {
+                $user->projects()->detach();
+                $user->syncRoles([]);
+                $user->delete();
+            });
+        } catch (\Illuminate\Database\QueryException) {
+            return back()->with('error', $pesan); // masih direferensikan data lain
+        }
+
+        return back()->with('success', "Akun {$user->name} dihapus.");
     }
 
     /** 12 karakter (grup 4-4-4), tanpa karakter yang mudah tertukar (0/O, 1/l/I); selalu ada huruf besar, kecil, dan angka. */

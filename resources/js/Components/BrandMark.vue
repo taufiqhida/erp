@@ -5,16 +5,18 @@ import { usePage } from '@inertiajs/vue3';
 // Logo perusahaan (Profil Developer). Belum diunggah → ikon rumah ungu bawaan.
 // Logo diberi alas putih supaya tetap terbaca di latar gelap.
 const props = defineProps({
-    size: { type: String, default: 'md' }, // md = sidebar/header, lg = halaman login
+    size: { type: String, default: 'md' }, // md = sidebar/header, xl = halaman login
 });
 
 const branding = computed(() => usePage().props.branding ?? {});
-const box = computed(() => props.size === 'lg' ? 'w-16 h-16 rounded-2xl' : 'w-8 h-8 rounded-lg');
-const icon = computed(() => props.size === 'lg' ? 'w-8 h-8' : 'w-4 h-4');
+const xl = computed(() => props.size === 'xl');
+// xl: tinggi tetap 80px, lebar mengikuti logo (logo lebar tidak dipaksa jadi kotak kecil).
+const box = computed(() => xl.value ? 'h-20 min-w-20 max-w-[11rem] px-2 rounded-2xl' : 'w-8 h-8 rounded-lg');
+const icon = computed(() => xl.value ? 'w-10 h-10' : 'w-4 h-4');
 </script>
 
 <template>
-    <div v-if="branding.logo_url" :class="[box, 'bg-white p-1 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-lg shadow-violet-500/20']">
+    <div v-if="branding.logo_url" :class="[box, 'bg-white py-1.5 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-lg shadow-violet-500/20']">
         <img :src="branding.logo_url" :alt="branding.nama_developer ?? 'Logo'" class="max-w-full max-h-full object-contain" />
     </div>
     <div v-else :class="[box, 'bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-violet-500/30']">

@@ -23,6 +23,14 @@ class AuthenticatedSessionController extends Controller
             // kalau tidak, user menunggu email yang tidak pernah datang.
             'canResetPassword' => Route::has('password.request') && \App\Support\Branding::data()['email_enabled'],
             'status' => session('status'),
+            // Pengumuman (Pengaturan → Pengumuman) — publik, tampil di sebelah kotak login.
+            'pengumuman' => \App\Models\Pengumuman::untukLogin()->get()->map(fn ($p) => [
+                'id'         => $p->id,
+                'judul'      => $p->judul,
+                'isi'        => $p->isi,
+                'tanggal'    => $p->tanggal->translatedFormat('d F Y'),
+                'disematkan' => $p->disematkan,
+            ]),
         ]);
     }
 

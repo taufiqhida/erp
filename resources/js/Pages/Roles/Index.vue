@@ -30,6 +30,25 @@ const resetPassword = async (user) => {
     router.post(route('users.reset-password', user.id), {}, { preserveScroll: true });
 };
 
+const ubahAktif = async (user) => {
+    if (user.is_active) {
+        const ok = await konfirmasi(
+            `Nonaktifkan ${user.name}?\n\n${user.name} tidak bisa login lagi dan sesi yang sedang aktif langsung dikeluarkan. Nama dan riwayat kerjanya tetap tersimpan di Audit Trail dan data transaksi. Bisa diaktifkan kembali kapan saja.`,
+            { title: 'Nonaktifkan akun', confirmText: 'Ya, nonaktifkan', danger: true },
+        );
+        if (!ok) return;
+    }
+    router.patch(route('users.toggle-aktif', user.id), {}, { preserveScroll: true });
+};
+
+const hapusAkun = async (user) => {
+    const ok = await konfirmasi(
+        `Hapus permanen akun ${user.name}?\n\nHanya bisa untuk akun yang belum punya riwayat kerja (mis. salah buat). Kalau sudah pernah bekerja di sistem, gunakan Nonaktifkan.`,
+        { title: 'Hapus akun', confirmText: 'Ya, hapus permanen', danger: true },
+    );
+    if (ok) router.delete(route('users.destroy', user.id), { preserveScroll: true });
+};
+
 const salinPassword = async () => {
     try {
         await navigator.clipboard.writeText(tempShown.value.password);
@@ -153,11 +172,6 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
         </template>
 
         <div class="p-6 space-y-5">
-            <!-- Flash Message -->
-            <div v-if="flash.success" class="flex items-center gap-3 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-sm">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 flex-shrink-0"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>
-                {{ flash.success }}
-            </div>
 
             <div class="flex items-center justify-between">
                 <div>
@@ -192,6 +206,7 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                                 v-for="user in users.data"
                                 :key="user.id"
                                 class="hover:bg-slate-800/20 transition-colors"
+                                :class="{ 'opacity-60': !user.is_active }"
                             >
                                 <td class="px-5 py-4">
                                     <div class="flex items-center gap-3">
@@ -201,6 +216,10 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                                         <div>
                                             <div class="text-slate-200 font-medium text-sm">{{ user.name }}</div>
                                             <div class="text-slate-500 text-xs">{{ user.email }}</div>
+                                            <span v-if="!user.is_active"
+                                                class="inline-block mt-1 mr-1 px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-400 text-[0.6875rem] font-medium">
+                                                Nonaktif
+                                            </span>
                                             <span v-if="user.must_change_password"
                                                 class="inline-block mt-1 px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[0.6875rem] font-medium">
                                                 Wajib ganti password
@@ -245,6 +264,16 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                                             class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 text-xs font-medium rounded-lg transition-colors"
                                             title="Buat password sementara baru untuk pengguna ini">
                                             Reset Password
+                                        </button>
+                                        <button v-if="user.id !== $page.props.auth.user.id" @click="ubahAktif(user)"
+                                            :class="user.is_active ? 'hover:bg-rose-500/20 hover:text-rose-300' : 'hover:bg-emerald-500/20 hover:text-emerald-300'"
+                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 text-slate-300 text-xs font-medium rounded-lg transition-colors">
+                                            {{ user.is_active ? 'Nonaktifkan' : 'Aktifkan' }}
+                                        </button>
+                                        <button v-if="user.id !== $page.props.auth.user.id && !user.is_active" @click="hapusAkun(user)"
+                                            class="inline-flex items-center px-2.5 py-1.5 text-rose-400 hover:bg-rose-500/10 text-xs rounded-lg transition-colors"
+                                            title="Hapus permanen (hanya akun tanpa riwayat)">
+                                            Hapus
                                         </button>
                                     </div>
                                 </td>

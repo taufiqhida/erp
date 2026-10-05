@@ -50,6 +50,15 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        // Password benar tapi akun dinonaktifkan: tolak dengan pesan yang jelas.
+        if (! Auth::user()->is_active) {
+            Auth::guard('web')->logout();
+
+            throw ValidationException::withMessages([
+                'email' => \App\Http\Middleware\EnsureUserIsActive::PESAN,
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
     }
 
