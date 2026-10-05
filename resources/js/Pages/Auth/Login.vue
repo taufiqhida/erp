@@ -41,9 +41,6 @@ const submit = () => {
     <GuestLayout>
         <Head title="Masuk" />
 
-        <h1 class="text-lg font-semibold text-white">Masuk ke akun Anda</h1>
-        <p class="mt-1 mb-5 text-sm text-slate-400">Gunakan email dan password yang diberikan administrator.</p>
-
         <div v-if="status" class="mb-4 text-sm font-medium text-emerald-400">
             {{ status }}
         </div>

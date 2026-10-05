@@ -1,8 +1,8 @@
 <script setup>
 import { ref } from 'vue';
 
-// Pengumuman di halaman login (di dalam kotak identitas): tinggi tetap (sekitar 3 pengumuman),
-// sisanya digulir (scroll mouse/sentuh) atau dengan tombol naik/turun. Yang disematkan paling atas.
+// Pengumuman di halaman login: mengisi penuh kotak induk (tinggi tetap), isi yang lebih panjang
+// digulir (scroll mouse/sentuh) atau dengan tombol naik/turun. Yang disematkan paling atas.
 defineProps({
     items: { type: Array, default: () => [] },
 });
@@ -12,10 +12,10 @@ const geser = (arah) => daftar.value?.scrollBy({ top: arah * 130, behavior: 'smo
 </script>
 
 <template>
-    <section v-if="items.length" class="rounded-xl border border-slate-800 bg-slate-950/50" aria-label="Pengumuman">
-        <header class="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+    <section v-if="items.length" class="h-full flex flex-col" aria-label="Pengumuman">
+        <header class="flex items-center justify-between px-2 pb-3 border-b border-slate-800">
             <h2 class="text-slate-200 text-sm font-semibold">Pengumuman</h2>
-            <div v-if="items.length > 3" class="flex gap-1">
+            <div v-if="items.length > 2" class="flex gap-1">
                 <button type="button" @click="geser(-1)" aria-label="Naik"
                     class="w-7 h-7 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">▲</button>
                 <button type="button" @click="geser(1)" aria-label="Turun"
@@ -23,8 +23,8 @@ const geser = (arah) => daftar.value?.scrollBy({ top: arah * 130, behavior: 'smo
             </div>
         </header>
 
-        <div ref="daftar" class="max-h-[21rem] overflow-y-auto divide-y divide-slate-800">
-            <article v-for="p in items" :key="p.id" class="px-4 py-3">
+        <div ref="daftar" class="flex-1 min-h-0 overflow-y-auto divide-y divide-slate-800">
+            <article v-for="p in items" :key="p.id" class="px-2 py-3">
                 <div class="flex items-center gap-2 text-xs text-slate-500">
                     <span v-if="p.disematkan" class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-medium">📌 Disematkan</span>
                     <span>{{ p.tanggal }}</span>
