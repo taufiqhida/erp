@@ -1205,9 +1205,6 @@ const submitUploadSiteplan = () => {
                                 <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded"><span class="text-slate-500">10.</span> hgb_no <span class="text-slate-500">(opsional)</span></span>
                                 <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded"><span class="text-slate-500">11.</span> keterangan <span class="text-slate-500">(opsional)</span></span>
                             </div>
-                            <p class="pt-1 text-slate-500">status: <span class="font-mono">available</span> / <span class="font-mono">not_for_sale</span> (default available) · status_bangun: nama tahap persis sama seperti di menu "Kelola Status Bangun" — {{ (statusBangunStages ?? []).map(s => s.nama).join(' / ') }} (default {{ statusBangunStages?.[0]?.nama }}, isi kalau proyek sudah berjalan)</p>
-                            <p class="pt-1 text-slate-500">persen_tahap: angka 0–100, persen penyelesaian di dalam tahap pada kolom status_bangun (kosong = 0). id_rumah dan hgb_no harus unik, kosongkan kalau belum ada.</p>
-                            <p class="pt-1 text-slate-500">tipe_unit dicocokkan dengan nama Tipe Unit yang sudah ada di proyek ini — kalau belum ada, baris itu dilewati — buat dulu Tipe Unit-nya di "Kelola Tipe Unit".</p>
                         </div>
                         <div>
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">Pilih File Excel</label>
