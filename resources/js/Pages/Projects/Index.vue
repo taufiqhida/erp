@@ -1,4 +1,6 @@
 <script setup>
+import EmptyState from '@/Components/EmptyState.vue';
+import { konfirmasi } from '@/Composables/useConfirm';
 import BerandaLayout from '@/Layouts/BerandaLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
@@ -52,8 +54,8 @@ const applyFilters = () => {
     }, { preserveState: true, replace: true });
 };
 
-const deleteProject = (project) => {
-    if (!confirm(`Hapus proyek "${project.nama}"? Data akan diarsipkan.`)) return;
+const deleteProject = async (project) => {
+    if (!await konfirmasi(`Hapus proyek "${project.nama}"? Data akan diarsipkan.`)) return;
     router.delete(route('projects.destroy', project.id));
 };
 </script>
@@ -118,8 +120,10 @@ const deleteProject = (project) => {
             </div>
 
             <!-- Cards -->
-            <div v-if="!projects.data.length" class="text-center py-20 text-slate-500">
-                Tidak ada proyek ditemukan.
+            <div v-if="!projects.data.length">
+                <EmptyState title="Belum ada proyek yang ditemukan"
+                    :description="canCreate ? 'Mulai dengan membuat proyek pertama, atau ubah kata kunci pencarian.' : 'Belum ada proyek yang ditugaskan ke akun Anda. Hubungi administrator.'"
+                    :action-label="canCreate ? 'Tambah Proyek' : ''" :action-href="canCreate ? route('projects.create') : ''" />
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">

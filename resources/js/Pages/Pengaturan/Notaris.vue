@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
 import UrutanButtons from '@/Components/UrutanButtons.vue';
 import { useForm, router } from '@inertiajs/vue3';
@@ -25,8 +26,8 @@ const toggleActive = (preset) => {
 };
 
 const delForm = useForm({});
-const destroy = (preset) => {
-    if (confirm(`Hapus notaris "${preset.nama}"?`)) {
+const destroy = async (preset) => {
+    if (await konfirmasi(`Hapus notaris "${preset.nama}"?`)) {
         delForm.delete(route('pengaturan.notaris.destroy', preset.id));
     }
 };

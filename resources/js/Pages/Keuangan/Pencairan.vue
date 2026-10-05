@@ -1,4 +1,5 @@
 <script setup>
+import EmptyState from '@/Components/EmptyState.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import SortTh from '@/Components/SortTh.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
@@ -225,7 +226,12 @@ const statusPenjualanConfig = computed(() => {
                                 </td>
                             </tr>
                             <tr v-if="!rows.data.length">
-                                <td colspan="9" class="px-4 py-12 text-center text-slate-600">Tidak ada transaksi KPR untuk filter ini.</td>
+                                <td colspan="9">
+                                    <EmptyState :filtered="!!hasFilter"
+                                        :title="hasFilter ? 'Tidak ada transaksi KPR yang cocok' : 'Belum ada transaksi KPR yang perlu dicairkan'"
+                                        :description="hasFilter ? 'Coba ubah atau hapus filter pencarian.' : 'Daftar ini berisi konsumen KPR yang sudah Akad dan belum cair penuh.'"
+                                        @reset="resetFilters" />
+                                </td>
                             </tr>
                         </tbody>
                     </table>

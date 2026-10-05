@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
 import { useForm, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -59,8 +60,8 @@ const move = (doc, dir) => {
 };
 
 const delForm = useForm({});
-const del = (id) => {
-    if (confirm('Hapus template dokumen ini?')) {
+const del = async (id) => {
+    if (await konfirmasi('Hapus template dokumen ini?')) {
         delForm.delete(route('pengaturan.dokumen-templates.destroy', id));
     }
 };

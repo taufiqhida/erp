@@ -1,4 +1,5 @@
 <script setup>
+import EmptyState from '@/Components/EmptyState.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InlineSiteplanSvg from '@/Components/InlineSiteplanSvg.vue';
 import KavlingSearchSelect from '@/Components/KavlingSearchSelect.vue';
@@ -651,8 +652,10 @@ const submitUploadSiteplan = () => {
                     </div>
                 </div>
 
-                <div v-if="!kavlings?.length" class="bg-slate-900 border border-dashed border-slate-700 rounded-2xl p-16 text-center text-slate-500">
-                    Belum ada kavling. Klik "Tambah Kavling" untuk mulai.
+                <div v-if="!kavlings?.length" class="bg-slate-900 border border-dashed border-slate-700 rounded-2xl">
+                    <EmptyState title="Belum ada kavling di proyek ini"
+                        :description="canEditKavlings ? 'Tambah kavling satu per satu dengan tombol \'Tambah Kavling\', atau impor banyak sekaligus lewat \'Import Excel\'. Pastikan Tipe Unit sudah dibuat.' : 'Kavling akan tampil di sini setelah ditambahkan oleh admin proyek.'"
+                        :action-label="canEditKavlings ? 'Kelola Tipe Unit' : ''" :action-href="canEditKavlings ? route('projects.tipe-unit.index', project.id) : ''" />
                 </div>
             </div>
 
@@ -766,6 +769,7 @@ const submitUploadSiteplan = () => {
                             v-html="link.label"
                             :class="['px-3 py-1.5 text-xs rounded-md transition-colors', link.active ? 'bg-violet-600 text-white' : 'text-slate-400 hover:bg-slate-800', !link.url ? 'opacity-40 pointer-events-none' : '']"
                             preserve-scroll
+                            preserve-state
                             :only="['kavlingsPage']"
                         />
                     </div>

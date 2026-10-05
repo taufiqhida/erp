@@ -1,5 +1,6 @@
 <script setup>
 import BrandMark from '@/Components/BrandMark.vue';
+import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import { computed } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { useToasts } from '@/Composables/useToasts';
@@ -94,6 +95,7 @@ const logout = () => router.post(route('logout'));
             </div>
         </Teleport>
     </div>
+    <ConfirmDialog />
 </template>
 
 <style scoped>

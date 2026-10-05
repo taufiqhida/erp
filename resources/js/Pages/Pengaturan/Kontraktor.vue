@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
 import { useForm, router } from '@inertiajs/vue3';
 import { reactive, ref } from 'vue';
@@ -46,8 +47,8 @@ const saveEdit = (k) => {
 };
 
 const delForm = useForm({});
-const destroy = (k) => {
-    if (confirm(`Hapus kontraktor "${k.nama}"?`)) {
+const destroy = async (k) => {
+    if (await konfirmasi(`Hapus kontraktor "${k.nama}"?`)) {
         delForm.delete(route('pengaturan.kontraktor.destroy', k.id));
     }
 };

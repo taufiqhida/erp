@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
 import { useForm, router } from '@inertiajs/vue3';
 import { computed } from 'vue';
@@ -14,9 +15,9 @@ const isBalanced = computed(() => Math.abs(totalBobot.value - 100) < 0.01);
 
 // ── Edit nama/bobot/warna langsung dari baris (instant save, seperti pola
 // inline-edit lain di app ini — bukan modal) ─────────────────────────────
-const updateStage = (stage, changes) => {
+const updateStage = async (stage, changes) => {
     const affectsLive = stage.kavlings_count > 0 && ('bobot' in changes);
-    if (affectsLive && !confirm(
+    if (affectsLive && !await konfirmasi(
         `Tahap "${stage.nama}" sedang dipakai ${stage.kavlings_count} kavling — mengubah bobotnya langsung mengubah progress kavling itu. Lanjutkan?`
     )) return;
 
@@ -51,11 +52,11 @@ const addStage = () => {
 };
 
 // ── Hapus tahap ──────────────────────────────────────────────────────
-const destroyStage = (stage) => {
+const destroyStage = async (stage) => {
     const msg = stage.kavlings_count > 0
         ? `Tahap "${stage.nama}" masih dipakai ${stage.kavlings_count} kavling — mereka akan otomatis dipindah ke tahap sebelumnya. Lanjutkan hapus?`
         : `Hapus tahap "${stage.nama}"? Belum ada kavling yang pakai.`;
-    if (!confirm(msg)) return;
+    if (!await konfirmasi(msg)) return;
     router.delete(route('pengaturan.status-bangun.destroy', stage.id), { preserveScroll: true });
 };
 </script>

@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
 import { Link, useForm } from '@inertiajs/vue3';
 
@@ -10,8 +11,8 @@ const props = defineProps({
 
 const delForm = useForm({});
 
-const del = (id) => {
-    if (confirm('Hapus template surat ini?')) {
+const del = async (id) => {
+    if (await konfirmasi('Hapus template surat ini?')) {
         delForm.delete(route('pengaturan.surat-templates.destroy', id));
     }
 };

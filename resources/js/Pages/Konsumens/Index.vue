@@ -1,4 +1,6 @@
 <script setup>
+import EmptyState from '@/Components/EmptyState.vue';
+import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
@@ -104,8 +106,8 @@ const switchMode = (mode) => {
     }, { preserveState: false });
 };
 
-const deleteKonsumen = (konsumen) => {
-    if (!confirm(`Hapus konsumen "${konsumen.nama}"?`)) return;
+const deleteKonsumen = async (konsumen) => {
+    if (!await konfirmasi(`Hapus konsumen "${konsumen.nama}"?`)) return;
     router.delete(route('konsumens.destroy', konsumen.id));
 };
 
@@ -345,7 +347,11 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                 </td>
                             </tr>
                             <tr v-if="!rows.data.length">
-                                <td colspan="9" class="px-4 py-12 text-center text-slate-600">Tidak ada unit konsumen ditemukan.</td>
+                                <td colspan="9">
+                                    <EmptyState title="Tidak ada konsumen yang ditemukan"
+                                        description="Konsumen dibuat otomatis saat unit di-booking. Kalau pencarian sedang dipakai, coba ubah kata kuncinya."
+                                        action-label="Pilih Proyek untuk Booking" :action-href="route('beranda')" />
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -432,7 +438,11 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                             </tr>
                             </template>
                             <tr v-if="!rows.data.length">
-                                <td colspan="5" class="px-4 py-12 text-center text-slate-600">Tidak ada konsumen ditemukan.</td>
+                                <td colspan="5">
+                                    <EmptyState title="Tidak ada konsumen yang ditemukan"
+                                        description="Konsumen dibuat otomatis saat unit di-booking. Kalau pencarian sedang dipakai, coba ubah kata kuncinya."
+                                        action-label="Pilih Proyek untuk Booking" :action-href="route('beranda')" />
+                                </td>
                             </tr>
                         </tbody>
                     </table>

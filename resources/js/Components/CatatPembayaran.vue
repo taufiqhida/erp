@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import { reactive, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 
@@ -43,9 +44,9 @@ const submit = () => {
     });
 };
 
-const remove = () => {
+const remove = async () => {
     if (!props.deleteUrl) return;
-    if (!confirm('Batalkan pencatatan pembayaran ini? Statusnya kembali jadi Belum Bayar.')) return;
+    if (!await konfirmasi('Batalkan pencatatan pembayaran ini? Statusnya kembali jadi Belum Bayar.')) return;
     router.delete(props.deleteUrl, { preserveScroll: true });
 };
 </script>
@@ -81,7 +82,7 @@ const remove = () => {
                 <button @click="open = false" class="px-2 py-1 text-slate-400 hover:text-slate-200 text-xs">Batal</button>
                 <button @click="submit" :disabled="!form.jumlah || !form.tanggal_bayar || (requireNote && !form.keterangan.trim()) || processing"
                     class="px-2.5 py-1 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
-                    {{ processing ? '...' : 'Simpan' }}
+                    {{ processing ? 'Menyimpan…' : 'Simpan' }}
                 </button>
             </div>
         </div>

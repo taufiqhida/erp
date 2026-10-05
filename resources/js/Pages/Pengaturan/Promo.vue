@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
 import { useForm, router } from '@inertiajs/vue3';
 
@@ -26,8 +27,8 @@ const toggleActive = (preset) => {
 };
 
 const delForm = useForm({});
-const destroy = (preset) => {
-    if (confirm(`Hapus preset "${preset.nama}"?`)) {
+const destroy = async (preset) => {
+    if (await konfirmasi(`Hapus preset "${preset.nama}"?`)) {
         delForm.delete(route('pengaturan.promo.destroy', preset.id));
     }
 };

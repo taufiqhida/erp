@@ -1,4 +1,5 @@
 <script setup>
+import EmptyState from '@/Components/EmptyState.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import SortTh from '@/Components/SortTh.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
@@ -241,7 +242,13 @@ const statusPenjualanConfig = computed(() => {
                                 </td>
                             </tr>
                             <tr v-if="!rows.data.length">
-                                <td colspan="11" class="px-4 py-12 text-center text-slate-600">Tidak ada transaksi untuk filter ini.</td>
+                                <td colspan="11">
+                                    <EmptyState :filtered="!!hasFilter"
+                                        :title="hasFilter ? 'Tidak ada transaksi yang cocok' : 'Belum ada transaksi'"
+                                        :description="hasFilter ? 'Coba ubah atau hapus filter pencarian.' : 'Transaksi muncul di sini setelah ada booking. Pilih proyek, lalu buka menu Penjualan.'"
+                                        action-label="Pilih Proyek" :action-href="hasFilter ? '' : route('beranda')"
+                                        @reset="resetFilters" />
+                                </td>
                             </tr>
                         </tbody>
                     </table>

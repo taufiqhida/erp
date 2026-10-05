@@ -1,4 +1,5 @@
 <script setup>
+import EmptyState from '@/Components/EmptyState.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import SortTh from '@/Components/SortTh.vue';
 import { Head, Link } from '@inertiajs/vue3';
@@ -183,7 +184,10 @@ const formatRp = (v) => 'Rp ' + Number(v ?? 0).toLocaleString('id-ID');
                                 </td>
                             </tr>
                             <tr v-if="!sorted.length">
-                                <td colspan="8" class="px-4 py-12 text-center text-slate-600">Tidak ada konsumen di tahap Rencana Akad.</td>
+                                <td colspan="8">
+                                    <EmptyState title="Belum ada konsumen di tahap Rencana Akad"
+                                        description="Konsumen masuk ke sini setelah SP3K disetujui. Atur tanggal akad dan notaris di halaman Dokumen konsumen." />
+                                </td>
                             </tr>
                         </tbody>
                     </table>

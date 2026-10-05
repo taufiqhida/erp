@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import CatatPembayaran from '@/Components/CatatPembayaran.vue';
 import StatusPembayaranBadge from '@/Components/StatusPembayaranBadge.vue';
@@ -147,8 +148,8 @@ const updateBiayaAkadNominal = (item, nominal) => {
     router.patch(route('konsumens.biaya-akad.update', item.id), { nominal }, { preserveScroll: true });
 };
 
-const removeBiayaAkad = (item) => {
-    if (confirm(`Hapus item "${item.nama}"?`)) {
+const removeBiayaAkad = async (item) => {
+    if (await konfirmasi(`Hapus item "${item.nama}"?`)) {
         router.delete(route('konsumens.biaya-akad.destroy', item.id), { preserveScroll: true });
     }
 };

@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PengajuanKonsumenModal from '@/Components/PengajuanKonsumenModal.vue';
 import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
@@ -270,8 +271,8 @@ const previousStage = computed(() => {
     return idx > 0 ? order[idx - 1] : null;
 });
 
-const revertToPreviousStage = (confirmMessage) => {
-    if (!window.confirm(confirmMessage)) return;
+const revertToPreviousStage = async (confirmMessage) => {
+    if (!await konfirmasi(confirmMessage)) return;
     router.patch(route('bookings.revert-previous', props.transaksi.id), {}, { preserveScroll: true });
 };
 
@@ -303,8 +304,8 @@ const bastReadyToConfirm = computed(() =>
     bangunanSiap.value && bastForm.status_ttd === 'sudah_ttd' && props.transaksi.dp_lunas && !bastSelesai.value
 );
 
-const confirmBastSelesai = () => {
-    if (!window.confirm('Konfirmasi transaksi ini Selesai? Serah terima dianggap tuntas sepenuhnya.')) return;
+const confirmBastSelesai = async () => {
+    if (!await konfirmasi('Konfirmasi transaksi ini Selesai? Serah terima dianggap tuntas sepenuhnya.')) return;
     router.patch(route('bast.confirm-selesai', props.transaksi.id), {}, { preserveScroll: true });
 };
 

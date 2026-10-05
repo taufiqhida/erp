@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import CatatPembayaran from '@/Components/CatatPembayaran.vue';
 import StatusPembayaranBadge from '@/Components/StatusPembayaranBadge.vue';
@@ -18,8 +19,8 @@ const canPayDajamSbum = computed(() => canManageKpr.value && (!props.transaksi.i
 // Tandai Selesai — pemicu lock (bukan status Akad), cuma aktif kalau semua
 // piutang konsumen & piutang bank sudah lunas (dicek ulang di server).
 const markingComplete = ref(false);
-const markComplete = () => {
-    if (!confirm('Tandai transaksi ini Selesai? Setelah ini data pemberkasan & pembayaran akan terkunci.')) return;
+const markComplete = async () => {
+    if (!await konfirmasi('Tandai transaksi ini Selesai? Setelah ini data pemberkasan & pembayaran akan terkunci.')) return;
     markingComplete.value = true;
     router.post(route('keuangan.mark-complete', props.transaksi.id), {}, {
         preserveScroll: true,
@@ -79,8 +80,8 @@ const submitTambahCicilan = () => {
         onSuccess: () => { tambahCicilanForm.reset(); showTambahCicilan.value = false; },
     });
 };
-const deleteCicilanRow = (j) => {
-    if (!confirm(`Hapus baris ${j.jenis_label} #${j.nomor_cicilan}?`)) return;
+const deleteCicilanRow = async (j) => {
+    if (!await konfirmasi(`Hapus baris ${j.jenis_label} #${j.nomor_cicilan}?`)) return;
     router.delete(route('jadwal-tagihan.destroy', j.id), { preserveScroll: true });
 };
 
@@ -106,8 +107,8 @@ const submitEditTahap = (t) => {
         onSuccess: () => { editingTahap.value = null; },
     });
 };
-const deleteTahap = (t) => {
-    if (!confirm('Hapus tahap pencairan ini?')) return;
+const deleteTahap = async (t) => {
+    if (!await konfirmasi('Hapus tahap pencairan ini?')) return;
     router.delete(route('pencairan-kpr.tahap.destroy', t.id), { preserveScroll: true });
 };
 const showTambahTahap = ref(false);
@@ -172,8 +173,8 @@ const submitEditCicilanLain = (c) => {
         onSuccess: () => { editingCicilanLain.value = null; },
     });
 };
-const deleteCicilanLain = (c) => {
-    if (!confirm('Hapus cicilan ini?')) return;
+const deleteCicilanLain = async (c) => {
+    if (!await konfirmasi('Hapus cicilan ini?')) return;
     router.delete(route('cicilan-pembayaran.destroy', c.id), { preserveScroll: true });
 };
 </script>

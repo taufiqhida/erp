@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
 import UrutanButtons from '@/Components/UrutanButtons.vue';
 import { useForm, router } from '@inertiajs/vue3';
@@ -38,8 +39,8 @@ const toggleReferral = (preset) => {
 };
 
 const delForm = useForm({});
-const destroy = (preset) => {
-    if (confirm(`Hapus sumber lead "${preset.nama}"?`)) {
+const destroy = async (preset) => {
+    if (await konfirmasi(`Hapus sumber lead "${preset.nama}"?`)) {
         delForm.delete(route('pengaturan.sumber-lead.destroy', preset.id));
     }
 };

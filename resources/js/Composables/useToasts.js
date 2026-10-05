@@ -40,10 +40,17 @@ export function useToasts() {
     onMounted(() => {
         window.addEventListener('app:toast', onAppToast);
         offError = router.on('error', (event) => {
-            const msgs = [...new Set(Object.values(event.detail.errors ?? {}).flat())];
-            if (!msgs.length) return;
-            const lebih = msgs.length > 3 ? `\n(+${msgs.length - 3} pesan lainnya)` : '';
-            pushToast('error', msgs.slice(0, 3).join('\n') + lebih);
+            const semua = [...new Set(Object.values(event.detail.errors ?? {}).flat())];
+            if (!semua.length) return;
+            // Tunggu halaman selesai dirender, lalu tampilkan toast HANYA untuk pesan yang belum
+            // terlihat di layar (banner/pesan per-field) — supaya tidak muncul dobel.
+            setTimeout(() => {
+                const teks = document.body.innerText;
+                const msgs = semua.filter((m) => !teks.includes(m));
+                if (!msgs.length) return;
+                const lebih = msgs.length > 3 ? `\n(+${msgs.length - 3} pesan lainnya)` : '';
+                pushToast('error', msgs.slice(0, 3).join('\n') + lebih);
+            }, 150);
         });
     });
     onUnmounted(() => {

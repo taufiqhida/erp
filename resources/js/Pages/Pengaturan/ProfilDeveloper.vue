@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
 import { useForm, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -38,8 +39,8 @@ const setPrimaryBank = (bank) => {
 };
 
 const deleteBankForm = useForm({});
-const deleteBank = (bank) => {
-    if (confirm(`Hapus rekening ${bank.nama_bank}?`)) {
+const deleteBank = async (bank) => {
+    if (await konfirmasi(`Hapus rekening ${bank.nama_bank}?`)) {
         deleteBankForm.delete(route('pengaturan.profil-developer.banks.destroy', bank.id), { preserveScroll: true });
     }
 };

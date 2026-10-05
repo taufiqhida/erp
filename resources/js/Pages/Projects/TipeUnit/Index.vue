@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -60,11 +61,11 @@ const submitEdit = () => {
         });
 };
 
-const deleteTipe = (t) => {
+const deleteTipe = async (t) => {
     const msg = t.kavlings_count > 0
         ? `Tipe "${t.nama}" masih dipakai ${t.kavlings_count} unit — akan dinonaktifkan (bukan dihapus). Lanjutkan?`
         : `Hapus Tipe "${t.nama}"? Belum ada unit yang pakai, jadi ini akan dihapus permanen.`;
-    if (!confirm(msg)) return;
+    if (!await konfirmasi(msg)) return;
     useForm({}).delete(route('tipe-unit.destroy', t.id), { preserveScroll: true });
 };
 

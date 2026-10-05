@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
 import UrutanButtons from '@/Components/UrutanButtons.vue';
 import { useForm, router } from '@inertiajs/vue3';
@@ -56,8 +57,8 @@ const saveEdit = (preset) => {
 };
 
 const delForm = useForm({});
-const destroy = (preset) => {
-    if (confirm(`Hapus bank rekanan "${preset.nama}"?`)) {
+const destroy = async (preset) => {
+    if (await konfirmasi(`Hapus bank rekanan "${preset.nama}"?`)) {
         delForm.delete(route('pengaturan.bank-rekanan.destroy', preset.id));
     }
 };

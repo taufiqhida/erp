@@ -1,4 +1,5 @@
 <script setup>
+import { konfirmasi } from '@/Composables/useConfirm';
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
 import UrutanButtons from '@/Components/UrutanButtons.vue';
 import { Link, router } from '@inertiajs/vue3';
@@ -23,8 +24,8 @@ const toggleActive = (agent) => {
     router.patch(route('pengaturan.sales-agents.toggle', agent.id), {}, { preserveScroll: true });
 };
 
-const deleteAgent = (agent) => {
-    if (!confirm(`Hapus sales/agent "${agent.nama}"?`)) return;
+const deleteAgent = async (agent) => {
+    if (!await konfirmasi(`Hapus sales/agent "${agent.nama}"?`)) return;
     router.delete(route('pengaturan.sales-agents.destroy', agent.id));
 };
 </script>
