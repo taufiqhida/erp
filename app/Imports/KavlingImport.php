@@ -10,7 +10,9 @@ use App\Models\TipeUnitPreset;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Maatwebsite\Excel\Concerns\Import;
 use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
 /**
  * Import bulk kavling dari Excel/CSV — kolom yang diterima persis sama
@@ -20,7 +22,7 @@ use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
  * bukan diam-diam diganti ke nilai default — supaya user tahu persis
  * baris mana yang perlu diperbaiki & diupload ulang.
  */
-class KavlingImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
+class KavlingImport implements Import, WithMultipleSheets
 {
     protected Project $project;
     public array $errors = [];
@@ -38,6 +40,27 @@ class KavlingImport implements ToCollection, WithHeadingRow, SkipsEmptyRows
     public function __construct(Project $project)
     {
         $this->project = $project;
+    }
+
+    /**
+     * Hanya sheet PERTAMA ("Kavling") yang dibaca. Template juga berisi sheet "Petunjuk"; tanpa
+     * pembatasan ini, tiap baris petunjuk ikut terbaca sebagai data kavling dan menghasilkan
+     * pesan error palsu "No Unit kosong" setiap kali template diunggah.
+     */
+    public function sheets(): array
+    {
+        $parent = $this;
+
+        return [
+            0 => new class($parent) implements ToCollection, WithHeadingRow, SkipsEmptyRows {
+                public function __construct(private KavlingImport $parent) {}
+
+                public function collection(Collection $rows): void
+                {
+                    $this->parent->collection($rows);
+                }
+            },
+        ];
     }
 
     public function collection(Collection $rows): void

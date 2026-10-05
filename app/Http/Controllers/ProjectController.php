@@ -438,14 +438,17 @@ class ProjectController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Kavling');
 
-        $headers = ['nomor_kavling', 'kluster', 'blok', 'tipe_unit', 'harga', 'status', 'status_bangun', 'keterangan', 'id_rumah', 'hgb_no', 'persen_tahap'];
+        // Urutan kolom (kiri → kanan): identitas unit (kluster, blok, nomor) → spek (tipe, harga) → status
+        // → progres bangun (status_bangun diikuti persen_tahap) → data tambahan → keterangan. KavlingImport
+        // membaca kolom lewat NAMA header, jadi urutan ini bebas diatur tanpa mengubah importer.
+        $headers = ['kluster', 'blok', 'nomor_kavling', 'tipe_unit', 'harga', 'status', 'status_bangun', 'persen_tahap', 'id_rumah', 'hgb_no', 'keterangan'];
         $sheet->fromArray($headers, null, 'A1');
         $sheet->getStyle('A1:K1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
         $sheet->getStyle('A1:K1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('7C3AED');
         $sheet->freezePane('A2');
 
         $defaultStageName = StatusBangunStage::defaultStage()?->nama ?? 'Belum Mulai';
-        $example = ['1', '', 'A1', '36/72', 250000000, 'available', $defaultStageName, 'Contoh baris — boleh dihapus', 'DMK0120062025T002A309', 'HGB-00123', 0];
+        $example = ['', 'A1', '1', '36/72', 250000000, 'available', $defaultStageName, 0, 'DMK0120062025T002A309', 'HGB-00123', 'Contoh baris — boleh dihapus'];
         $sheet->fromArray($example, null, 'A2');
         $sheet->getStyle('A2:K2')->getFont()->setItalic(true)->getColor()->setRGB('999999');
 
@@ -491,17 +494,17 @@ class ProjectController extends Controller
         $help->getStyle('A1:D1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('7C3AED');
 
         $helpRows = [
-            ['nomor_kavling', 'Ya', '1', 'Nomor unit di dalam bloknya (tanpa blok). Identitas unit = kluster + blok + nomor, jadi nomor yang sama boleh dipakai di blok/kluster berbeda. Kalau kombinasinya sudah ada atau duplikat dalam file, baris dilewati.'],
             ['kluster', 'Tidak', 'Melati', 'Kosongkan jika proyek/unit tidak punya kluster.'],
             ['blok', 'Ya', 'A1', 'Blok unit. Unit tampil sebagai "A1-1" (atau "Melati · A1-1" kalau ada kluster).'],
+            ['nomor_kavling', 'Ya', '1', 'Nomor unit di dalam bloknya (tanpa blok). Identitas unit = kluster + blok + nomor, jadi nomor yang sama boleh dipakai di blok/kluster berbeda. Kalau kombinasinya sudah ada atau duplikat dalam file, baris dilewati.'],
             ['tipe_unit', 'Ya', '36/72', 'Nama Tipe Unit — dicocokkan dengan Tipe Unit yang sudah ada di proyek ini (menu "Kelola Tipe Unit"). Namanya harus sudah ada — kalau belum, baris itu dilewati (buat dulu Tipe Unit-nya di "Kelola Tipe Unit").'],
             ['harga', 'Tidak', '250000000', 'Angka saja, tanpa "Rp" atau titik ribuan.'],
             ['status', 'Tidak (default: available)', 'available / not_for_sale', 'available = tersedia dijual, not_for_sale = ditahan/belum dijual dulu.'],
             ['status_bangun', "Tidak (default: {$defaultStageName})", StatusBangunStage::ordered()->pluck('nama')->implode(' / '), 'Isi kalau proyek sudah berjalan & sebagian unit progressnya bukan dari nol — harus persis sama dengan nama tahap di menu "Kelola Status Bangun". Kosongkan untuk unit yang belum mulai dibangun.'],
-            ['keterangan', 'Tidak', 'teks bebas', ''],
+            ['persen_tahap', 'Tidak (default: 0)', '0 – 100', 'Persen penyelesaian di dalam tahap yang diisi pada kolom status_bangun (bukan persen total). Contoh: tahap Struktur 50 → unit sudah separuh jalan di tahap Struktur. Kosong = 0. Progress total dihitung otomatis dari bobot tahap.'],
             ['id_rumah', 'Tidak', 'DMK0120062025T002A309', 'ID Rumah Tapera/SIKUMBANG — harus unik, kosongkan kalau belum ada.'],
             ['hgb_no', 'Tidak', 'HGB-00123', 'Nomor HGB/sertifikat unit (dipakai di dokumen surat) — harus unik, kosongkan kalau belum ada.'],
-            ['persen_tahap', 'Tidak (default: 0)', '0 – 100', 'Persen penyelesaian di dalam tahap yang diisi pada kolom status_bangun (bukan persen total). Contoh: tahap Struktur 50 → unit sudah separuh jalan di tahap Struktur. Kosong = 0. Progress total dihitung otomatis dari bobot tahap.'],
+            ['keterangan', 'Tidak', 'teks bebas', ''],
         ];
         $help->fromArray($helpRows, null, 'A2');
         $help->getStyle('A1:D' . (count($helpRows) + 1))->getAlignment()->setWrapText(true)->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP);
