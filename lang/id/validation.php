@@ -88,6 +88,14 @@ return [
     'uploaded'             => ':attribute gagal diunggah.',
     'url'                  => 'Format :attribute tidak valid.',
 
+    'password' => [
+        'letters'       => ':attribute harus mengandung minimal satu huruf.',
+        'mixed'         => ':attribute harus mengandung huruf besar dan huruf kecil.',
+        'numbers'       => ':attribute harus mengandung minimal satu angka.',
+        'symbols'       => ':attribute harus mengandung minimal satu simbol.',
+        'uncompromised' => ':attribute ini pernah bocor di internet. Pilih password lain.',
+    ],
+
     'custom' => [],
 
     'attributes' => [

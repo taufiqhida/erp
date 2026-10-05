@@ -41,6 +41,36 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
+    // ── Alamat lama → alamat baru (301) ───────────────────────────────────
+    // Tautan/bookmark/riwayat yang sudah tersimpan tetap hidup. Hanya GET; query string
+    // (mis. ?transaksi=1) ikut dibawa. Boleh dihapus kalau sudah lama tidak dipakai.
+    $alihkan = function (string $lama, string $baru) {
+        Route::get($lama, function (\Illuminate\Http\Request $request) use ($baru) {
+            $url = preg_replace_callback('/\{(\w+)\}/', fn ($m) => $request->route($m[1]), $baru);
+            $query = $request->getQueryString();
+
+            return redirect('/' . $url . ($query ? '?' . $query : ''), 301);
+        });
+    };
+    $alihkan('projects/clear-active', 'proyek/clear-active');
+    $alihkan('projects/create', 'proyek/create');
+    $alihkan('projects/{project}', 'proyek/{project}');
+    $alihkan('projects/{project}/edit', 'proyek/{project}/edit');
+    $alihkan('projects/{project}/tipe-unit', 'proyek/{project}/tipe-unit');
+    $alihkan('projects/{project}/export-kavling', 'proyek/{project}/export-kavling');
+    $alihkan('projects/{project}/kavling-template', 'proyek/{project}/kavling-template');
+    $alihkan('cancellation-requests', 'proyek/pembatalan');
+    $alihkan('penjualan', 'pemasaran/penjualan');
+    $alihkan('penjualan/{project}', 'pemasaran/penjualan/{project}');
+    $alihkan('rencana-akad', 'pemasaran/rencana-akad');
+    $alihkan('konsumens', 'pemasaran/konsumen');
+    $alihkan('konsumens/export', 'pemasaran/konsumen/export');
+    $alihkan('konsumens/{konsumen}', 'pemasaran/konsumen/{konsumen}');
+    $alihkan('konsumens/{konsumen}/edit', 'pemasaran/konsumen/{konsumen}/edit');
+    $alihkan('konsumens/{project}/import-template', 'pemasaran/konsumen/{project}/import-template');
+    $alihkan('kavling-konsumen/{kk}/dokumen', 'pemasaran/transaksi/{kk}/dokumen');
+    $alihkan('pembayaran/{pembayaran}/kuitansi', 'keuangan/kuitansi/{pembayaran}');
+
     // Profile (user sendiri)
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -57,22 +87,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Rute spesifik ini HARUS didaftarkan sebelum Route::resource, supaya
     // "clear-active" tidak ditangkap sebagai {project} route-model-binding
     // oleh rute GET projects/{project} (projects.show).
-    Route::get('projects/clear-active', [ProjectController::class, 'clearActiveProject'])
+    Route::get('proyek/clear-active', [ProjectController::class, 'clearActiveProject'])
         ->name('projects.clear-active');
-    Route::resource('projects', ProjectController::class)->except(['index']);
+    // URI-nya "proyek" (seragam dengan Proses Bangun/SPK); NAMA route tetap "projects.*"
+    // supaya semua route('projects.xxx') di kode & Vue tidak berubah.
+    Route::resource('proyek', ProjectController::class)
+        ->parameters(['proyek' => 'project'])
+        ->names('projects')
+        ->where(['project' => '[0-9]+'])
+        ->except(['index']);
 
     // Siteplan & Import
-    Route::post('projects/{project}/siteplan', [ProjectController::class, 'uploadSiteplan'])
+    Route::post('proyek/{project}/siteplan', [ProjectController::class, 'uploadSiteplan'])
         ->name('projects.siteplan.upload')->middleware('throttle:heavy');
-    Route::patch('projects/{project}/kavling-koordinat', [ProjectController::class, 'updateKavlingKoordinat'])
+    Route::patch('proyek/{project}/kavling-koordinat', [ProjectController::class, 'updateKavlingKoordinat'])
         ->name('projects.kavling-koordinat');
-    Route::patch('projects/{project}/siteplan-marker-size', [ProjectController::class, 'updateSiteplanMarkerSize'])
+    Route::patch('proyek/{project}/siteplan-marker-size', [ProjectController::class, 'updateSiteplanMarkerSize'])
         ->name('projects.siteplan-marker-size');
-    Route::get('projects/{project}/kavling-template', [ProjectController::class, 'downloadKavlingTemplate'])
+    Route::get('proyek/{project}/kavling-template', [ProjectController::class, 'downloadKavlingTemplate'])
         ->name('projects.kavling-template')->middleware('throttle:heavy');
-    Route::get('projects/{project}/export-kavling', [ProjectController::class, 'exportKavlingExcel'])
+    Route::get('proyek/{project}/export-kavling', [ProjectController::class, 'exportKavlingExcel'])
         ->name('projects.export-kavling')->middleware('throttle:heavy');
-    Route::post('projects/{project}/import-kavling', [ProjectController::class, 'importKavling'])
+    Route::post('proyek/{project}/import-kavling', [ProjectController::class, 'importKavling'])
         ->name('projects.import-kavling')->middleware('throttle:heavy');
 
     // Kavlings (nested under project) — index dihapus, sudah digabung ke
@@ -83,8 +119,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->shallow();
 
     // Tipe Unit (master data preset, scoped per proyek)
+    Route::get('proyek/{project}/tipe-unit', [TipeUnitPresetController::class, 'index'])
+        ->name('projects.tipe-unit.index');
     Route::resource('projects.tipe-unit', TipeUnitPresetController::class)
-        ->only(['index', 'store', 'update', 'destroy'])
+        ->only(['store', 'update', 'destroy'])
         ->shallow();
     Route::post('tipe-unit/{tipeUnitPreset}/upload-gambar', [TipeUnitPresetController::class, 'uploadGambar'])
         ->name('tipe-unit.upload-gambar')->middleware('throttle:heavy');
@@ -112,9 +150,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('spk.store');
 
     // ── Penjualan (menu proyek untuk sales) ───────────────────────────
-    Route::get('rencana-akad', [RencanaAkadController::class, 'index'])->name('rencana-akad.index');
-    Route::get('penjualan', [BookingController::class, 'projectList'])->name('penjualan.index');
-    Route::get('penjualan/{project}', [BookingController::class, 'projectDetail'])->name('penjualan.project');
+    Route::get('pemasaran/rencana-akad', [RencanaAkadController::class, 'index'])->name('rencana-akad.index');
+    Route::get('pemasaran/penjualan', [BookingController::class, 'projectList'])->name('penjualan.index');
+    Route::get('pemasaran/penjualan/{project}', [BookingController::class, 'projectDetail'])->name('penjualan.project');
     Route::get('proyek/{project}/kavlings-available', [BookingController::class, 'availableKavlings'])->name('bookings.available-kavlings');
 
     // Booking
@@ -139,7 +177,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('kavling-konsumen/{kk}/bast/confirm-selesai', [BastController::class, 'confirmSelesai'])->name('bast.confirm-selesai');
 
     // ── Dokumen Konsumen ───────────────────────────────────────────────
-    Route::get('kavling-konsumen/{kk}/dokumen', [DokumenKonsumenController::class, 'index'])
+    Route::get('pemasaran/transaksi/{kk}/dokumen', [DokumenKonsumenController::class, 'index'])
         ->name('dokumen.index');
     Route::patch('dokumen/{dok}/status', [DokumenKonsumenController::class, 'updateStatus'])
         ->name('dokumen.update-status');
@@ -148,12 +186,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // lewat form booking, biar tidak ada row konsumen yatim tanpa transaksi.
     // export DIDAFTAR SEBELUM resource() — kalau setelah, "konsumens/{konsumen}"
     // dari resource() bakal duluan menangkap "konsumens/export" (1 segmen sama).
-    Route::get('konsumens/export', [KonsumenController::class, 'exportKonsumenExcel'])
+    Route::get('pemasaran/konsumen/export', [KonsumenController::class, 'exportKonsumenExcel'])
         ->name('konsumens.export')->middleware('throttle:heavy');
-    Route::resource('konsumens', KonsumenController::class)->except(['create', 'store']);
-    Route::get('konsumens/{project}/import-template', [KonsumenController::class, 'downloadImportTemplate'])
+    Route::resource('pemasaran/konsumen', KonsumenController::class)
+        ->parameters(['konsumen' => 'konsumen'])
+        ->names('konsumens')
+        ->except(['create', 'store']);
+    Route::get('pemasaran/konsumen/{project}/import-template', [KonsumenController::class, 'downloadImportTemplate'])
         ->name('konsumens.import-template')->middleware('throttle:heavy');
-    Route::post('konsumens/{project}/import', [KonsumenController::class, 'importKonsumen'])
+    Route::post('pemasaran/konsumen/{project}/import', [KonsumenController::class, 'importKonsumen'])
         ->name('konsumens.import')->middleware('throttle:heavy');
 
     // ── Rincian Biaya Akad (Dajam/SBUM/Biaya Akad per transaksi) ────────
@@ -213,11 +254,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('rincian-biaya-akad.bayar');
     Route::delete('rincian-biaya-akad/{item}/bayar', [KeuanganController::class, 'destroyDajamSbumPembayaran'])
         ->name('rincian-biaya-akad.bayar.destroy');
-    Route::get('pembayaran/{pembayaran}/kuitansi', [KeuanganController::class, 'kuitansi'])
+    Route::get('keuangan/kuitansi/{pembayaran}', [KeuanganController::class, 'kuitansi'])
         ->name('pembayaran.kuitansi');
 
     // ── Cancellation Requests ─────────────────────────────────────────
-    Route::get('cancellation-requests', [CancellationRequestController::class, 'index'])
+    Route::get('proyek/pembatalan', [CancellationRequestController::class, 'index'])
         ->name('cancellation-requests.index');
     Route::post('cancellation-requests', [CancellationRequestController::class, 'store'])
         ->name('cancellation-requests.store');

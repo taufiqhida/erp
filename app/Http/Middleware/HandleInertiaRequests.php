@@ -52,7 +52,9 @@ class HandleInertiaRequests extends Middleware
                 'warning'      => $request->session()->get('warning'),
                 'importErrors' => $request->session()->get('importErrors'),
             ],
-            'currentProject' => $this->resolveCurrentProject($request),
+            // Closure = dihitung saat respons dirender (setelah controller), supaya proyek yang baru
+            // dibuka lewat URL langsung langsung muncul di menu samping, bukan di muatan berikutnya.
+            'currentProject' => fn () => $this->resolveCurrentProject($request),
             'statusColors'   => $request->user() ? StatusColor::allMapped() : null,
         ];
     }
