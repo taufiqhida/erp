@@ -21,16 +21,16 @@ const kartu = 'rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-2xl s
 <template>
     <div class="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10">
         <div :class="$slots.samping
-            ? 'w-full max-w-4xl grid grid-cols-1 lg:grid-cols-2 gap-6'
+            ? 'w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-6'
             : 'w-full max-w-md'">
 
             <!-- Kotak pengumuman (layar lebar: di kiri; layar kecil: di bawah kartu) -->
-            <div v-if="$slots.samping" class="order-last lg:order-first h-[22rem] lg:h-[31rem] rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <div v-if="$slots.samping" class="order-last lg:order-first h-[22rem] lg:h-[27rem] rounded-2xl border border-slate-800 bg-slate-900 p-4">
                 <slot name="samping" />
             </div>
 
             <!-- Kartu form -->
-            <div :class="[kartu, $slots.samping ? 'lg:h-[31rem] lg:overflow-y-auto lg:flex lg:flex-col lg:justify-center' : '']">
+            <div :class="[kartu, $slots.samping ? 'lg:h-[27rem] lg:overflow-y-auto lg:flex lg:flex-col lg:justify-center' : '']">
                 <div>
                     <Link href="/" class="flex items-center gap-4 mb-5">
                         <BrandMark size="lg" />
