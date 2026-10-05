@@ -51,6 +51,8 @@ class HandleInertiaRequests extends Middleware
                 'error'        => $request->session()->get('error'),
                 'warning'      => $request->session()->get('warning'),
                 'importErrors' => $request->session()->get('importErrors'),
+                // Password sementara hasil reset: tampil SEKALI (flash), tidak disimpan di mana pun.
+                'tempPassword' => $request->session()->get('tempPassword'),
             ],
             // Closure = dihitung saat respons dirender (setelah controller), supaya proyek yang baru
             // dibuka lewat URL langsung langsung muncul di menu samping, bukan di muatan berikutnya.

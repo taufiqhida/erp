@@ -462,11 +462,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('urutan.move');
     });
 
+    // ── Wajib ganti password (akun baru / hasil reset) ────────────────────
+    Route::get('password/wajib-ganti', [\App\Http\Controllers\Auth\ForcePasswordChangeController::class, 'show'])->name('password.wajib');
+    Route::put('password/wajib-ganti', [\App\Http\Controllers\Auth\ForcePasswordChangeController::class, 'update'])->name('password.wajib.update');
+
     // ── Role Management + User Management (superadmin only) ───────────
     Route::middleware('role:superadmin')->group(function () {
         Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
         Route::patch('roles/{user}/assign', [RoleController::class, 'assign'])->name('roles.assign');
         Route::post('users', [RoleController::class, 'storeUser'])->name('users.store');
+        Route::post('users/{user}/reset-password', [RoleController::class, 'resetPassword'])->name('users.reset-password');
         Route::post('projects/{project}/assign-users', [RoleController::class, 'assignProject'])
             ->name('projects.assign-users');
     });

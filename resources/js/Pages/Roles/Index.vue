@@ -1,7 +1,8 @@
 <script setup>
 import BerandaLayout from '@/Layouts/BerandaLayout.vue';
-import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import { ref, computed, watch } from 'vue';
+import { konfirmasi } from '@/Composables/useConfirm';
 
 const props = defineProps({
     users:    Object,
@@ -11,6 +12,29 @@ const props = defineProps({
 
 const page = usePage();
 const flash = computed(() => page.props.flash ?? {});
+
+// ── Reset password ──────────────────────────────────────────────────────────
+// Password sementara datang lewat flash (SEKALI), jadi disalin ke state lokal supaya modal
+// tetap terbuka sampai ditutup. Password lama tidak pernah bisa dilihat (hanya hash).
+const tempShown = ref(null);
+const tersalin = ref(false);
+watch(() => flash.value.tempPassword, (v) => { if (v) { tempShown.value = v; tersalin.value = false; } }, { immediate: true });
+
+const resetPassword = async (user) => {
+    const ok = await konfirmasi(
+        `Reset password ${user.name}?\n\nPassword lama tidak berlaku lagi, sesi login ${user.name} yang sedang aktif dikeluarkan, dan ${user.name} wajib membuat password baru saat login berikutnya.`,
+        { title: 'Reset password', confirmText: 'Ya, reset', danger: true },
+    );
+    if (!ok) return;
+    router.post(route('users.reset-password', user.id), {}, { preserveScroll: true });
+};
+
+const salinPassword = async () => {
+    try {
+        await navigator.clipboard.writeText(tempShown.value.password);
+        tersalin.value = true;
+    } catch { /* browser tanpa izin clipboard: user menyalin manual */ }
+};
 
 // ── Edit Role Modal ──────────────────────────────────────────────────────────
 const editingUser = ref(null);
@@ -176,6 +200,10 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                                         <div>
                                             <div class="text-slate-200 font-medium text-sm">{{ user.name }}</div>
                                             <div class="text-slate-500 text-xs">{{ user.email }}</div>
+                                            <span v-if="user.must_change_password"
+                                                class="inline-block mt-1 px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[0.6875rem] font-medium">
+                                                Wajib ganti password
+                                            </span>
                                         </div>
                                     </div>
                                 </td>
@@ -211,6 +239,11 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
                                             </svg>
                                             Edit Role
+                                        </button>
+                                        <button v-if="user.id !== $page.props.auth.user.id" @click="resetPassword(user)"
+                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 text-xs font-medium rounded-lg transition-colors"
+                                            title="Buat password sementara baru untuk pengguna ini">
+                                            Reset Password
                                         </button>
                                     </div>
                                 </td>
@@ -444,6 +477,33 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                             class="flex-1 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-violet-500/20">
                             Simpan Assignment
                         </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+        <!-- ── Password sementara (tampil sekali) ──────────────────── -->
+        <Teleport to="body">
+            <div v-if="tempShown" class="fixed inset-0 z-[90] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+                <div class="absolute inset-0 bg-black/70" />
+                <div class="relative w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-6">
+                    <h2 class="text-white font-semibold">Password sementara dibuat</h2>
+                    <p class="mt-1 text-slate-400 text-sm">Untuk <span class="text-slate-200">{{ tempShown.nama }}</span> ({{ tempShown.email }})</p>
+
+                    <div class="mt-4 flex items-center gap-2">
+                        <code class="flex-1 px-3 py-2.5 rounded-lg bg-slate-950 border border-slate-700 text-emerald-300 text-lg tracking-wider text-center select-all">{{ tempShown.password }}</code>
+                        <button @click="salinPassword" class="px-3 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm">
+                            {{ tersalin ? 'Tersalin ✓' : 'Salin' }}
+                        </button>
+                    </div>
+
+                    <ul class="mt-4 space-y-1 text-xs text-amber-300/90 list-disc pl-4">
+                        <li>Password ini <b>hanya tampil sekali</b>. Setelah ditutup tidak bisa dilihat lagi.</li>
+                        <li>Berikan ke pengguna lewat jalur aman (langsung atau pesan pribadi).</li>
+                        <li>Pengguna akan diminta membuat password baru saat login pertama.</li>
+                    </ul>
+
+                    <div class="mt-5 flex justify-end">
+                        <button @click="tempShown = null" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium">Sudah dicatat, tutup</button>
                     </div>
                 </div>
             </div>

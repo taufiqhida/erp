@@ -24,6 +24,7 @@ class RoleController extends Controller
                 'email'    => $u->email,
                 'initials' => $u->initials,
                 'roles'    => $u->roles->pluck('name'),
+                'must_change_password' => (bool) $u->must_change_password,
                 'projects' => $u->projects->map(fn($p) => ['id' => $p->id, 'nama' => $p->nama, 'kode' => $p->kode]),
             ]);
 
@@ -68,12 +69,67 @@ class RoleController extends Controller
             'password'          => Hash::make($validated['password']),
             'email_verified_at' => now(), // langsung verifikasi
         ]);
+        // Admin yang menentukan password-nya, jadi pemilik akun wajib menggantinya saat login pertama.
+        $user->forceFill(['must_change_password' => true])->save();
 
         if (!empty($validated['roles'])) {
             $user->syncRoles($validated['roles']);
         }
 
         return back()->with('success', "Akun {$user->name} berhasil dibuat.");
+    }
+
+    /**
+     * Reset password user (hanya superadmin): buat password sementara yang tampil SEKALI, tandai
+     * wajib ganti pada login berikutnya, dan keluarkan sesi yang sedang aktif. Password lama tidak
+     * pernah bisa dilihat (hanya tersimpan sebagai hash).
+     */
+    public function resetPassword(Request $request, User $user): RedirectResponse
+    {
+        abort_if($user->id === $request->user()->id, 422, 'Untuk akun sendiri, ganti password lewat menu Profil.');
+
+        $sementara = $this->buatPasswordSementara();
+
+        $user->forceFill([
+            'password'             => Hash::make($sementara),
+            'must_change_password' => true,
+            'password_changed_at'  => null,
+            'remember_token'       => null,
+        ])->save();
+
+        \Illuminate\Support\Facades\DB::table('sessions')->where('user_id', $user->id)->delete();
+
+        activity('akun')
+            ->performedOn($user)
+            ->causedBy($request->user())
+            ->log("Reset password pengguna {$user->email}");
+
+        return back()->with('tempPassword', [
+            'nama'     => $user->name,
+            'email'    => $user->email,
+            'password' => $sementara,
+        ]);
+    }
+
+    /** 12 karakter (grup 4-4-4), tanpa karakter yang mudah tertukar (0/O, 1/l/I); selalu ada huruf besar, kecil, dan angka. */
+    private function buatPasswordSementara(): string
+    {
+        $besar = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+        $kecil = 'abcdefghijkmnpqrstuvwxyz';
+        $angka = '23456789';
+        $ambil = fn (string $set) => $set[random_int(0, strlen($set) - 1)];
+
+        $chars = [
+            $ambil($besar), $ambil($besar), $ambil($besar),
+            $ambil($kecil), $ambil($kecil), $ambil($kecil), $ambil($kecil), $ambil($kecil),
+            $ambil($angka), $ambil($angka), $ambil($angka), $ambil($kecil),
+        ];
+        for ($i = count($chars) - 1; $i > 0; $i--) {
+            $j = random_int(0, $i);
+            [$chars[$i], $chars[$j]] = [$chars[$j], $chars[$i]];
+        }
+
+        return implode('-', array_map('implode', array_chunk($chars, 4)));
     }
 
     /**
