@@ -6,6 +6,7 @@ import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 defineProps({
     canResetPassword: {
@@ -22,6 +23,8 @@ const form = useForm({
     remember: false,
 });
 
+const showPassword = ref(false);
+
 const submit = () => {
     form.post(route('login'), {
         onFinish: () => form.reset('password'),
@@ -31,7 +34,10 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Log in" />
+        <Head title="Masuk" />
+
+        <h1 class="text-lg font-semibold text-gray-900">Masuk ke akun Anda</h1>
+        <p class="mt-1 mb-5 text-sm text-gray-500">Gunakan email dan password yang diberikan administrator.</p>
 
         <div v-if="status" class="mb-4 text-sm font-medium text-green-600">
             {{ status }}
@@ -49,6 +55,7 @@ const submit = () => {
                     required
                     autofocus
                     autocomplete="username"
+                    placeholder="nama@perusahaan.com"
                 />
 
                 <InputError class="mt-2" :message="form.errors.email" />
@@ -57,14 +64,21 @@ const submit = () => {
             <div class="mt-4">
                 <InputLabel for="password" value="Password" />
 
-                <TextInput
-                    id="password"
-                    type="password"
-                    class="mt-1 block w-full"
-                    v-model="form.password"
-                    required
-                    autocomplete="current-password"
-                />
+                <div class="relative mt-1">
+                    <TextInput
+                        id="password"
+                        :type="showPassword ? 'text' : 'password'"
+                        class="block w-full pr-24"
+                        v-model="form.password"
+                        required
+                        autocomplete="current-password"
+                    />
+                    <button type="button" @click="showPassword = !showPassword"
+                        class="absolute inset-y-0 right-0 px-3 text-xs font-medium text-gray-500 hover:text-gray-800"
+                        :aria-label="showPassword ? 'Sembunyikan password' : 'Tampilkan password'">
+                        {{ showPassword ? 'Sembunyikan' : 'Tampilkan' }}
+                    </button>
+                </div>
 
                 <InputError class="mt-2" :message="form.errors.password" />
             </div>
@@ -72,28 +86,27 @@ const submit = () => {
             <div class="mt-4 block">
                 <label class="flex items-center">
                     <Checkbox name="remember" v-model:checked="form.remember" />
-                    <span class="ms-2 text-sm text-gray-600"
-                        >Remember me</span
-                    >
+                    <span class="ms-2 text-sm text-gray-600">Ingat saya di perangkat ini</span>
                 </label>
             </div>
 
-            <div class="mt-4 flex items-center justify-end">
+            <PrimaryButton
+                class="mt-5 w-full justify-center"
+                :class="{ 'opacity-25': form.processing }"
+                :disabled="form.processing"
+            >
+                {{ form.processing ? 'Memproses…' : 'Masuk' }}
+            </PrimaryButton>
+
+            <div class="mt-4 text-center text-sm">
                 <Link
                     v-if="canResetPassword"
                     :href="route('password.request')"
-                    class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    class="text-gray-600 underline hover:text-gray-900"
                 >
-                    Forgot your password?
+                    Lupa password?
                 </Link>
-
-                <PrimaryButton
-                    class="ms-4"
-                    :class="{ 'opacity-25': form.processing }"
-                    :disabled="form.processing"
-                >
-                    Log in
-                </PrimaryButton>
+                <span v-else class="text-gray-500">Lupa password? Hubungi administrator sistem.</span>
             </div>
         </form>
     </GuestLayout>

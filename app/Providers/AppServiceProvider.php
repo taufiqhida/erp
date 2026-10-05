@@ -13,6 +13,7 @@ use App\Support\FinanceCache;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Support\ServiceProvider;
@@ -33,6 +34,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Vite::prefetch(concurrency: 3);
+
+        // Favicon & judul tab di root view (app.blade.php) mengikuti logo Profil Developer.
+        View::composer('app', fn ($view) => $view->with('brand', \App\Support\Branding::data()));
 
         // Password baru minimal 10 karakter dengan huruf & angka (akun lama tidak terpengaruh
         // sampai password-nya diganti).

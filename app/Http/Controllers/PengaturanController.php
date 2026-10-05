@@ -78,6 +78,7 @@ class PengaturanController extends Controller
         if ($request->hasFile('logo')) {
             if ($profile->logo_path) Storage::disk('public')->delete($profile->logo_path);
             $validated['logo_path'] = $request->file('logo')->store('developer', 'public');
+            \App\Support\Branding::buatFavicon($validated['logo_path']);
         }
         unset($validated['logo']);
 

@@ -54,6 +54,8 @@ class HandleInertiaRequests extends Middleware
             ],
             // Closure = dihitung saat respons dirender (setelah controller), supaya proyek yang baru
             // dibuka lewat URL langsung langsung muncul di menu samping, bukan di muatan berikutnya.
+            // Logo/nama developer + status email — lihat App\Support\Branding.
+            'branding'       => fn () => \App\Support\Branding::data(),
             'currentProject' => fn () => $this->resolveCurrentProject($request),
             'statusColors'   => $request->user() ? StatusColor::allMapped() : null,
         ];

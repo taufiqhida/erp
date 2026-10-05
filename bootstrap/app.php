@@ -48,4 +48,23 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($request->expectsJson()) return null;
             return redirect()->route('dashboard')->with('error', 'Anda tidak memiliki akses ke halaman tersebut.');
         });
+
+        // Halaman error berbahasa Indonesia untuk akses LANGSUNG (buka alamat/muat ulang). Permintaan
+        // Inertia/XHR dibiarkan: aksi yang ditolak tetap muncul sebagai toast (lihat router.on('invalid')
+        // di app.js), dan mode debug tetap menampilkan halaman debug untuk error 500.
+        $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response, \Throwable $e, Request $request) {
+            $status = $response->getStatusCode();
+
+            if (!in_array($status, [403, 404, 419, 500, 503], true)) return $response;
+            if ($request->header('X-Inertia') || $request->expectsJson()) return $response;
+            if ($status === 500 && config('app.debug')) return $response;
+
+            try {
+                return \Inertia\Inertia::render('Error', ['status' => $status])
+                    ->toResponse($request)
+                    ->setStatusCode($status);
+            } catch (\Throwable) {
+                return $response; // kalau halaman error sendiri gagal dirender, pakai respons bawaan
+            }
+        });
     })->create();

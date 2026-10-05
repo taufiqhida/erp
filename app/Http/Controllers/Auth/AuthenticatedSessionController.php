@@ -19,7 +19,9 @@ class AuthenticatedSessionController extends Controller
     public function create(): Response
     {
         return Inertia::render('Auth/Login', [
-            'canResetPassword' => Route::has('password.request'),
+            // Tautan "Lupa password" hanya kalau email benar-benar aktif (MAIL_MAILER bukan log) —
+            // kalau tidak, user menunggu email yang tidak pernah datang.
+            'canResetPassword' => Route::has('password.request') && \App\Support\Branding::data()['email_enabled'],
             'status' => session('status'),
         ]);
     }
