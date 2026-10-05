@@ -1,4 +1,5 @@
 <script setup>
+import Pagination from '@/Components/Pagination.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
@@ -164,18 +165,7 @@ const statusBadgeClass = {
                 </div>
 
                 <!-- Pagination -->
-                <div v-if="requests.last_page > 1" class="flex items-center justify-between px-5 py-3.5 border-t border-slate-800">
-                    <span class="text-slate-500 text-xs">{{ requests.from }}–{{ requests.to }} dari {{ requests.total }}</span>
-                    <div class="flex gap-1">
-                        <Link
-                            v-for="link in requests.links"
-                            :key="link.label"
-                            :href="link.url ?? '#'"
-                            v-html="link.label"
-                            :class="['px-3 py-1.5 text-xs rounded-md transition-colors', link.active ? 'bg-violet-600 text-white' : 'text-slate-400 hover:bg-slate-800', !link.url ? 'opacity-40 pointer-events-none' : '']"
-                        />
-                    </div>
-                </div>
+                <Pagination :paginator="requests" embedded />
             </div>
         </div>
 

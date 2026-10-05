@@ -1,4 +1,5 @@
 <script setup>
+import Pagination from '@/Components/Pagination.vue';
 import BerandaLayout from '@/Layouts/BerandaLayout.vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
@@ -253,6 +254,8 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                 </div>
             </div>
         </div>
+
+        <div class="px-6"><Pagination :paginator="users" /></div>
 
         <!-- ── Assign Users ke Proyek ─────────────────────────── -->
         <div class="p-6 pt-0 space-y-4">

@@ -141,7 +141,7 @@ class KeuanganController extends Controller
 
         $rows = $query
             ->with(['konsumen:id,nama', 'kavling.project:id,nama', 'skemaDpPreset', 'biayaTambahans', 'bankRekananPreset:id,nama'])
-            ->paginate(50)
+            ->paginate($this->perPage($request, 50))
             ->withQueryString()
             ->through(function ($kk) {
                 $kategori = $kk->kategoriPendapatan();
@@ -277,7 +277,7 @@ class KeuanganController extends Controller
 
         $rows = $query
             ->with(['konsumen:id,nama', 'kavling.project:id,nama', 'bankRekananPreset:id,nama'])
-            ->paginate(50)
+            ->paginate($this->perPage($request, 50))
             ->withQueryString()
             ->through(function ($kk) {
                 return [

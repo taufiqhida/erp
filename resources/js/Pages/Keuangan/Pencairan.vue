@@ -1,4 +1,5 @@
 <script setup>
+import Pagination from '@/Components/Pagination.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import SortTh from '@/Components/SortTh.vue';
@@ -238,12 +239,7 @@ const statusPenjualanConfig = computed(() => {
                 </div>
             </div>
 
-            <div v-if="rows.last_page > 1" class="flex flex-wrap justify-center gap-1">
-                <Link v-for="link in rows.links" :key="link.label" :href="link.url ?? '#'" v-html="link.label"
-                    :class="['px-3 py-1.5 text-xs rounded-md transition-colors',
-                        link.active ? 'bg-violet-600 text-white' : 'text-slate-400 hover:bg-slate-800 bg-slate-900',
-                        !link.url ? 'opacity-40 pointer-events-none' : '']" />
-            </div>
+            <Pagination :paginator="rows" />
         </div>
     </AuthenticatedLayout>
 </template>

@@ -2,12 +2,17 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InlineSiteplanSvg from '@/Components/InlineSiteplanSvg.vue';
 import SearchSelect from '@/Components/SearchSelect.vue';
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import Pagination from '@/Components/Pagination.vue';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 
 const props = defineProps({
     project:    Object,
-    kavlings:   Array,
+    kavlings:   { type: Array, default: () => [] },     // hanya terisi di tampilan siteplan
+    kavlingsPage: { type: Object, default: null },      // hanya terisi di tampilan tabel (server-side)
+    tampilan:   { type: String, default: 'siteplan' },
+    filters:    { type: Object, default: () => ({}) },
+    filterOptions: { type: Object, default: () => ({ kluster: [], blok: [], tipe_unit: [] }) },
     konsumens:  Array,
     salesAgents: { type: Array, default: () => [] },
     biayaTambahanPresets: { type: Array, default: () => [] },
@@ -39,7 +44,7 @@ const basisLabels = { harga_dasar: 'Harga Dasar', harga_netto: 'Harga Jual Netto
 const page = usePage();
 
 // ── View mode ────────────────────────────────────────────────────────
-const viewMode = ref('siteplan');
+const viewMode = ref(props.tampilan === 'tabel' ? 'table' : 'siteplan');
 
 // ── Status config — nama status tetap system-driven, warnanya dinamis dari
 // master "Warna Status" (Pengaturan), sumber: page.props.statusColors ──────
@@ -80,16 +85,19 @@ const statusBangunOptionsLegend = computed(() =>
 const markerSize = computed(() => props.project.siteplan_marker_size ?? 28);
 
 // ── Multi-filter (kluster/blok/tipe/status jual/status bangun) ───────────
-const filters = ref({ kluster: '', blok: '', tipe_unit: '', status_jual: '', status_bangun_stage_id: '' });
+const filters = ref({
+    kluster: props.filters.kluster ?? '',
+    blok: props.filters.blok ?? '',
+    tipe_unit: props.filters.tipe_unit ?? '',
+    status_jual: props.filters.status_jual ?? '',
+    status_bangun_stage_id: props.filters.status_bangun_stage_id ? Number(props.filters.status_bangun_stage_id) : '',
+});
 
-const uniqueOptions = (key) => {
-    const values = (props.kavlings ?? []).map(k => k[key]).filter(v => v !== null && v !== undefined && v !== '');
-    return [...new Set(values)].sort();
-};
-const klusterOptions  = computed(() => uniqueOptions('kluster'));
-const blokOptions     = computed(() => uniqueOptions('blok'));
-const tipeUnitOptions = computed(() => uniqueOptions('tipe_unit'));
+const klusterOptions  = computed(() => props.filterOptions.kluster ?? []);
+const blokOptions     = computed(() => props.filterOptions.blok ?? []);
+const tipeUnitOptions = computed(() => props.filterOptions.tipe_unit ?? []);
 
+// Siteplan memakai daftar lengkap (props.kavlings) dan menyaringnya di browser; tabel disaring di server.
 const filteredKavlings = computed(() => (props.kavlings ?? []).filter(k =>
     (!filters.value.kluster || k.kluster === filters.value.kluster) &&
     (!filters.value.blok || k.blok === filters.value.blok) &&
@@ -97,6 +105,28 @@ const filteredKavlings = computed(() => (props.kavlings ?? []).filter(k =>
     (!filters.value.status_jual || k.status_jual === filters.value.status_jual) &&
     (!filters.value.status_bangun_stage_id || k.status_bangun_stage_id === filters.value.status_bangun_stage_id)
 ));
+
+// Muat ulang data sesuai mode & filter. Tiap mode hanya meminta datanya sendiri (lihat
+// BookingController::projectDetail): siteplan = semua unit, tabel = satu halaman.
+const muatData = () => {
+    router.get(route('penjualan.project', props.project.id), {
+        kluster: filters.value.kluster || undefined,
+        blok: filters.value.blok || undefined,
+        tipe_unit: filters.value.tipe_unit || undefined,
+        status_jual: filters.value.status_jual || undefined,
+        status_bangun_stage_id: filters.value.status_bangun_stage_id || undefined,
+        tampilan: viewMode.value === 'table' ? 'tabel' : undefined,
+    }, {
+        preserveState: true, preserveScroll: true, replace: true,
+        only: ['kavlings', 'kavlingsPage', 'tampilan', 'filters', 'filterOptions'],
+    });
+};
+const gantiTampilan = (mode) => {
+    if (viewMode.value === mode) return;
+    viewMode.value = mode;
+    muatData();
+};
+watch(filters, () => { if (viewMode.value === 'table') muatData(); }, { deep: true });
 
 const resetFilters = () => {
     filters.value = { kluster: '', blok: '', tipe_unit: '', status_jual: '', status_bangun_stage_id: '' };
@@ -320,12 +350,12 @@ const isBookable = (k) => k.status_jual === 'available';
 
             <!-- View Toggle -->
             <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1 w-fit">
-                <button @click="viewMode = 'siteplan'"
+                <button @click="gantiTampilan('siteplan')"
                     :class="viewMode === 'siteplan' ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20' : 'text-slate-400 hover:text-slate-200'"
                     class="px-4 py-1.5 rounded-md text-sm font-medium transition-all">
                     🗺️ Siteplan
                 </button>
-                <button @click="viewMode = 'table'"
+                <button @click="gantiTampilan('table')"
                     :class="viewMode === 'table' ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20' : 'text-slate-400 hover:text-slate-200'"
                     class="px-4 py-1.5 rounded-md text-sm font-medium transition-all">
                     📋 Tabel Unit
@@ -384,7 +414,7 @@ const isBookable = (k) => k.status_jual === 'available';
                     class="px-2.5 py-1.5 text-slate-400 hover:text-slate-200 text-xs rounded-lg transition-colors">
                     ✕ Reset ({{ activeFilterCount }})
                 </button>
-                <span class="text-slate-500 text-xs ml-auto">{{ filteredKavlings.length }} / {{ (kavlings ?? []).length }} unit</span>
+                <span class="text-slate-500 text-xs ml-auto">{{ kavlingsPage?.total ?? 0 }} / {{ project.kavlings_count }} unit</span>
             </div>
 
             <!-- ── Siteplan View ─────────────────────────────── -->
@@ -450,7 +480,7 @@ const isBookable = (k) => k.status_jual === 'available';
 
             <!-- ── Tabel Unit View ─────────────────────────────── -->
             <div v-if="viewMode === 'table'" class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                <div v-if="!filteredKavlings.length" class="text-center py-12 text-slate-500 text-sm">
+                <div v-if="!kavlingsPage?.data.length" class="text-center py-12 text-slate-500 text-sm">
                     Tidak ada unit yang cocok dengan filter.
                 </div>
                 <div v-else class="overflow-x-auto">
@@ -469,7 +499,7 @@ const isBookable = (k) => k.status_jual === 'available';
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="k in filteredKavlings" :key="k.id" class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                            <tr v-for="k in kavlingsPage?.data ?? []" :key="k.id" class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-400 text-xs">{{ k.kluster ?? '-' }}</td>
                                 <td class="px-4 py-2.5 text-slate-200 font-medium">{{ k.nomor_lengkap }}</td>
                                 <td class="px-4 py-2.5 text-slate-400 text-xs">{{ k.tipe_unit ?? '-' }}</td>
@@ -513,6 +543,7 @@ const isBookable = (k) => k.status_jual === 'available';
                         </tbody>
                     </table>
                 </div>
+                <Pagination v-if="kavlingsPage" :paginator="kavlingsPage" :only="['kavlingsPage']" embedded />
             </div>
         </div>
 

@@ -151,11 +151,23 @@ class ProjectController extends Controller
         // titik sekaligus untuk digambar di peta (tidak boleh terpotong
         // halaman). Filter Tabel TIDAK berlaku di sini (lihat komputed
         // kavlingsWithKoordinat di frontend).
-        $kavlings = $project->kavlings()
-            ->with(['activeTransaction.konsumen', 'tipeUnitPreset', 'statusBangunStage'])
-            ->orderByUnit()
-            ->get()
-            ->map(fn($k) => $this->formatKavlingRow($k));
+        // Daftar lengkap HANYA dikirim untuk tampilan siteplan; tampilan tabel cukup halaman paginasi
+        // (kavlingsPage), jadi proyek ribuan unit tidak mengirim ribuan baris yang tidak dipakai.
+        $tampilan = $request->tampilan === 'tabel' ? 'tabel' : 'siteplan';
+        $kavlings = $tampilan === 'siteplan'
+            ? $project->kavlings()
+                ->with(['activeTransaction.konsumen', 'tipeUnitPreset', 'statusBangunStage'])
+                ->orderByUnit()
+                ->get()
+                ->map(fn($k) => $this->formatKavlingRow($k))
+                ->values()
+            : [];
+
+        // Opsi dropdown filter diturunkan dari proyek, bukan dari daftar unit yang sedang dimuat.
+        $filterOptions = [
+            'kluster' => $project->kavlings()->whereNotNull('kluster')->where('kluster', '!=', '')->distinct()->orderBy('kluster')->pluck('kluster'),
+            'blok'    => $project->kavlings()->whereNotNull('blok')->where('blok', '!=', '')->distinct()->orderBy('blok')->pluck('blok'),
+        ];
 
         // Set Tabel — dipaginasi & difilter server-side (mirip
         // KavlingController::index(), sekarang jadi satu-satunya tabel unit
@@ -168,7 +180,7 @@ class ProjectController extends Controller
             ->when($request->status_bangun_stage_id, fn($q) => $q->where('status_bangun_stage_id', $request->status_bangun_stage_id))
             ->with(['activeTransaction.konsumen', 'tipeUnitPreset', 'statusBangunStage'])
             ->orderByUnit()
-            ->paginate(20)
+            ->paginate($this->perPage($request, 20))
             ->withQueryString()
             ->through(fn($k) => $this->formatKavlingRow($k));
 
@@ -202,6 +214,8 @@ class ProjectController extends Controller
             ],
             'kavlings'     => $kavlings,
             'kavlingsPage' => $kavlingsPage,
+            'tampilan'     => $tampilan,
+            'filterOptions' => $filterOptions,
             'filters'      => $request->only(['kluster', 'blok', 'tipe_unit_preset_id', 'status_jual', 'status_bangun_stage_id']),
             'tipeUnits'    => $tipeUnits,
             'statusBangunStages' => $statusBangunStages,

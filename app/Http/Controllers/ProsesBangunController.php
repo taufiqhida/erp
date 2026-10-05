@@ -29,7 +29,20 @@ class ProsesBangunController extends Controller
         $this->authorizeProjectAccess($project);
         abort_unless(Auth::user()->can('view kavlings'), 403);
 
-        $kavlings = $project->kavlings()
+        // Urutan & paginasi di SERVER (bukan browser): 'progress' dan 'deadline' dihitung di SQL dari
+        // tabel tahap & SPK, jadi tetap benar lintas halaman. Aturan 'deadline': yang paling mendekati
+        // (termasuk yang sudah lewat) di atas; unit tanpa SPK dan unit yang sudah selesai dibangun
+        // selalu di paling bawah.
+        $urut = in_array($request->urut, ['unit', 'progress', 'deadline'], true) ? $request->urut : 'unit';
+        $arah = $request->arah === 'desc' ? 'desc' : 'asc';
+        $finalId = (int) StatusBangunStage::finalStage()?->id;
+
+        $progressExpr = "(COALESCE((SELECT SUM(s2.bobot) FROM status_bangun_stages s2 WHERE s2.urutan < (SELECT s1.urutan FROM status_bangun_stages s1 WHERE s1.id = kavlings.status_bangun_stage_id)), 0)"
+            . " + COALESCE((SELECT s3.bobot FROM status_bangun_stages s3 WHERE s3.id = kavlings.status_bangun_stage_id), 0) * LEAST(100, GREATEST(0, kavlings.status_bangun_persen)) / 100)";
+        $deadlineExpr = "(SELECT sp.tanggal_deadline FROM spk_kavling sk JOIN spks sp ON sp.id = sk.spk_id WHERE sk.kavling_id = kavlings.id ORDER BY sp.tanggal_terbit DESC, sp.id DESC LIMIT 1)";
+        $selesaiExpr = "(kavlings.status_bangun_stage_id = {$finalId} AND kavlings.status_bangun_persen >= 100)";
+
+        $query = $project->kavlings()
             ->when($request->kluster, fn($q) => $q->where('kluster', $request->kluster))
             ->when($request->blok, fn($q) => $q->where('blok', $request->blok))
             ->when($request->tipe_unit_preset_id, fn($q) => $q->where('tipe_unit_preset_id', $request->tipe_unit_preset_id))
@@ -39,10 +52,20 @@ class ProsesBangunController extends Controller
                 'tipeUnitPreset:id,nama',
                 'statusBangunStage',
                 'spks' => fn($q) => $q->with('kontraktor:id,nama')->orderByDesc('tanggal_terbit')->orderByDesc('spks.id'),
-            ])
-            ->orderByUnit()
-            ->get()
-            ->map(fn($k) => $this->formatRow($k));
+            ]);
+
+        if ($urut === 'progress') {
+            $query->orderByRaw("{$progressExpr} {$arah}");
+        } elseif ($urut === 'deadline') {
+            $query->orderByRaw("({$deadlineExpr} IS NULL OR {$selesaiExpr}) ASC")
+                ->orderByRaw("{$deadlineExpr} {$arah}");
+        }
+        Kavling::applyUnitOrder($query, $urut === 'unit' ? $arah : 'asc');
+
+        $kavlings = $query
+            ->paginate($this->perPage($request, 50))
+            ->withQueryString()
+            ->through(fn($k) => $this->formatRow($k));
 
         $spkRiwayat = $project->spks()
             ->with('kontraktor:id,nama')
@@ -64,7 +87,7 @@ class ProsesBangunController extends Controller
             'project'  => ['id' => $project->id, 'nama' => $project->nama],
             'kavlings' => $kavlings,
             'spkRiwayat' => $spkRiwayat,
-            'filters'  => $request->only(['kluster', 'blok', 'tipe_unit_preset_id', 'status_bangun_stage_id', 'kontraktor_id']),
+            'filters'  => $request->only(['kluster', 'blok', 'tipe_unit_preset_id', 'status_bangun_stage_id', 'kontraktor_id', 'urut', 'arah']),
             'klusterOptions' => $project->kavlings()->whereNotNull('kluster')->distinct()->orderBy('kluster')->pluck('kluster'),
             'blokOptions'    => $project->kavlings()->whereNotNull('blok')->distinct()->orderBy('blok')->pluck('blok'),
             'tipeUnitOptions' => $project->tipeUnitPresets()->active()->orderBy('nama')->get(['id', 'nama']),

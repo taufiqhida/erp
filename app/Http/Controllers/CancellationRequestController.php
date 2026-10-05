@@ -44,7 +44,7 @@ class CancellationRequestController extends Controller
         ->when($request->status, fn($q) => $q->where('status', $request->status))
         ->when($request->type, fn($q) => $q->where('type', $request->type))
         ->orderByDesc('created_at')
-        ->paginate(15)
+        ->paginate($this->perPage($request, 20))
         ->withQueryString()
         ->through(fn($r) => [
             'id'                    => $r->id,

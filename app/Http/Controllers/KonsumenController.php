@@ -130,7 +130,7 @@ class KonsumenController extends Controller
                     fn($q) => $q->orderBy('kavling_konsumen.tanggal_booking', $dir)
                 )
                 ->orderByDesc('kavling_konsumen.id')
-                ->paginate(20)
+                ->paginate($this->perPage($request, 20))
                 ->withQueryString()
                 ->through(fn($trx) => [
                     'id'                => $trx->id,
@@ -184,7 +184,7 @@ class KonsumenController extends Controller
                 ])
                 ->withCount('kavlingKonsumens as transaksi_count')
                 ->orderBy('nama')
-                ->paginate(20)
+                ->paginate($this->perPage($request, 20))
                 ->withQueryString()
                 ->through(fn($k) => [
                     'id'              => $k->id,

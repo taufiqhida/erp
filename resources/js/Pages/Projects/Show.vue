@@ -1,4 +1,5 @@
 <script setup>
+import Pagination from '@/Components/Pagination.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InlineSiteplanSvg from '@/Components/InlineSiteplanSvg.vue';
@@ -8,8 +9,10 @@ import { ref, computed, watch } from 'vue';
 
 const props = defineProps({
     project:      Object,
-    kavlings:     Array,
+    kavlings:     { type: Array, default: () => [] }, // hanya terisi di tampilan siteplan
     kavlingsPage: Object,
+    tampilan:     { type: String, default: 'siteplan' },
+    filterOptions: { type: Object, default: () => ({ kluster: [], blok: [] }) },
     filters:      Object,
     konsumens:    Array,
     tipeUnits:    Array,
@@ -19,7 +22,7 @@ const props = defineProps({
 const page = usePage();
 
 // ── View mode ────────────────────────────────────────────────────────────────
-const viewMode = ref('siteplan'); // 'siteplan' | 'table'
+const viewMode = ref(props.tampilan === 'tabel' ? 'table' : 'siteplan'); // 'siteplan' | 'table'
 
 // ── Multi-filter (kluster/blok/tipe/status jual/status bangun) — server-side,
 // dipaginasi lewat kavlingsPage. Dropdown opsi tetap diturunkan dari set
@@ -33,12 +36,8 @@ const filters = ref({
     status_bangun_stage_id: props.filters?.status_bangun_stage_id ?? '',
 });
 
-const uniqueOptions = (key) => {
-    const values = (props.kavlings ?? []).map(k => k[key]).filter(v => v !== null && v !== undefined && v !== '');
-    return [...new Set(values)].sort();
-};
-const klusterOptions   = computed(() => uniqueOptions('kluster'));
-const blokOptions      = computed(() => uniqueOptions('blok'));
+const klusterOptions   = computed(() => props.filterOptions.kluster ?? []);
+const blokOptions      = computed(() => props.filterOptions.blok ?? []);
 
 // ── Status Bangun — sumbernya master preset live (Pengaturan > Status
 // Bangun), bukan enum hardcode lagi. `statusBangunOptions` dibentuk supaya
@@ -60,7 +59,23 @@ const applyFilter = () => {
         tipe_unit_preset_id: filters.value.tipe_unit_preset_id || undefined,
         status_jual: filters.value.status_jual || undefined,
         status_bangun_stage_id: filters.value.status_bangun_stage_id || undefined,
+        tampilan: viewMode.value === 'table' ? 'tabel' : undefined,
     }, { preserveState: true, preserveScroll: true, replace: true, only: ['kavlingsPage', 'filters'] });
+};
+
+// Ganti Siteplan/Tabel: siteplan butuh daftar lengkap unit, tabel tidak — jadi data tiap mode
+// diminta ke server saat dipilih (lihat ProjectController::show).
+const gantiTampilan = (mode) => {
+    if (viewMode.value === mode) return;
+    viewMode.value = mode;
+    router.get(route('projects.show', props.project.id), {
+        kluster: filters.value.kluster || undefined,
+        blok: filters.value.blok || undefined,
+        tipe_unit_preset_id: filters.value.tipe_unit_preset_id || undefined,
+        status_jual: filters.value.status_jual || undefined,
+        status_bangun_stage_id: filters.value.status_bangun_stage_id || undefined,
+        tampilan: mode === 'table' ? 'tabel' : undefined,
+    }, { preserveState: true, preserveScroll: true, replace: true, only: ['kavlings', 'kavlingsPage', 'tampilan', 'filters', 'filterOptions'] });
 };
 
 watch(filters, applyFilter, { deep: true });
@@ -453,13 +468,13 @@ const submitUploadSiteplan = () => {
             <!-- ── View Toggle + Buttons ─────────────────────────── -->
             <div class="flex items-center justify-between flex-wrap gap-3">
                 <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1">
-                    <button @click="viewMode = 'siteplan'"
+                    <button @click="gantiTampilan('siteplan')"
                             :class="viewMode === 'siteplan' ? 'bg-violet-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
                             class="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>
                         Siteplan
                     </button>
-                    <button @click="viewMode = 'table'"
+                    <button @click="gantiTampilan('table')"
                             :class="viewMode === 'table' ? 'bg-violet-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
                             class="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 19.5m9.75-9.75c0 .621-.504 1.125-1.125 1.125H12m8.625-9H12"/></svg>
@@ -652,7 +667,7 @@ const submitUploadSiteplan = () => {
                     </div>
                 </div>
 
-                <div v-if="!kavlings?.length" class="bg-slate-900 border border-dashed border-slate-700 rounded-2xl">
+                <div v-if="!project.kavlings_count" class="bg-slate-900 border border-dashed border-slate-700 rounded-2xl">
                     <EmptyState title="Belum ada kavling di proyek ini"
                         :description="canEditKavlings ? 'Tambah kavling satu per satu dengan tombol \'Tambah Kavling\', atau impor banyak sekaligus lewat \'Import Excel\'. Pastikan Tipe Unit sudah dibuat.' : 'Kavling akan tampil di sini setelah ditambahkan oleh admin proyek.'"
                         :action-label="canEditKavlings ? 'Kelola Tipe Unit' : ''" :action-href="canEditKavlings ? route('projects.tipe-unit.index', project.id) : ''" />
@@ -759,21 +774,7 @@ const submitUploadSiteplan = () => {
                 </div>
 
                 <!-- Pagination -->
-                <div v-if="kavlingsPage.last_page > 1" class="flex items-center justify-between px-5 py-3.5 border-t border-slate-800">
-                    <span class="text-slate-500 text-xs">{{ kavlingsPage.from }}–{{ kavlingsPage.to }} dari {{ kavlingsPage.total }}</span>
-                    <div class="flex gap-1">
-                        <Link
-                            v-for="link in kavlingsPage.links"
-                            :key="link.label"
-                            :href="link.url ?? '#'"
-                            v-html="link.label"
-                            :class="['px-3 py-1.5 text-xs rounded-md transition-colors', link.active ? 'bg-violet-600 text-white' : 'text-slate-400 hover:bg-slate-800', !link.url ? 'opacity-40 pointer-events-none' : '']"
-                            preserve-scroll
-                            preserve-state
-                            :only="['kavlingsPage']"
-                        />
-                    </div>
-                </div>
+                <Pagination :paginator="kavlingsPage" :only="['kavlingsPage']" embedded />
             </div>
         </div>
 

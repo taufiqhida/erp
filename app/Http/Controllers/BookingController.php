@@ -81,47 +81,42 @@ class BookingController extends Controller
             'kavlings as kavlings_sold_count'      => fn($q) => $q->where('status_jual', 'sold'),
         ]);
 
-        $kavlings = $project->kavlings()
-            ->with(['activeTransaction.konsumen', 'tipeUnitPreset', 'statusBangunStage'])
-            ->orderByUnit()
-            ->get()
-            ->map(fn($k) => [
-                'id'                  => $k->id,
-                'kluster'             => $k->kluster,
-                'nomor_kavling'       => $k->nomor_kavling,
-                'blok'                => $k->blok,
-                'tipe_unit'           => $k->tipeUnitPreset?->nama,
-                'nomor_lengkap'       => $k->nomor_lengkap,
-                'svg_id'              => $k->svg_id,
-                'luas_tanah'          => $k->tipeUnitPreset?->luas_tanah,
-                'luas_bangunan'       => $k->tipeUnitPreset?->luas_bangunan,
-                'harga'               => $k->harga,
-                'status_jual'         => $k->status_jual->value,
-                'status_jual_label'   => $k->status_jual->label(),
-                'status_bangun_stage_id' => $k->status_bangun_stage_id,
-                'status_bangun_label' => $k->statusBangunStage?->nama,
-                'status_bangun_color' => $k->statusBangunStage?->warna,
-                'progress_bangun'     => $k->progress_bangun,
-                'status_unit'         => $k->status_unit,
-                'keterangan'          => $k->keterangan,
-                'perlu_biaya_tambahan' => $k->perlu_biaya_tambahan,
-                'catatan'             => $k->catatan,
-                'koordinat_x'         => $k->koordinat_x,
-                'koordinat_y'         => $k->koordinat_y,
-                'foto_rumah'          => $k->tipeUnitPreset?->foto_rumah ? route('media.show', ['path' => $k->tipeUnitPreset->foto_rumah]) : null,
-                'denah_rumah'         => $k->tipeUnitPreset?->denah_rumah ? route('media.show', ['path' => $k->tipeUnitPreset->denah_rumah]) : null,
-                'kamar_tidur'         => $k->tipeUnitPreset?->kamar_tidur,
-                'kamar_mandi'         => $k->tipeUnitPreset?->kamar_mandi,
-                'spek_atap'           => $k->tipeUnitPreset?->spek_atap,
-                'spek_dinding'        => $k->tipeUnitPreset?->spek_dinding,
-                'spek_lantai'         => $k->tipeUnitPreset?->spek_lantai,
-                'spek_pondasi'        => $k->tipeUnitPreset?->spek_pondasi,
-                'id_rumah'            => $k->id_rumah,
-                'konsumen_nama'       => $k->activeTransaction?->konsumen?->nama,
-                'konsumen_id'         => $k->activeTransaction?->konsumen_id,
-                'transaksi_id'        => $k->activeTransaction?->id,
-                'status_penjualan'    => $k->activeTransaction?->status_penjualan,
-            ]);
+        // Dua mode tampilan, dua cara muat data (lihat Penjualan/Project.vue):
+        //  - siteplan: butuh SEMUA unit untuk digambar di peta → daftar lengkap, tanpa paginasi;
+        //  - tabel: dipaginasi & difilter di SERVER (20/50/100) → hanya baris halaman ini yang dikirim.
+        // Tiap mode hanya mengirim yang dipakainya, jadi proyek ribuan unit tidak membebani tampilan tabel.
+        $tampilan = $request->tampilan === 'tabel' ? 'tabel' : 'siteplan';
+
+        $kavlings = [];
+        $kavlingsPage = null;
+
+        if ($tampilan === 'siteplan') {
+            $kavlings = $project->kavlings()
+                ->with(['activeTransaction.konsumen', 'tipeUnitPreset', 'statusBangunStage'])
+                ->orderByUnit()
+                ->get()
+                ->map(fn($k) => $this->formatPenjualanRow($k))
+                ->values();
+        } else {
+            $kavlingsPage = $project->kavlings()
+                ->when($request->kluster, fn($q) => $q->where('kluster', $request->kluster))
+                ->when($request->blok, fn($q) => $q->where('blok', $request->blok))
+                ->when($request->tipe_unit, fn($q) => $q->whereHas('tipeUnitPreset', fn($t) => $t->where('nama', $request->tipe_unit)))
+                ->when($request->status_jual, fn($q) => $q->where('status_jual', $request->status_jual))
+                ->when($request->status_bangun_stage_id, fn($q) => $q->where('status_bangun_stage_id', $request->status_bangun_stage_id))
+                ->with(['activeTransaction.konsumen', 'tipeUnitPreset', 'statusBangunStage'])
+                ->orderByUnit()
+                ->paginate($this->perPage($request, 20))
+                ->withQueryString()
+                ->through(fn($k) => $this->formatPenjualanRow($k));
+        }
+
+        // Opsi dropdown filter diturunkan dari proyek (bukan dari daftar unit yang dimuat).
+        $filterOptions = [
+            'kluster'   => $project->kavlings()->whereNotNull('kluster')->where('kluster', '!=', '')->distinct()->orderBy('kluster')->pluck('kluster'),
+            'blok'      => $project->kavlings()->whereNotNull('blok')->where('blok', '!=', '')->distinct()->orderBy('blok')->pluck('blok'),
+            'tipe_unit' => $project->tipeUnitPresets()->orderBy('nama')->pluck('nama'),
+        ];
 
         return Inertia::render('Penjualan/Project', [
             'project'  => [
@@ -138,6 +133,10 @@ class BookingController extends Controller
                 'siteplan_marker_size' => $project->siteplan_marker_size,
             ],
             'kavlings' => $kavlings,
+            'kavlingsPage' => $kavlingsPage,
+            'tampilan' => $tampilan,
+            'filters' => $request->only(['kluster', 'blok', 'tipe_unit', 'status_jual', 'status_bangun_stage_id']),
+            'filterOptions' => $filterOptions,
             'konsumens' => Konsumen::orderBy('nama')->get(['id', 'nama', 'no_hp', 'nik']),
             'salesAgents' => SalesAgent::where('is_active', true)
                 ->ordered()
@@ -908,5 +907,47 @@ class BookingController extends Controller
         });
 
         return back()->with('success', 'Rincian pesanan berhasil diperbarui. Catatan: Booking Fee/DP yang sudah digenerate tidak ikut berubah.');
+    }
+
+    /** Satu baris unit untuk halaman Penjualan (siteplan & tabel memakai bentuk yang sama). */
+    private function formatPenjualanRow($k): array
+    {
+        return [
+                'id'                  => $k->id,
+                'kluster'             => $k->kluster,
+                'nomor_kavling'       => $k->nomor_kavling,
+                'blok'                => $k->blok,
+                'tipe_unit'           => $k->tipeUnitPreset?->nama,
+                'nomor_lengkap'       => $k->nomor_lengkap,
+                'svg_id'              => $k->svg_id,
+                'luas_tanah'          => $k->tipeUnitPreset?->luas_tanah,
+                'luas_bangunan'       => $k->tipeUnitPreset?->luas_bangunan,
+                'harga'               => $k->harga,
+                'status_jual'         => $k->status_jual->value,
+                'status_jual_label'   => $k->status_jual->label(),
+                'status_bangun_stage_id' => $k->status_bangun_stage_id,
+                'status_bangun_label' => $k->statusBangunStage?->nama,
+                'status_bangun_color' => $k->statusBangunStage?->warna,
+                'progress_bangun'     => $k->progress_bangun,
+                'status_unit'         => $k->status_unit,
+                'keterangan'          => $k->keterangan,
+                'perlu_biaya_tambahan' => $k->perlu_biaya_tambahan,
+                'catatan'             => $k->catatan,
+                'koordinat_x'         => $k->koordinat_x,
+                'koordinat_y'         => $k->koordinat_y,
+                'foto_rumah'          => $k->tipeUnitPreset?->foto_rumah ? route('media.show', ['path' => $k->tipeUnitPreset->foto_rumah]) : null,
+                'denah_rumah'         => $k->tipeUnitPreset?->denah_rumah ? route('media.show', ['path' => $k->tipeUnitPreset->denah_rumah]) : null,
+                'kamar_tidur'         => $k->tipeUnitPreset?->kamar_tidur,
+                'kamar_mandi'         => $k->tipeUnitPreset?->kamar_mandi,
+                'spek_atap'           => $k->tipeUnitPreset?->spek_atap,
+                'spek_dinding'        => $k->tipeUnitPreset?->spek_dinding,
+                'spek_lantai'         => $k->tipeUnitPreset?->spek_lantai,
+                'spek_pondasi'        => $k->tipeUnitPreset?->spek_pondasi,
+                'id_rumah'            => $k->id_rumah,
+                'konsumen_nama'       => $k->activeTransaction?->konsumen?->nama,
+                'konsumen_id'         => $k->activeTransaction?->konsumen_id,
+                'transaksi_id'        => $k->activeTransaction?->id,
+                'status_penjualan'    => $k->activeTransaction?->status_penjualan,
+        ];
     }
 }

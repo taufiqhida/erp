@@ -44,7 +44,7 @@ class AuditTrailController extends Controller
             ->when($request->to, fn ($q) => $q->whereDate('created_at', '<=', $request->to))
             ->when($request->search, fn ($q) => $q->where('description', 'like', "%{$request->search}%"))
             ->orderByDesc('id')
-            ->paginate(30)
+            ->paginate($this->perPage($request, 50))
             ->withQueryString()
             ->through(fn (Activity $a) => [
                 'id'            => $a->id,

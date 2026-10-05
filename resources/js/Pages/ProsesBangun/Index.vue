@@ -1,11 +1,12 @@
 <script setup>
+import Pagination from '@/Components/Pagination.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 
 const props = defineProps({
     project: Object,
-    kavlings: Array,
+    kavlings: Object, // paginator server-side (data, links, total, ...)
     spkRiwayat: Array,
     filters: Object,
     klusterOptions: Array,
@@ -24,30 +25,17 @@ const deadlineBadge = {
     expired:  { label: 'Lewat',     cls: 'bg-rose-500/15 text-rose-400' },
 };
 
-// Sort di browser — seluruh unit satu proyek sudah dimuat sekaligus (bukan paginasi).
-// "Deadline": yang paling mendekati (termasuk yang sudah lewat, karena paling mendesak)
-// di atas; unit tanpa SPK dan unit yang sudah selesai dibangun selalu di paling bawah.
-const sortKey = ref('unit');
-const sortDir = ref('asc');
-const setSort = (key) => {
-    if (sortKey.value === key) { sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'; return; }
-    sortKey.value = key;
-    sortDir.value = 'asc';
-};
+// Urutan & paginasi dikerjakan SERVER (lihat ProsesBangunController::index) supaya benar lintas
+// halaman. Klik judul kolom = muat ulang halaman 1 dengan urutan itu.
+const sortKey = ref(props.filters.urut ?? 'unit');
+const sortDir = ref(props.filters.arah ?? 'asc');
 const sortArrow = (key) => sortKey.value === key ? (sortDir.value === 'asc' ? '▲' : '▼') : '⇅';
-const sortedKavlings = computed(() => {
-    const dir = sortDir.value === 'asc' ? 1 : -1;
-    if (sortKey.value === 'deadline') {
-        const aktif = props.kavlings.filter(k => k.spk_deadline_raw && !k.bangun_selesai)
-            .sort((a, b) => dir * a.spk_deadline_raw.localeCompare(b.spk_deadline_raw));
-        const sisanya = props.kavlings.filter(k => !(k.spk_deadline_raw && !k.bangun_selesai));
-        return [...aktif, ...sisanya];
-    }
-    if (sortKey.value === 'progress') {
-        return [...props.kavlings].sort((a, b) => dir * (Number(a.progress_bangun) - Number(b.progress_bangun)));
-    }
-    return sortDir.value === 'asc' ? props.kavlings : [...props.kavlings].reverse();
-});
+const setSort = (key) => {
+    if (sortKey.value === key) { sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'; }
+    else { sortKey.value = key; sortDir.value = 'asc'; }
+    applyFilters();
+};
+const sortedKavlings = computed(() => props.kavlings.data);
 
 const filters = reactive({
     kluster: props.filters.kluster ?? '',
@@ -57,7 +45,15 @@ const filters = reactive({
     kontraktor_id: props.filters.kontraktor_id ?? '',
 });
 const applyFilters = () => {
-    router.get(route('proses-bangun.index', props.project.id), { ...filters }, { preserveState: true, replace: true });
+    router.get(route('proses-bangun.index', props.project.id), {
+        kluster: filters.kluster || undefined,
+        blok: filters.blok || undefined,
+        tipe_unit_preset_id: filters.tipe_unit_preset_id || undefined,
+        status_bangun_stage_id: filters.status_bangun_stage_id || undefined,
+        kontraktor_id: filters.kontraktor_id || undefined,
+        urut: sortKey.value === 'unit' ? undefined : sortKey.value,
+        arah: sortKey.value === 'unit' && sortDir.value === 'asc' ? undefined : sortDir.value,
+    }, { preserveState: true, replace: true });
 };
 const resetFilters = () => {
     filters.kluster = ''; filters.blok = ''; filters.tipe_unit_preset_id = ''; filters.status_bangun_stage_id = ''; filters.kontraktor_id = '';
@@ -301,12 +297,13 @@ const showRiwayat = ref(false);
                                     </div>
                                 </td>
                             </tr>
-                            <tr v-if="!kavlings.length">
+                            <tr v-if="!kavlings.data.length">
                                 <td colspan="9" class="px-5 py-8 text-center text-slate-600 text-sm">Tidak ada kavling yang cocok dengan filter.</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
+                <Pagination :paginator="kavlings" embedded />
             </div>
         </div>
     </AuthenticatedLayout>

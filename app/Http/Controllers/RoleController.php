@@ -17,7 +17,7 @@ class RoleController extends Controller
     {
         $users = User::with(['roles', 'projects:id,nama,kode'])
             ->orderBy('name')
-            ->paginate(20)
+            ->paginate($this->perPage(request(), 20))
             ->through(fn($u) => [
                 'id'       => $u->id,
                 'name'     => $u->name,

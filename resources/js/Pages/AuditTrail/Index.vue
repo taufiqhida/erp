@@ -1,4 +1,5 @@
 <script setup>
+import Pagination from '@/Components/Pagination.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
@@ -153,14 +154,7 @@ const formatValue = (v) => {
                 </div>
 
                 <!-- Pagination -->
-                <div v-if="rows.last_page > 1" class="flex items-center justify-between px-5 py-3.5 border-t border-slate-800">
-                    <span class="text-slate-500 text-xs">{{ rows.from }}–{{ rows.to }} dari {{ rows.total }}</span>
-                    <div class="flex gap-1">
-                        <Link v-for="link in rows.links" :key="link.label" :href="link.url ?? '#'" v-html="link.label"
-                            :class="['px-3 py-1.5 text-xs rounded-md transition-colors', link.active ? 'bg-violet-600 text-white' : 'text-slate-400 hover:bg-slate-800', !link.url ? 'opacity-40 pointer-events-none' : '']"
-                            preserve-scroll preserve-state />
-                    </div>
-                </div>
+                <Pagination :paginator="rows" embedded />
             </div>
         </div>
     </AuthenticatedLayout>
