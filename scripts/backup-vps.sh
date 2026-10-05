@@ -52,13 +52,24 @@ docker exec "$APP_CONTAINER" tar czf - -C /var/www/html/storage/app . | gpg_enc 
 mv "$UP_FILE.tmp" "$UP_FILE"
 log "Unggahan OK: $(basename "$UP_FILE") ($(du -h "$UP_FILE" | cut -f1))"
 
-# 3. Kirim ke Google Drive (hanya dua file baru ini).
-rclone copy "$DB_FILE" "$RCLONE_REMOTE" --quiet
-rclone copy "$UP_FILE" "$RCLONE_REMOTE" --quiet
-log "Upload ke $RCLONE_REMOTE OK"
+# 3. Kirim ke penyimpanan luar. Kalau upload gagal (mis. akun/token bermasalah), backup LOKAL
+#    tetap sah dan pembersihan lokal tetap jalan — tapi hasil akhir dicatat sebagai PERINGATAN
+#    (exit code 2) supaya terlihat bahwa salinan luar server belum ada.
+UPLOAD_OK=1
+if rclone copy "$DB_FILE" "$RCLONE_REMOTE" --quiet && rclone copy "$UP_FILE" "$RCLONE_REMOTE" --quiet; then
+    log "Upload ke $RCLONE_REMOTE OK"
+    rclone delete "$RCLONE_REMOTE" --min-age "${KEEP_REMOTE_DAYS}d" --quiet || log "peringatan: pembersihan penyimpanan luar gagal (tidak fatal)"
+else
+    UPLOAD_OK=0
+    log "PERINGATAN: upload ke $RCLONE_REMOTE GAGAL — backup hanya ada di server ini"
+fi
 
-# 4. Bersih-bersih: lokal & Drive.
+# 4. Bersih-bersih lokal (selalu jalan, supaya disk tidak penuh).
 find "$BACKUP_DIR" -name 'erp-*.gpg' -mtime +"$KEEP_LOCAL_DAYS" -delete
-rclone delete "$RCLONE_REMOTE" --min-age "${KEEP_REMOTE_DAYS}d" --quiet || log "peringatan: pembersihan Drive gagal (tidak fatal)"
 
-log "=== Backup selesai ==="
+if [ "$UPLOAD_OK" -eq 1 ]; then
+    log "=== Backup selesai ==="
+else
+    log "=== Backup selesai (LOKAL SAJA, upload gagal) ==="
+    exit 2
+fi
