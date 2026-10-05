@@ -1191,18 +1191,22 @@ const submitUploadSiteplan = () => {
                         <!-- Format info -->
                         <div class="bg-slate-800 rounded-xl p-4 text-xs space-y-1.5 text-slate-400">
                             <div class="text-slate-300 font-medium mb-2">Format kolom Excel yang diperlukan:</div>
-                            <div class="grid grid-cols-2 gap-1">
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">nomor_kavling (wajib)</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">kluster (opsional)</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">blok (opsional)</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">tipe_unit (wajib)</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">harga (opsional)</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">status (opsional)</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">status_bangun (opsional)</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">keterangan (opsional)</span>
-                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded">id_rumah (opsional)</span>
+                            <div class="text-slate-500 mb-1">Urutan kolom sama seperti template (kolom A → K):</div>
+                            <div class="grid grid-cols-2 grid-flow-col grid-rows-6 gap-1">
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded"><span class="text-slate-500">1.</span> kluster <span class="text-slate-500">(opsional)</span></span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded"><span class="text-slate-500">2.</span> blok <span class="text-amber-400">(wajib)</span></span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded"><span class="text-slate-500">3.</span> nomor_kavling <span class="text-amber-400">(wajib)</span></span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded"><span class="text-slate-500">4.</span> tipe_unit <span class="text-amber-400">(wajib)</span></span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded"><span class="text-slate-500">5.</span> harga <span class="text-slate-500">(opsional)</span></span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded"><span class="text-slate-500">6.</span> status <span class="text-slate-500">(opsional)</span></span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded"><span class="text-slate-500">7.</span> status_bangun <span class="text-slate-500">(opsional)</span></span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded"><span class="text-slate-500">8.</span> persen_tahap <span class="text-slate-500">(opsional)</span></span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded"><span class="text-slate-500">9.</span> id_rumah <span class="text-slate-500">(opsional)</span></span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded"><span class="text-slate-500">10.</span> hgb_no <span class="text-slate-500">(opsional)</span></span>
+                                <span class="font-mono bg-slate-700 px-1.5 py-0.5 rounded"><span class="text-slate-500">11.</span> keterangan <span class="text-slate-500">(opsional)</span></span>
                             </div>
                             <p class="pt-1 text-slate-500">status: <span class="font-mono">available</span> / <span class="font-mono">not_for_sale</span> (default available) · status_bangun: nama tahap persis sama seperti di menu "Kelola Status Bangun" — {{ (statusBangunStages ?? []).map(s => s.nama).join(' / ') }} (default {{ statusBangunStages?.[0]?.nama }}, isi kalau proyek sudah berjalan)</p>
+                            <p class="pt-1 text-slate-500">persen_tahap: angka 0–100, persen penyelesaian di dalam tahap pada kolom status_bangun (kosong = 0). id_rumah dan hgb_no harus unik, kosongkan kalau belum ada.</p>
                             <p class="pt-1 text-slate-500">tipe_unit dicocokkan dengan nama Tipe Unit yang sudah ada di proyek ini — kalau belum ada, baris itu dilewati — buat dulu Tipe Unit-nya di "Kelola Tipe Unit".</p>
                         </div>
                         <div>
