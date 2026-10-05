@@ -10,7 +10,11 @@ use App\Models\KavlingKonsumenDajamSbum;
 use App\Models\PembayaranKonsumen;
 use App\Models\PencairanKprTahap;
 use App\Support\FinanceCache;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Vite;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -29,6 +33,14 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Vite::prefetch(concurrency: 3);
+
+        // Password baru minimal 10 karakter dengan huruf & angka (akun lama tidak terpengaruh
+        // sampai password-nya diganti).
+        Password::defaults(fn () => Password::min(10)->letters()->numbers());
+
+        // Pembatas untuk endpoint berat (export/import/template/upload): per user, 12x per menit.
+        // Cukup longgar untuk pemakaian normal, tapi mencegah dipakai membebani server.
+        RateLimiter::for('heavy', fn (Request $request) => Limit::perMinute(12)->by($request->user()?->id ?: $request->ip()));
 
         // Total keuangan tersimpan (kolom fin_* di kavling_konsumen) dihitung ulang tiap
         // ada perubahan pada sumbernya — lihat App\Models\Concerns\HasFinanceTotals.

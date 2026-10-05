@@ -63,17 +63,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Siteplan & Import
     Route::post('projects/{project}/siteplan', [ProjectController::class, 'uploadSiteplan'])
-        ->name('projects.siteplan.upload');
+        ->name('projects.siteplan.upload')->middleware('throttle:heavy');
     Route::patch('projects/{project}/kavling-koordinat', [ProjectController::class, 'updateKavlingKoordinat'])
         ->name('projects.kavling-koordinat');
     Route::patch('projects/{project}/siteplan-marker-size', [ProjectController::class, 'updateSiteplanMarkerSize'])
         ->name('projects.siteplan-marker-size');
     Route::get('projects/{project}/kavling-template', [ProjectController::class, 'downloadKavlingTemplate'])
-        ->name('projects.kavling-template');
+        ->name('projects.kavling-template')->middleware('throttle:heavy');
     Route::get('projects/{project}/export-kavling', [ProjectController::class, 'exportKavlingExcel'])
-        ->name('projects.export-kavling');
+        ->name('projects.export-kavling')->middleware('throttle:heavy');
     Route::post('projects/{project}/import-kavling', [ProjectController::class, 'importKavling'])
-        ->name('projects.import-kavling');
+        ->name('projects.import-kavling')->middleware('throttle:heavy');
 
     // Kavlings (nested under project) — index dihapus, sudah digabung ke
     // tabel di Projects/Show.vue (server-side paginated) supaya tidak ada
@@ -87,7 +87,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->only(['index', 'store', 'update', 'destroy'])
         ->shallow();
     Route::post('tipe-unit/{tipeUnitPreset}/upload-gambar', [TipeUnitPresetController::class, 'uploadGambar'])
-        ->name('tipe-unit.upload-gambar');
+        ->name('tipe-unit.upload-gambar')->middleware('throttle:heavy');
 
     // Kavling – toggle ketersediaan (Tersedia / Tidak Tersedia)
     Route::patch('kavlings/{kavling}/status-jual', [KavlingController::class, 'updateStatusJual'])
@@ -149,12 +149,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // export DIDAFTAR SEBELUM resource() — kalau setelah, "konsumens/{konsumen}"
     // dari resource() bakal duluan menangkap "konsumens/export" (1 segmen sama).
     Route::get('konsumens/export', [KonsumenController::class, 'exportKonsumenExcel'])
-        ->name('konsumens.export');
+        ->name('konsumens.export')->middleware('throttle:heavy');
     Route::resource('konsumens', KonsumenController::class)->except(['create', 'store']);
     Route::get('konsumens/{project}/import-template', [KonsumenController::class, 'downloadImportTemplate'])
-        ->name('konsumens.import-template');
+        ->name('konsumens.import-template')->middleware('throttle:heavy');
     Route::post('konsumens/{project}/import', [KonsumenController::class, 'importKonsumen'])
-        ->name('konsumens.import');
+        ->name('konsumens.import')->middleware('throttle:heavy');
 
     // ── Rincian Biaya Akad (Dajam/SBUM/Biaya Akad per transaksi) ────────
     Route::post('kavling-konsumen/{transaksi}/biaya-akad', [KonsumenController::class, 'storeRincianBiayaAkad'])
@@ -172,9 +172,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // ── Keuangan ──────────────────────────────────────────────────────
     Route::get('keuangan', [KeuanganController::class, 'index'])->name('keuangan.index');
-    Route::get('keuangan/export', [KeuanganController::class, 'exportPiutangExcel'])->name('keuangan.export');
+    Route::get('keuangan/export', [KeuanganController::class, 'exportPiutangExcel'])->name('keuangan.export')->middleware('throttle:heavy');
     Route::get('keuangan/pencairan-kpr', [KeuanganController::class, 'pencairan'])->name('keuangan.pencairan');
-    Route::get('keuangan/pencairan-kpr/export', [KeuanganController::class, 'exportPencairanExcel'])->name('keuangan.pencairan.export');
+    Route::get('keuangan/pencairan-kpr/export', [KeuanganController::class, 'exportPencairanExcel'])->name('keuangan.pencairan.export')->middleware('throttle:heavy');
     Route::get('keuangan/transaksi/{kk}', [KeuanganController::class, 'detail'])->name('keuangan.detail');
     Route::post('keuangan/transaksi/{kk}/selesai', [KeuanganController::class, 'markComplete'])->name('keuangan.mark-complete');
     Route::post('kavling-konsumen/{kk}/pembayaran', [KeuanganController::class, 'storePembayaran'])
