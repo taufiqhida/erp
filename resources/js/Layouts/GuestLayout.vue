@@ -11,7 +11,7 @@ import { computed } from 'vue';
 // berukuran sama dan tetap (kelebihan isi pengumuman digulir); di layar kecil kartu form tampil lebih dulu.
 const branding = computed(() => usePage().props.branding ?? {});
 
-const kartu = 'rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl shadow-black/30 ' +
+const kartu = 'rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-2xl shadow-black/30 ' +
     '[&_label]:text-slate-300 [&_.text-red-600]:text-rose-400 ' +
     '[&_input:not([type=checkbox])]:bg-slate-800 [&_input:not([type=checkbox])]:border-slate-700 ' +
     '[&_input:not([type=checkbox])]:text-slate-100 [&_input:not([type=checkbox])]:placeholder-slate-500 ' +
@@ -21,21 +21,23 @@ const kartu = 'rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl s
 <template>
     <div class="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10">
         <div :class="$slots.samping
-            ? 'w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-6'
+            ? 'w-full max-w-4xl grid grid-cols-1 lg:grid-cols-2 gap-6'
             : 'w-full max-w-md'">
 
             <!-- Kotak pengumuman (layar lebar: di kiri; layar kecil: di bawah kartu) -->
-            <div v-if="$slots.samping" class="order-last lg:order-first h-[26rem] lg:h-[36rem] rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <div v-if="$slots.samping" class="order-last lg:order-first h-[22rem] lg:h-[31rem] rounded-2xl border border-slate-800 bg-slate-900 p-4">
                 <slot name="samping" />
             </div>
 
             <!-- Kartu form -->
-            <div :class="[kartu, $slots.samping ? 'lg:h-[36rem] lg:overflow-y-auto lg:flex lg:flex-col lg:justify-center' : '']">
+            <div :class="[kartu, $slots.samping ? 'lg:h-[31rem] lg:overflow-y-auto lg:flex lg:flex-col lg:justify-center' : '']">
                 <div>
-                    <Link href="/" class="flex flex-col items-center text-center mb-6">
-                        <BrandMark size="xl" />
-                        <div class="mt-4 text-white text-2xl font-bold leading-tight">{{ branding.nama_sistem }}</div>
-                        <div v-if="branding.nama_developer" class="mt-1 text-violet-300 text-sm font-medium">{{ branding.nama_developer }}</div>
+                    <Link href="/" class="flex items-center gap-4 mb-5">
+                        <BrandMark size="lg" />
+                        <div class="min-w-0 text-left">
+                            <div class="text-white text-xl font-bold leading-tight">{{ branding.nama_sistem }}</div>
+                            <div v-if="branding.nama_developer" class="mt-0.5 text-violet-300 text-sm font-medium">{{ branding.nama_developer }}</div>
+                        </div>
                     </Link>
                     <slot />
                 </div>

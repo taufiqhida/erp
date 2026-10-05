@@ -5,15 +5,16 @@ import { usePage } from '@inertiajs/vue3';
 // Logo perusahaan (Profil Developer). Belum diunggah → ikon rumah ungu bawaan.
 // Logo tampil APA ADANYA, tanpa alas/latar (logo transparan tetap transparan).
 const props = defineProps({
-    size: { type: String, default: 'md' }, // md = sidebar/header, xl = halaman login
+    size: { type: String, default: 'md' }, // md = sidebar/header, lg = kartu login, xl = besar
 });
 
 const branding = computed(() => usePage().props.branding ?? {});
 const xl = computed(() => props.size === 'xl');
+const lg = computed(() => props.size === 'lg');
 
-const boxImg = computed(() => xl.value ? 'h-20 max-w-[11rem]' : 'h-8 max-w-[8rem]');
-const boxIkon = computed(() => xl.value ? 'w-20 h-20 rounded-2xl' : 'w-8 h-8 rounded-lg');
-const icon = computed(() => xl.value ? 'w-10 h-10' : 'w-4 h-4');
+const boxImg = computed(() => xl.value ? 'h-20 max-w-[11rem]' : lg.value ? 'h-14 max-w-[7rem]' : 'h-8 max-w-[8rem]');
+const boxIkon = computed(() => xl.value ? 'w-20 h-20 rounded-2xl' : lg.value ? 'w-14 h-14 rounded-xl' : 'w-8 h-8 rounded-lg');
+const icon = computed(() => xl.value ? 'w-10 h-10' : lg.value ? 'w-7 h-7' : 'w-4 h-4');
 </script>
 
 <template>
