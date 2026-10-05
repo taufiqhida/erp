@@ -14,8 +14,8 @@ const navGroups = [
     {
         label: 'Identitas & Branding',
         items: [
-            { label: 'Pengumuman Login', route: 'pengaturan.pengumuman', permission: 'manage system settings' },
             { label: 'Profil Developer', route: 'pengaturan.profil-developer', permission: 'manage system settings' },
+            { label: 'Pengumuman Login', route: 'pengaturan.pengumuman', permission: 'manage system settings' },
             { label: 'Template Surat',   route: 'pengaturan.surat-templates', permission: 'manage system settings' },
         ],
     },

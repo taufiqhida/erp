@@ -1,8 +1,8 @@
 <script setup>
 import { ref } from 'vue';
 
-// Kotak pengumuman di halaman login: tinggi tetap (sekitar 3 pengumuman), sisanya digulir
-// (scroll mouse/sentuh) atau dengan tombol naik/turun. Yang disematkan selalu paling atas.
+// Pengumuman di halaman login (di dalam kotak identitas): tinggi tetap (sekitar 3 pengumuman),
+// sisanya digulir (scroll mouse/sentuh) atau dengan tombol naik/turun. Yang disematkan paling atas.
 defineProps({
     items: { type: Array, default: () => [] },
 });
@@ -12,8 +12,8 @@ const geser = (arah) => daftar.value?.scrollBy({ top: arah * 130, behavior: 'smo
 </script>
 
 <template>
-    <section v-if="items.length" class="rounded-2xl border border-slate-700/70 bg-slate-900/60 backdrop-blur-sm" aria-label="Pengumuman">
-        <header class="flex items-center justify-between px-4 py-3 border-b border-slate-700/70">
+    <section v-if="items.length" class="rounded-xl border border-slate-800 bg-slate-950/50" aria-label="Pengumuman">
+        <header class="flex items-center justify-between px-4 py-3 border-b border-slate-800">
             <h2 class="text-slate-200 text-sm font-semibold">Pengumuman</h2>
             <div v-if="items.length > 3" class="flex gap-1">
                 <button type="button" @click="geser(-1)" aria-label="Naik"

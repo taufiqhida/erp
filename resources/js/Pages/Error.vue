@@ -26,9 +26,9 @@ const bisaMuatUlang = computed(() => [419, 500, 503].includes(props.status));
         <Head :title="pesan.judul" />
 
         <div class="text-center">
-            <div class="text-5xl font-bold text-violet-600">{{ status }}</div>
-            <h1 class="mt-3 text-lg font-semibold text-gray-900">{{ pesan.judul }}</h1>
-            <p class="mt-2 text-sm text-gray-600">{{ pesan.isi }}</p>
+            <div class="text-5xl font-bold text-violet-400">{{ status }}</div>
+            <h1 class="mt-3 text-lg font-semibold text-white">{{ pesan.judul }}</h1>
+            <p class="mt-2 text-sm text-slate-400">{{ pesan.isi }}</p>
 
             <div class="mt-6 flex flex-col sm:flex-row gap-2 justify-center">
                 <Link href="/"
@@ -36,7 +36,7 @@ const bisaMuatUlang = computed(() => [419, 500, 503].includes(props.status));
                     Kembali ke Beranda
                 </Link>
                 <button v-if="bisaMuatUlang" type="button" @click="muatUlang"
-                    class="inline-flex items-center justify-center rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    class="inline-flex items-center justify-center rounded-md border border-slate-600 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800">
                     Muat ulang halaman
                 </button>
             </div>

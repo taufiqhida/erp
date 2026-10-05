@@ -41,10 +41,10 @@ const submit = () => {
     <GuestLayout>
         <Head title="Masuk" />
 
-        <h1 class="text-lg font-semibold text-gray-900">Masuk ke akun Anda</h1>
-        <p class="mt-1 mb-5 text-sm text-gray-500">Gunakan email dan password yang diberikan administrator.</p>
+        <h1 class="text-lg font-semibold text-white">Masuk ke akun Anda</h1>
+        <p class="mt-1 mb-5 text-sm text-slate-400">Gunakan email dan password yang diberikan administrator.</p>
 
-        <div v-if="status" class="mb-4 text-sm font-medium text-green-600">
+        <div v-if="status" class="mb-4 text-sm font-medium text-emerald-400">
             {{ status }}
         </div>
 
@@ -79,7 +79,7 @@ const submit = () => {
                         autocomplete="current-password"
                     />
                     <button type="button" @click="showPassword = !showPassword"
-                        class="absolute inset-y-0 right-0 px-3 text-xs font-medium text-gray-500 hover:text-gray-800"
+                        class="absolute inset-y-0 right-0 px-3 text-xs font-medium text-slate-400 hover:text-white"
                         :aria-label="showPassword ? 'Sembunyikan password' : 'Tampilkan password'">
                         {{ showPassword ? 'Sembunyikan' : 'Tampilkan' }}
                     </button>
@@ -91,7 +91,7 @@ const submit = () => {
             <div class="mt-4 block">
                 <label class="flex items-center">
                     <Checkbox name="remember" v-model:checked="form.remember" />
-                    <span class="ms-2 text-sm text-gray-600">Ingat saya di perangkat ini</span>
+                    <span class="ms-2 text-sm text-slate-400">Ingat saya di perangkat ini</span>
                 </label>
             </div>
 
@@ -107,11 +107,11 @@ const submit = () => {
                 <Link
                     v-if="canResetPassword"
                     :href="route('password.request')"
-                    class="text-gray-600 underline hover:text-gray-900"
+                    class="text-slate-400 underline hover:text-white"
                 >
                     Lupa password?
                 </Link>
-                <span v-else class="text-gray-500">Lupa password? Hubungi administrator sistem.</span>
+                <span v-else class="text-slate-400">Lupa password? Hubungi administrator sistem.</span>
             </div>
         </form>
 

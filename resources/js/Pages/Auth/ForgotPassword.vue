@@ -25,14 +25,14 @@ const submit = () => {
     <GuestLayout>
         <Head title="Lupa Password" />
 
-        <div class="mb-4 text-sm text-gray-600">
+        <div class="mb-4 text-sm text-slate-400">
             Lupa password? Masukkan alamat email Anda dan kami akan mengirim
             tautan untuk membuat password baru.
         </div>
 
         <div
             v-if="status"
-            class="mb-4 text-sm font-medium text-green-600"
+            class="mb-4 text-sm font-medium text-emerald-400"
         >
             {{ status }}
         </div>

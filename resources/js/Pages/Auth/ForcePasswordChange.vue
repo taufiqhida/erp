@@ -28,8 +28,8 @@ const logout = () => router.post(route('logout'));
     <GuestLayout>
         <Head title="Buat Password Baru" />
 
-        <h1 class="text-lg font-semibold text-gray-900">Buat password baru</h1>
-        <p class="mt-1 mb-5 text-sm text-gray-500">
+        <h1 class="text-lg font-semibold text-white">Buat password baru</h1>
+        <p class="mt-1 mb-5 text-sm text-slate-400">
             Halo, {{ user?.name }}. Akun Anda memakai password sementara. Buat password baru milik Anda sendiri untuk melanjutkan.
         </p>
 
@@ -45,7 +45,7 @@ const logout = () => router.post(route('logout'));
                 <InputLabel for="password" value="Password baru" />
                 <TextInput id="password" type="password" class="mt-1 block w-full" v-model="form.password"
                     required autocomplete="new-password" />
-                <p class="mt-1 text-xs text-gray-500">Minimal 10 karakter, mengandung huruf dan angka.</p>
+                <p class="mt-1 text-xs text-slate-400">Minimal 10 karakter, mengandung huruf dan angka.</p>
                 <InputError class="mt-2" :message="form.errors.password" />
             </div>
 
@@ -61,7 +61,7 @@ const logout = () => router.post(route('logout'));
             </PrimaryButton>
 
             <div class="mt-4 text-center">
-                <button type="button" @click="logout" class="text-sm text-gray-500 underline hover:text-gray-800">Keluar</button>
+                <button type="button" @click="logout" class="text-sm text-slate-400 underline hover:text-white">Keluar</button>
             </div>
         </form>
     </GuestLayout>
