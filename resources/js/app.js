@@ -7,7 +7,9 @@ import { createApp, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import MoneyInput from './Components/MoneyInput.vue';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+// Nama singkat sistem diambil dari <title> yang dirender server (Branding), bukan dari env build,
+// supaya judul tab selalu "SSID - Dashboard", "SSID - Masuk", dst.  Tidak bergantung VITE_APP_NAME.
+const appName = document.title.trim() || 'SSID';
 
 // Tangani response non-Inertia (403/419/500/dll) agar tidak gagal diam-diam.
 // Tanpa ini, aksi yang ditolak backend (mis. authorize() gagal) tidak
@@ -33,7 +35,7 @@ router.on('exception', (event) => {
 });
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    title: (title) => (title ? `${appName} - ${title}` : appName),
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.vue`,
