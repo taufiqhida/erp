@@ -18,7 +18,7 @@ class Branding
     private const NAMA_PLACEHOLDER = 'Nama Developer'; // isi awal DeveloperProfile::getSingleton()
     private const FAVICON_PATH = 'developer/favicon.png';
 
-    /** @return array{nama_developer: ?string, nama_sistem: string, logo_url: ?string, favicon_url: string, email_enabled: bool} */
+    /** @return array{nama_developer: ?string, nama_sistem: string, nama_singkat: string, logo_url: ?string, favicon_url: string, email_enabled: bool} */
     public static function data(): array
     {
         $nama = null;
@@ -39,6 +39,7 @@ class Branding
         return [
             'nama_developer' => $nama,
             'nama_sistem'    => self::NAMA_SISTEM,
+            'nama_singkat'   => self::NAMA_BAWAAN,
             'logo_url'       => $logoPath ? self::mediaUrl($logoPath) : null,
             'favicon_url'    => self::faviconUrl($logoPath),
             // Email dianggap aktif kalau mailer BUKAN log/array (lihat MAIL_MAILER). Dipakai untuk
