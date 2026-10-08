@@ -1,0 +1,297 @@
+/* DIBUAT OTOMATIS oleh scripts/buat-tema.py (jalankan: python scripts/buat-tema.py) — palet permukaan (--s-*) & aksen (--a-*) sebagai variabel CSS.
+   Tailwind: `slate` = permukaan, `violet` = aksen (lihat tailwind.config.js). Atribut pada <html>:
+   data-tema="terang" (bawaan gelap), data-latar="navy" (bawaan slate), data-aksen="biru|merah|teal" (bawaan ungu). */
+
+:root {
+    --s-50: 248 250 252;
+    --s-100: 241 245 249;
+    --s-200: 226 232 240;
+    --s-300: 203 213 225;
+    --s-400: 148 163 184;
+    --s-500: 134 150 173;
+    --s-600: 71 85 105;
+    --s-700: 51 65 85;
+    --s-800: 30 41 59;
+    --s-900: 15 23 42;
+    --s-950: 2 6 23;
+    --a-50: 245 243 255;
+    --a-100: 237 233 254;
+    --a-200: 221 214 254;
+    --a-300: 196 181 253;
+    --a-400: 167 139 250;
+    --a-500: 139 92 246;
+    --a-600: 124 58 237;
+    --a-700: 109 40 217;
+    --a-800: 91 33 182;
+    --a-900: 76 29 149;
+    --a-950: 46 16 101;
+}
+
+html[data-latar='navy'] {
+    --s-50: 246 249 252;
+    --s-100: 236 241 247;
+    --s-200: 221 230 240;
+    --s-300: 197 211 226;
+    --s-400: 163 184 207;
+    --s-500: 134 160 189;
+    --s-600: 52 80 108;
+    --s-700: 31 58 86;
+    --s-800: 19 40 63;
+    --s-900: 10 26 46;
+    --s-950: 4 15 28;
+}
+
+html[data-aksen='biru'] {
+    --a-50: 240 247 251;
+    --a-100: 219 235 246;
+    --a-200: 184 216 236;
+    --a-300: 140 192 225;
+    --a-400: 97 168 213;
+    --a-500: 36 134 197;
+    --a-600: 0 114 188;
+    --a-700: 0 93 154;
+    --a-800: 0 73 120;
+    --a-900: 0 55 90;
+    --a-950: 0 36 60;
+}
+
+html[data-aksen='merah'] {
+    --a-50: 253 242 243;
+    --a-100: 250 225 226;
+    --a-200: 244 196 198;
+    --a-300: 238 160 163;
+    --a-400: 231 124 129;
+    --a-500: 222 73 80;
+    --a-600: 217 43 51;
+    --a-700: 178 35 42;
+    --a-800: 139 28 33;
+    --a-900: 104 21 24;
+    --a-950: 69 14 16;
+}
+
+html[data-aksen='teal'] {
+    --a-50: 241 247 246;
+    --a-100: 221 236 235;
+    --a-200: 188 217 214;
+    --a-300: 147 193 190;
+    --a-400: 106 170 165;
+    --a-500: 49 137 130;
+    --a-600: 15 118 110;
+    --a-700: 12 97 90;
+    --a-800: 10 76 70;
+    --a-900: 7 57 53;
+    --a-950: 5 38 35;
+}
+
+html[data-tema='terang'] {
+    color-scheme: light;
+    --s-50: 2 6 23;
+    --s-100: 15 23 42;
+    --s-200: 30 41 59;
+    --s-300: 51 65 85;
+    --s-400: 71 85 105;
+    --s-500: 82 96 119;
+    --s-600: 148 163 184;
+    --s-700: 203 213 225;
+    --s-800: 226 232 240;
+    --s-900: 255 255 255;
+    --s-950: 248 250 252;
+}
+
+html:not([data-tema='terang']) { color-scheme: dark; }
+
+html[data-tema='terang'] {
+    --a-50: 46 16 101;
+    --a-100: 46 16 101;
+    --a-200: 76 29 149;
+    --a-300: 91 33 182;
+    --a-400: 109 40 217;
+}
+
+html[data-tema='terang'][data-aksen='biru'] {
+    --a-50: 0 36 60;
+    --a-100: 0 36 60;
+    --a-200: 0 55 90;
+    --a-300: 0 73 120;
+    --a-400: 0 93 154;
+}
+
+html[data-tema='terang'][data-aksen='merah'] {
+    --a-50: 69 14 16;
+    --a-100: 69 14 16;
+    --a-200: 104 21 24;
+    --a-300: 139 28 33;
+    --a-400: 178 35 42;
+}
+
+html[data-tema='terang'][data-aksen='teal'] {
+    --a-50: 5 38 35;
+    --a-100: 5 38 35;
+    --a-200: 7 57 53;
+    --a-300: 10 76 70;
+    --a-400: 12 97 90;
+}
+
+html[data-tema='terang'] .text-white,
+html[data-tema='terang'] .hover\:text-white:hover { color: rgb(var(--s-50)); }
+html[data-tema='terang'] :is(
+    [class*="bg-violet-400"],
+    [class*="bg-violet-500"],
+    [class*="bg-violet-600"],
+    [class*="bg-violet-700"],
+    [class*="bg-rose-400"],
+    [class*="bg-rose-500"],
+    [class*="bg-rose-600"],
+    [class*="bg-rose-700"],
+    [class*="bg-emerald-400"],
+    [class*="bg-emerald-500"],
+    [class*="bg-emerald-600"],
+    [class*="bg-emerald-700"],
+    [class*="bg-blue-400"],
+    [class*="bg-blue-500"],
+    [class*="bg-blue-600"],
+    [class*="bg-blue-700"],
+    [class*="bg-sky-400"],
+    [class*="bg-sky-500"],
+    [class*="bg-sky-600"],
+    [class*="bg-sky-700"],
+    [class*="bg-amber-400"],
+    [class*="bg-amber-500"],
+    [class*="bg-amber-600"],
+    [class*="bg-amber-700"],
+    [class*="bg-orange-400"],
+    [class*="bg-orange-500"],
+    [class*="bg-orange-600"],
+    [class*="bg-orange-700"],
+    [class*="bg-indigo-400"],
+    [class*="bg-indigo-500"],
+    [class*="bg-indigo-600"],
+    [class*="bg-indigo-700"],
+    [class*="bg-teal-400"],
+    [class*="bg-teal-500"],
+    [class*="bg-teal-600"],
+    [class*="bg-teal-700"],
+    [class*="bg-fuchsia-400"],
+    [class*="bg-fuchsia-500"],
+    [class*="bg-fuchsia-600"],
+    [class*="bg-fuchsia-700"],
+    [class*="bg-red-400"],
+    [class*="bg-red-500"],
+    [class*="bg-red-600"],
+    [class*="bg-red-700"],
+    [class*="bg-green-400"],
+    [class*="bg-green-500"],
+    [class*="bg-green-600"],
+    [class*="bg-green-700"],
+    [class*="bg-cyan-400"],
+    [class*="bg-cyan-500"],
+    [class*="bg-cyan-600"],
+    [class*="bg-cyan-700"],
+    [class*="bg-pink-400"],
+    [class*="bg-pink-500"],
+    [class*="bg-pink-600"],
+    [class*="bg-pink-700"],
+    [class*="bg-purple-400"],
+    [class*="bg-purple-500"],
+    [class*="bg-purple-600"],
+    [class*="bg-purple-700"],
+    [class*="bg-yellow-400"],
+    [class*="bg-yellow-500"],
+    [class*="bg-yellow-600"],
+    [class*="bg-yellow-700"],
+    [class*="bg-gradient"],
+    [class*="from-"]
+).text-white,
+html[data-tema='terang'] :is(
+    [class*="bg-violet-400"],
+    [class*="bg-violet-500"],
+    [class*="bg-violet-600"],
+    [class*="bg-violet-700"],
+    [class*="bg-rose-400"],
+    [class*="bg-rose-500"],
+    [class*="bg-rose-600"],
+    [class*="bg-rose-700"],
+    [class*="bg-emerald-400"],
+    [class*="bg-emerald-500"],
+    [class*="bg-emerald-600"],
+    [class*="bg-emerald-700"],
+    [class*="bg-blue-400"],
+    [class*="bg-blue-500"],
+    [class*="bg-blue-600"],
+    [class*="bg-blue-700"],
+    [class*="bg-sky-400"],
+    [class*="bg-sky-500"],
+    [class*="bg-sky-600"],
+    [class*="bg-sky-700"],
+    [class*="bg-amber-400"],
+    [class*="bg-amber-500"],
+    [class*="bg-amber-600"],
+    [class*="bg-amber-700"],
+    [class*="bg-orange-400"],
+    [class*="bg-orange-500"],
+    [class*="bg-orange-600"],
+    [class*="bg-orange-700"],
+    [class*="bg-indigo-400"],
+    [class*="bg-indigo-500"],
+    [class*="bg-indigo-600"],
+    [class*="bg-indigo-700"],
+    [class*="bg-teal-400"],
+    [class*="bg-teal-500"],
+    [class*="bg-teal-600"],
+    [class*="bg-teal-700"],
+    [class*="bg-fuchsia-400"],
+    [class*="bg-fuchsia-500"],
+    [class*="bg-fuchsia-600"],
+    [class*="bg-fuchsia-700"],
+    [class*="bg-red-400"],
+    [class*="bg-red-500"],
+    [class*="bg-red-600"],
+    [class*="bg-red-700"],
+    [class*="bg-green-400"],
+    [class*="bg-green-500"],
+    [class*="bg-green-600"],
+    [class*="bg-green-700"],
+    [class*="bg-cyan-400"],
+    [class*="bg-cyan-500"],
+    [class*="bg-cyan-600"],
+    [class*="bg-cyan-700"],
+    [class*="bg-pink-400"],
+    [class*="bg-pink-500"],
+    [class*="bg-pink-600"],
+    [class*="bg-pink-700"],
+    [class*="bg-purple-400"],
+    [class*="bg-purple-500"],
+    [class*="bg-purple-600"],
+    [class*="bg-purple-700"],
+    [class*="bg-yellow-400"],
+    [class*="bg-yellow-500"],
+    [class*="bg-yellow-600"],
+    [class*="bg-yellow-700"],
+    [class*="bg-gradient"],
+    [class*="from-"]
+) .text-white { color: #fff; }
+
+/* Teks status (200–400) dibuat lebih gelap di tema terang — 23 aturan sesuai pemakaian di kode. */
+html[data-tema='terang'] .text-amber-300 { color: #92400e; }
+html[data-tema='terang'] .text-amber-400 { color: #b45309; }
+html[data-tema='terang'] .text-blue-300 { color: #1e40af; }
+html[data-tema='terang'] .text-blue-400 { color: #1d4ed8; }
+html[data-tema='terang'] .text-emerald-300 { color: #065f46; }
+html[data-tema='terang'] .text-emerald-400 { color: #047857; }
+html[data-tema='terang'] .text-fuchsia-300 { color: #86198f; }
+html[data-tema='terang'] .text-indigo-300 { color: #3730a3; }
+html[data-tema='terang'] .text-indigo-400 { color: #4338ca; }
+html[data-tema='terang'] .text-orange-300 { color: #9a3412; }
+html[data-tema='terang'] .text-orange-400 { color: #c2410c; }
+html[data-tema='terang'] .text-purple-400 { color: #7e22ce; }
+html[data-tema='terang'] .text-rose-300 { color: #9f1239; }
+html[data-tema='terang'] .text-rose-400 { color: #be123c; }
+html[data-tema='terang'] .text-sky-300 { color: #075985; }
+html[data-tema='terang'] .text-sky-400 { color: #0369a1; }
+html[data-tema='terang'] .text-teal-300 { color: #115e59; }
+html[data-tema='terang'] .text-yellow-400 { color: #a16207; }
+html[data-tema='terang'] .hover\:text-amber-300:hover { color: #92400e; }
+html[data-tema='terang'] .hover\:text-amber-400:hover { color: #b45309; }
+html[data-tema='terang'] .hover\:text-emerald-300:hover { color: #065f46; }
+html[data-tema='terang'] .hover\:text-rose-300:hover { color: #9f1239; }
+html[data-tema='terang'] .hover\:text-rose-400:hover { color: #be123c; }

@@ -59,6 +59,8 @@ class HandleInertiaRequests extends Middleware
             // dibuka lewat URL langsung langsung muncul di menu samping, bukan di muatan berikutnya.
             // Logo/nama developer + status email — lihat App\Support\Branding.
             'branding'       => fn () => \App\Support\Branding::data(),
+            // Panel pratinjau tema (sementara, hanya di lingkungan lokal) — dihapus setelah warna final diputuskan.
+            'pratinjauTema'  => app()->environment('local'),
             'currentProject' => fn () => $this->resolveCurrentProject($request),
             'statusColors'   => $request->user() ? StatusColor::allMapped() : null,
         ];

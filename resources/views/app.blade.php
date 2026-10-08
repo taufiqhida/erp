@@ -11,6 +11,11 @@
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
 
+        @if (app()->environment('local'))
+            {{-- Pratinjau tema (sementara): terapkan pilihan tersimpan sebelum halaman tampil, supaya tidak berkedip. --}}
+            <script>try{var d=document.documentElement,s=JSON.parse(localStorage.getItem('ssid-tema-pratinjau')||'{}');['tema','aksen','latar'].forEach(function(k){if(s[k])d.dataset[k]=s[k]})}catch(e){}</script>
+        @endif
+
         <!-- Scripts -->
         @routes
         @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])

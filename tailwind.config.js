@@ -1,6 +1,10 @@
 import defaultTheme from 'tailwindcss/defaultTheme';
 import forms from '@tailwindcss/forms';
 
+const skala = (nama) => Object.fromEntries(
+    [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map((n) => [n, `rgb(var(--${nama}-${n}) / <alpha-value>)`]),
+);
+
 /** @type {import('tailwindcss').Config} */
 export default {
     content: [
@@ -16,9 +20,10 @@ export default {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
             },
             colors: {
-                // Teks sekunder (text-slate-500) dicerahkan sedikit supaya lolos kontras WCAG AA (>= 4,5:1)
-                // di atas latar slate-900/800 (bawaan Tailwind hanya 3,75:1 / 3,07:1). Tidak ada bg/border-slate-500.
-                slate: { 500: '#8696ad' },
+                // `slate` = permukaan/teks netral, `violet` = warna aksen. Keduanya dibaca dari variabel CSS
+                // (resources/css/tema.css) sehingga bisa berganti tema terang/gelap dan aksen tanpa mengubah kelas.
+                slate: skala('s'),
+                violet: skala('a'),
             },
         },
     },

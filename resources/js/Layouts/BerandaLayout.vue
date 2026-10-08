@@ -2,6 +2,7 @@
 import BrandMark from '@/Components/BrandMark.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import UkuranTeks from '@/Components/UkuranTeks.vue';
+import PratinjauTema from '@/Components/PratinjauTema.vue';
 import { computed } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { useToasts } from '@/Composables/useToasts';
@@ -102,6 +103,7 @@ const logout = () => router.post(route('logout'));
         </Teleport>
     </div>
     <ConfirmDialog />
+    <PratinjauTema v-if="$page.props.pratinjauTema" />
 </template>
 
 <style scoped>

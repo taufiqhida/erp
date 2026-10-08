@@ -2,6 +2,7 @@
 import BrandMark from '@/Components/BrandMark.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import UkuranTeks from '@/Components/UkuranTeks.vue';
+import PratinjauTema from '@/Components/PratinjauTema.vue';
 import { ref, computed } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { useToasts } from '@/Composables/useToasts';
@@ -385,6 +386,7 @@ const toggleDropdown = (item) => {
         </Teleport>
     </div>
     <ConfirmDialog />
+    <PratinjauTema v-if="$page.props.pratinjauTema" />
 </template>
 
 <style scoped>
