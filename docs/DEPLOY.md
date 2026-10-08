@@ -90,6 +90,14 @@ Di `.env`: `APP_URL=https://<domain>`, `TRUSTED_PROXIES=*`, `SESSION_SECURE_COOK
 
 > Situs di aaPanel tidak perlu PHP, database, atau FTP — semuanya ada di dalam kontainer.
 
+> **JANGAN aktifkan Cache pada reverse proxy aaPanel.** Cache nginx memakai alamat halaman sebagai kunci (bukan siapa pengguna),
+> jadi halaman milik satu pengguna (termasuk pengalihan ke /login) bisa tersaji ke orang lain. Gejalanya: jendela incognito baru
+> langsung masuk tanpa login, pilihan tema tidak bertahan, halaman kosong atau pengalihan ke /login yang acak.
+> Cek: `curl -s -o /dev/null -D - https://<domain>/beranda | grep -iE "^(HTTP|x-cache|age)"` — tidak boleh ada baris `x-cache`/`age`.
+> Perbaikan: aaPanel → Website → situs → Reverse proxy → Edit → matikan Cache (atau ganti `proxy_cache cache_one;` jadi
+> `proxy_cache off;` di berkas proxy-nya), reload nginx, lalu keluarkan semua sesi:
+> `docker compose exec app php artisan tinker --execute="DB::table('sessions')->truncate();"`
+
 ## 5. Ganti domain / alamat
 
 1. DNS: record A ke IP VPS (awalnya **DNS only**, bukan proxied).
@@ -170,6 +178,7 @@ nslookup <domain>
 | Gambar unggahan 404 (nginx) | Aturan ekstensi gambar menangkap `/media/...` | Sudah diperbaiki di `docker/nginx/default.conf` (blok `location ^~ /media/`) — `git pull` + build ulang |
 | Tabel `pengumuman` tidak ada | Migrasi belum dijalankan | `docker compose exec app php artisan migrate --force` |
 | SSL gagal terbit | DNS belum menyebar / record masih *proxied* | Pastikan DNS only, tunggu, ulangi |
+| Incognito langsung masuk tanpa login / tema tidak bertahan / halaman blank acak | Cache reverse proxy aaPanel menyajikan halaman pengguna lain | Matikan cache proxy (bagian 4), kosongkan sesi |
 | Judul tab "Laravel" | `VITE_APP_NAME` tidak diisi saat build | Sudah diperbaiki di kode (judul diambil dari Branding) |
 
 ## 9. Daftar periksa keamanan (sebelum dipakai data asli)
