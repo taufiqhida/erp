@@ -41,6 +41,7 @@ class HandleInertiaRequests extends Middleware
                     'email'       => $request->user()->email,
                     'ukuran_font' => $request->user()->ukuranFont(),
                     'tema'        => $request->user()->temaPilihan(),
+                    'sidebar'     => $request->user()->sidebarPilihan(),
                     'roles'       => $request->user()->getRoleNames(),
                     'permissions' => $request->user()->getAllPermissions()->pluck('name'),
                     'projects'    => $request->user()->can('view all projects')

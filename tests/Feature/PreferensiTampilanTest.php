@@ -163,5 +163,38 @@ class PreferensiTampilanTest extends TestCase
         $props = json_decode(html_entity_decode($m[1], ENT_QUOTES), true)['props'];
         $this->assertSame('terang', $props['auth']['user']['tema']);
     }
+
+    // ── Bentuk menu samping ──────────────────────────────────────────────
+
+    public function test_menu_samping_bawaan_terbuka_dan_pilihan_ringkas_tersimpan_di_akun(): void
+    {
+        $this->assertSame('terbuka', $this->user->sidebarPilihan());
+
+        $this->actingAs($this->user)->patch(route('preferensi.update'), ['sidebar' => 'ringkas'])->assertSessionDoesntHaveErrors();
+
+        $html = $this->actingAs($this->user)->get(route('beranda'))->getContent();
+        preg_match('/data-page="([^"]+)"/', $html, $m);
+        $props = json_decode(html_entity_decode($m[1], ENT_QUOTES), true)['props'];
+        $this->assertSame('ringkas', $props['auth']['user']['sidebar']);
+        $this->assertSame('ringkas', $this->user->fresh()->sidebarPilihan());
+    }
+
+    public function test_pilihan_menu_samping_tidak_valid_ditolak_dan_tidak_menimpa_preferensi_lain(): void
+    {
+        $this->actingAs($this->user)->patch(route('preferensi.update'), ['tema' => 'terang']);
+        $this->actingAs($this->user)->patch(route('preferensi.update'), ['sidebar' => 'ringkas']);
+        $this->actingAs($this->user)->patch(route('preferensi.update'), ['sidebar' => 'hilang'])->assertSessionHasErrors('sidebar');
+
+        $u = $this->user->fresh();
+        $this->assertSame('ringkas', $u->sidebarPilihan());
+        $this->assertSame('terang', $u->temaPilihan());
+    }
+
+    public function test_menu_samping_rusak_di_database_jatuh_ke_terbuka(): void
+    {
+        $this->user->forceFill(['preferences' => ['sidebar' => 'sembarang']])->save();
+
+        $this->assertSame('terbuka', $this->user->fresh()->sidebarPilihan());
+    }
 }
 

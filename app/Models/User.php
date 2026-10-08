@@ -21,6 +21,9 @@ class User extends Authenticatable
     /** Pilihan tema tampilan: gelap (bawaan), terang, atau mengikuti pengaturan perangkat. */
     public const TEMA = ['gelap', 'terang', 'sistem'];
 
+    /** Menu samping layar lebar: terbuka penuh atau mengecil jadi rel ikon. */
+    public const SIDEBAR = ['terbuka', 'ringkas'];
+
     protected $fillable = [
         'name',
         'email',
@@ -56,6 +59,14 @@ class User extends Authenticatable
         $v = $this->preferences['tema'] ?? 'gelap';
 
         return in_array($v, self::TEMA, true) ? $v : 'gelap';
+    }
+
+    /** Bentuk menu samping pilihan pengguna, selalu salah satu nilai SIDEBAR (bawaan terbuka). */
+    public function sidebarPilihan(): string
+    {
+        $v = $this->preferences['sidebar'] ?? 'terbuka';
+
+        return in_array($v, self::SIDEBAR, true) ? $v : 'terbuka';
     }
 
     /** Ukuran teks pilihan pengguna, selalu salah satu nilai UKURAN_FONT. */

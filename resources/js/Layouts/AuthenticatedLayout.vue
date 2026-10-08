@@ -3,7 +3,7 @@ import BrandMark from '@/Components/BrandMark.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import UkuranTeks from '@/Components/UkuranTeks.vue';
 import PilihTema from '@/Components/PilihTema.vue';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { useToasts } from '@/Composables/useToasts';
 
@@ -13,6 +13,53 @@ const user = computed(() => page.props.auth.user);
 const currentProject = computed(() => page.props.currentProject);
 const sidebarOpen = ref(false);
 const showUserMenu = ref(false);
+
+// Menu samping: layar lebar bisa mengecil jadi rel ikon (pilihan tersimpan di akun, lihat PreferensiController).
+// `rel` = benar-benar tampil sebagai rel (pilihan ringkas DAN layar lebar); layar kecil selalu laci penuh.
+const ringkas = ref(user.value?.sidebar === 'ringkas');
+const lebar = window.matchMedia('(min-width: 1024px)');
+const desktop = ref(lebar.matches);
+const rel = computed(() => ringkas.value && desktop.value);
+const flyout = ref(null); // label grup menu yang sedang membuka panel melayang (hanya saat rel)
+
+const toggleSidebar = () => {
+    ringkas.value = !ringkas.value;
+    flyout.value = null;
+    showUserMenu.value = false;
+    router.patch(route('preferensi.update'), { sidebar: ringkas.value ? 'ringkas' : 'terbuka' }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['auth'],
+    });
+};
+const toggleFlyout = (item) => {
+    showUserMenu.value = false;
+    flyout.value = flyout.value === item.label ? null : item.label;
+};
+
+const ubahLebar = (e) => { desktop.value = e.matches; flyout.value = null; };
+const klikLuar = (e) => {
+    if (flyout.value && !e.target.closest('[data-flyout]')) flyout.value = null;
+};
+const tombolKeyboard = (e) => {
+    if (e.key === 'Escape') { flyout.value = null; return; }
+    // Pintasan "[" mengecil/memperluas menu (diabaikan saat mengetik atau memakai Ctrl/Alt/Cmd).
+    if (e.key !== '[' || e.ctrlKey || e.metaKey || e.altKey || !desktop.value) return;
+    const el = e.target;
+    if (el?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+    e.preventDefault();
+    toggleSidebar();
+};
+onMounted(() => {
+    lebar.addEventListener('change', ubahLebar);
+    document.addEventListener('click', klikLuar);
+    document.addEventListener('keydown', tombolKeyboard);
+});
+onUnmounted(() => {
+    lebar.removeEventListener('change', ubahLebar);
+    document.removeEventListener('click', klikLuar);
+    document.removeEventListener('keydown', tombolKeyboard);
+});
 
 // Helper: cek apakah user punya role tertentu
 const hasRole = (role) => user.value?.roles?.includes(role) ?? false;
@@ -173,32 +220,38 @@ const toggleDropdown = (item) => {
             @click="sidebarOpen = false"
         />
 
-        <!-- Sidebar -->
+        <!-- Sidebar: layar lebar bisa mengecil jadi rel ikon (rel), layar kecil = laci geser (selalu penuh) -->
         <aside
             :class="[
-                'fixed inset-y-0 left-0 z-30 w-64 flex flex-col bg-slate-900 border-r border-slate-800 transition-transform duration-300 lg:static lg:translate-x-0',
+                'fixed inset-y-0 left-0 z-30 w-64 flex flex-col bg-slate-900 border-r border-slate-800 transition-[width,transform] duration-300 lg:static lg:translate-x-0',
+                ringkas ? 'lg:w-[4.5rem]' : 'lg:w-64',
                 sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             ]"
         >
             <!-- Logo — klik utk kembali ke Halaman Utama -->
-            <Link :href="route('beranda')" class="flex items-center gap-3 px-6 py-5 border-b border-slate-800 hover:bg-slate-800/50 transition-colors">
+            <Link :href="route('beranda')" :title="rel ? 'Halaman Utama' : undefined" :aria-label="rel ? 'Halaman Utama' : undefined"
+                :class="['flex items-center gap-3 py-5 border-b border-slate-800 hover:bg-slate-800/50 transition-colors', ringkas ? 'px-6 lg:px-0 lg:justify-center' : 'px-6']">
                 <BrandMark />
-                <div class="min-w-0">
+                <div :class="['min-w-0', ringkas ? 'lg:hidden' : '']">
                     <div class="text-white font-semibold text-sm leading-none truncate">{{ branding.nama_developer ?? 'SSID' }}</div>
                     <div class="text-slate-400 text-xs mt-0.5 truncate">{{ branding.nama_sistem }}</div>
                 </div>
             </Link>
 
-            <!-- Nav -->
-            <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+            <!-- Nav (saat rel: tidak digulir supaya panel melayang tidak terpotong) -->
+            <nav :class="['flex-1 px-3 py-4 space-y-0.5 overflow-y-auto', ringkas ? 'lg:overflow-visible' : '']" aria-label="Menu utama">
                 <template v-for="item in navItems" :key="item.label">
-                    <!-- Item dengan sub-menu (dropdown) -->
-                    <div v-if="item.children">
+                    <!-- Item dengan sub-menu: dropdown biasa, atau panel melayang saat rel -->
+                    <div v-if="item.children" class="relative" data-flyout>
                         <button
                             type="button"
-                            @click="toggleDropdown(item)"
+                            @click="rel ? toggleFlyout(item) : toggleDropdown(item)"
+                            :aria-expanded="rel ? flyout === item.label : isDropdownOpen(item)"
+                            :aria-label="rel ? item.label : undefined"
+                            :title="rel && flyout !== item.label ? item.label : undefined"
                             :class="[
                                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group',
+                                ringkas ? 'lg:justify-center lg:px-0' : '',
                                 isActive(item.children.map(c => c.routeName).flat())
                                     ? 'bg-violet-600/20 text-violet-300 shadow-sm'
                                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -211,22 +264,27 @@ const toggleDropdown = (item) => {
                                 ]"
                                 v-html="item.icon"
                             />
-                            {{ item.label }}
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
-                                :class="['w-4 h-4 ml-auto transition-transform flex-shrink-0', isDropdownOpen(item) ? 'rotate-90' : '']">
+                            <span :class="ringkas ? 'lg:hidden' : ''">{{ item.label }}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"
+                                :class="['w-4 h-4 ml-auto transition-transform flex-shrink-0', ringkas ? 'lg:hidden' : '', (rel ? flyout === item.label : isDropdownOpen(item)) ? 'rotate-90' : '']">
                                 <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
                             </svg>
                         </button>
-                        <div v-if="isDropdownOpen(item)" class="mt-0.5 ml-4 pl-4 border-l border-slate-800 space-y-0.5">
+                        <div v-if="rel ? flyout === item.label : isDropdownOpen(item)"
+                            :class="rel
+                                ? 'absolute left-full top-0 ml-5 w-56 p-1.5 space-y-0.5 rounded-xl border border-slate-700 bg-slate-800 shadow-2xl z-50'
+                                : 'mt-0.5 ml-4 pl-4 border-l border-slate-800 space-y-0.5'">
+                            <div v-if="rel" class="px-2.5 py-1.5 text-xs font-semibold text-slate-400">{{ item.label }}</div>
                             <Link
                                 v-for="child in item.children"
                                 :key="child.label"
                                 :href="child.href"
+                                @click="flyout = null"
                                 :class="[
                                     'flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
                                     isActive(child.routeName)
                                         ? 'bg-violet-600/20 text-violet-300 shadow-sm'
-                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/60'
                                 ]"
                             >
                                 {{ child.label }}
@@ -242,8 +300,11 @@ const toggleDropdown = (item) => {
                     <Link
                         v-else
                         :href="item.href"
+                        :aria-label="rel ? item.label : undefined"
+                        :title="rel ? item.label : undefined"
                         :class="[
                             'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group',
+                            ringkas ? 'lg:justify-center lg:px-0' : '',
                             isActive(item.routeName)
                                 ? 'bg-violet-600/20 text-violet-300 shadow-sm'
                                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -256,19 +317,37 @@ const toggleDropdown = (item) => {
                             ]"
                             v-html="item.icon"
                         />
-                        {{ item.label }}
+                        <span :class="ringkas ? 'lg:hidden' : ''">{{ item.label }}</span>
                         <span
                             v-if="isActive(item.routeName)"
-                            class="ml-auto w-1.5 h-1.5 rounded-full bg-violet-400"
+                            :class="['ml-auto w-1.5 h-1.5 rounded-full bg-violet-400', ringkas ? 'lg:hidden' : '']"
                         />
                     </Link>
                 </template>
             </nav>
 
+            <!-- Kecilkan / perluas menu samping (hanya layar lebar) -->
+            <div class="hidden lg:block px-3 pb-2">
+                <button type="button" @click="toggleSidebar"
+                    :aria-expanded="!ringkas"
+                    :aria-label="ringkas ? 'Perluas menu samping' : 'Kecilkan menu samping'"
+                    :title="ringkas ? 'Perluas menu samping ( [ )' : 'Kecilkan menu samping ( [ )'"
+                    :class="['w-full flex items-center gap-3 py-2 rounded-lg text-sm text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition-colors',
+                        ringkas ? 'justify-center px-0' : 'px-3']">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" aria-hidden="true"
+                        :class="['w-5 h-5 flex-shrink-0 transition-transform', ringkas ? 'rotate-180' : '']">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5" />
+                    </svg>
+                    <span v-if="!ringkas">Kecilkan menu</span>
+                </button>
+            </div>
+
             <!-- User Info Bottom -->
-            <div class="px-3 py-4 border-t border-slate-800">
-                <!-- User Menu Popup (renders above) -->
-                <div v-if="showUserMenu" class="mb-2 bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-2xl">
+            <div class="px-3 py-4 border-t border-slate-800 relative">
+                <!-- User Menu Popup (di atas; saat rel melayang di samping) -->
+                <div v-if="showUserMenu"
+                    :class="['bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-2xl',
+                        rel ? 'absolute bottom-3 left-full ml-2 w-60 z-50' : 'mb-2']">
                     <div class="px-4 py-3 border-b border-slate-700 space-y-3">
                         <div>
                             <div class="text-slate-400 text-xs mb-2">Tema</div>
@@ -305,19 +384,22 @@ const toggleDropdown = (item) => {
                     id="user-menu-btn"
                     :aria-expanded="showUserMenu"
                     aria-haspopup="true"
+                    :aria-label="rel ? `Menu pengguna ${user.name}` : undefined"
+                    :title="rel ? user.name : undefined"
                     @click="showUserMenu = !showUserMenu"
-                    class="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-slate-800 transition-colors text-left group"
+                    :class="['flex items-center gap-3 w-full py-2.5 rounded-lg hover:bg-slate-800 transition-colors text-left group', ringkas ? 'px-3 lg:px-0 lg:justify-center' : 'px-3']"
                 >
                     <div class="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
                         {{ user.name?.slice(0, 2).toUpperCase() }}
                     </div>
-                    <div class="flex-1 min-w-0">
+                    <div :class="['flex-1 min-w-0', ringkas ? 'lg:hidden' : '']">
                         <div class="text-slate-200 text-sm font-medium truncate">{{ user.name }}</div>
                         <span :class="roleLabel.color" class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium mt-0.5">
                             {{ roleLabel.label }}
                         </span>
                     </div>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" :class="['w-4 h-4 text-slate-500 transition-transform', showUserMenu ? 'rotate-180' : '']">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true"
+                        :class="['w-4 h-4 text-slate-500 transition-transform', ringkas ? 'lg:hidden' : '', showUserMenu ? 'rotate-180' : '']">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
                     </svg>
                 </button>
