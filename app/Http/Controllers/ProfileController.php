@@ -43,21 +43,12 @@ class ProfileController extends Controller
     /**
      * Delete the user's account.
      */
+    /**
+     * Akun tidak boleh dihapus sendiri: riwayat kerja (Audit Trail, transaksi) terikat ke akun. Penonaktifan dan
+     * penghapusan akun yang belum punya riwayat dilakukan superadmin di Manajemen Role.
+     */
     public function destroy(Request $request): RedirectResponse
     {
-        $request->validate([
-            'password' => ['required', 'current_password'],
-        ]);
-
-        $user = $request->user();
-
-        Auth::logout();
-
-        $user->delete();
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return Redirect::to('/');
+        abort(403, 'Akun hanya bisa dinonaktifkan atau dihapus oleh superadmin.');
     }
 }
