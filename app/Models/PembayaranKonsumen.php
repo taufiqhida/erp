@@ -53,6 +53,7 @@ class PembayaranKonsumen extends Model
             'dajam'          => 'Dana Jaminan',
             'tambahan_um'    => 'Tambahan Uang Muka',
             'titipan_biaya_akad' => 'Titipan Biaya Akad',
+            'uang_masuk_batal'   => 'Pembayaran Diterima (Batal)',
             default          => $this->jenis,
         };
     }
