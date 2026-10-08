@@ -46,6 +46,12 @@ const navGroups = [
         ],
     },
     {
+        label: 'Sistem',
+        items: [
+            { label: 'Pindah Master Data', route: 'pengaturan.pindah-master', permission: 'manage system settings' },
+        ],
+    },
+    {
         label: 'Konstruksi',
         items: [
             { label: 'Status Bangun', route: 'pengaturan.status-bangun', permission: 'manage status bangun master' },

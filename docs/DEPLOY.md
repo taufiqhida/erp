@@ -116,6 +116,33 @@ Pada dasarnya = deploy di server baru + memulihkan backup.
 4. Di server baru: pulihkan database dan folder unggahan, jalankan `docker compose up -d --build`.
 5. Uji, lalu arahkan record DNS ke IP server baru. Biarkan server lama beberapa hari sebelum dimatikan.
 
+## 6b. Menyiapkan production baru (urutan awal)
+
+Dikerjakan SEKALI di server production yang baru. Perintah `docker compose ...` dijalankan di folder `/var/www/erp`.
+
+1. Deploy kode dan pastikan semua migrasi `Ran` (`migrate:status`).
+2. Isi role dan izin (aman diulang; jangan jalankan seeder lain):
+   ```bash
+   docker compose exec app php artisan db:seed --class=RolesAndPermissionsSeeder --force
+   ```
+3. Buat akun superadmin pertama. Password sementara tampil SEKALI dan wajib diganti saat login pertama:
+   ```bash
+   docker compose exec app php artisan users:buat-superadmin email@perusahaan.com --nama="Nama Lengkap"
+   ```
+4. Login, lalu **Pengaturan → Pindah Master Data**: impor file master dari staging (Periksa dulu → Terapkan).
+5. Unggah ulang file yang tidak ikut impor: logo dan kop surat (Profil Developer), template Word (Template Surat).
+6. Buat akun staf lewat **Manajemen Role** (password sementara, wajib ganti).
+7. Baru **Import Kavling**, lalu **Import Konsumen**.
+
+> JANGAN menjalankan `db:seed` tanpa `--class` (berisi data demo) dan jangan `RealUsersSeeder` (12 akun berpassword bawaan).
+> Seeder role hanya perlu diulang bila ada izin baru di kode. Migrasi berjalan sekali dan tidak menimpa ubahan di layar.
+
+### Memindahkan master data (staging → production)
+- Di staging: Pengaturan → Pindah Master Data → pilih master → **Unduh file master** (`.json`).
+- Di production: bagian Impor → pilih file → **Periksa dulu** (belum mengubah apa pun) → cek ringkasan → **Terapkan impor**.
+- Pencocokan memakai nama (huruf besar/kecil diabaikan). Yang sudah ada dilewati kecuali "Perbarui yang sudah ada" dinyalakan.
+- Akun, proyek, kavling, konsumen, transaksi tidak ikut. File berisi nomor rekening perusahaan bila Profil Developer dicentang: simpan hati-hati, hapus setelah dipakai.
+
 ## 7. Perintah rutin yang berguna
 
 ```bash

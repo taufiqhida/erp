@@ -382,6 +382,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('pengumuman', [\App\Http\Controllers\PengumumanController::class, 'store'])->name('pengumuman.store');
             Route::patch('pengumuman/{pengumuman}', [\App\Http\Controllers\PengumumanController::class, 'update'])->name('pengumuman.update');
             Route::delete('pengumuman/{pengumuman}', [\App\Http\Controllers\PengumumanController::class, 'destroy'])->name('pengumuman.destroy');
+
+            // Pindah master data antar server (ekspor JSON → impor dengan pratinjau).
+            Route::get('pindah-master', [\App\Http\Controllers\PindahMasterController::class, 'index'])->name('pindah-master');
+            Route::get('pindah-master/ekspor', [\App\Http\Controllers\PindahMasterController::class, 'ekspor'])->name('pindah-master.ekspor')->middleware('throttle:heavy');
+            Route::post('pindah-master/periksa', [\App\Http\Controllers\PindahMasterController::class, 'periksa'])->name('pindah-master.periksa')->middleware('throttle:heavy');
+            Route::post('pindah-master/terapkan', [\App\Http\Controllers\PindahMasterController::class, 'terapkan'])->name('pindah-master.terapkan')->middleware('throttle:heavy');
+            Route::post('pindah-master/batal', [\App\Http\Controllers\PindahMasterController::class, 'batal'])->name('pindah-master.batal');
         });
 
         Route::middleware('permission:manage notaris')->group(function () {
