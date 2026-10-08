@@ -145,6 +145,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ── Proses Bangun (progress bangun + SPK) — terpisah dari Stok Kavling ──
     Route::get('proyek/{project}/proses-bangun', [ProsesBangunController::class, 'index'])
         ->name('proses-bangun.index');
+    Route::post('proyek/{project}/proses-bangun/massal', [ProsesBangunController::class, 'updateMassal'])
+        ->name('proses-bangun.massal')->middleware('throttle:heavy');
     Route::get('proyek/{project}/spk/buat', [ProsesBangunController::class, 'createSpk'])
         ->name('spk.create');
     Route::post('proyek/{project}/spk', [ProsesBangunController::class, 'storeSpk'])

@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -91,7 +92,9 @@ class ProsesBangunController extends Controller
             'klusterOptions' => $project->kavlings()->whereNotNull('kluster')->distinct()->orderBy('kluster')->pluck('kluster'),
             'blokOptions'    => $project->kavlings()->whereNotNull('blok')->distinct()->orderBy('blok')->pluck('blok'),
             'tipeUnitOptions' => $project->tipeUnitPresets()->active()->orderBy('nama')->get(['id', 'nama']),
-            'statusBangunStages' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna', 'bobot', 'urutan']),
+            'statusBangunStages' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna', 'bobot', 'urutan', 'is_default']),
+            // Daftar semua unit proyek untuk modal Update Proses (dimuat hanya saat modal dibuka).
+            'unitMassal' => Inertia::optional(fn () => Auth::user()->can('update status bangun') ? $this->unitMassal($project) : []),
             // Kontraktor yang PERNAH dapat SPK di proyek ini saja — bukan seluruh master
             // Kontraktor global — supaya opsi filter tidak penuh nama yang tidak relevan.
             'kontraktorOptions' => Kontraktor::whereHas('spks', fn($q) => $q->where('project_id', $project->id))
@@ -167,6 +170,96 @@ class ProsesBangunController extends Controller
 
         return redirect()->route('proses-bangun.index', $project->id)
             ->with('success', 'SPK berhasil diterbitkan.');
+    }
+
+    /**
+     * Ringkas semua unit proyek untuk pemilih unit di modal Update Proses (satu muatan, bukan per halaman):
+     * tahap & persen sekarang, progress total, apakah sudah selesai, dan id SPK yang mencakupnya.
+     */
+    private function unitMassal(Project $project): array
+    {
+        $finalId = StatusBangunStage::finalStage()?->id;
+
+        $query = $project->kavlings()->with('spks:id');
+        Kavling::applyUnitOrder($query, 'asc');
+
+        return $query->get()->map(fn (Kavling $k) => [
+            'id'       => $k->id,
+            'label'    => $k->nomor_lengkap,
+            'kluster'  => $k->kluster,
+            'blok'     => $k->blok,
+            'stage_id' => $k->status_bangun_stage_id,
+            'persen'   => (float) $k->status_bangun_persen,
+            'progress' => $k->progress_bangun,
+            'selesai'  => $finalId && (int) $k->status_bangun_stage_id === (int) $finalId && (float) $k->status_bangun_persen >= 100,
+            'spk_ids'  => $k->spks->pluck('id')->all(),
+        ])->all();
+    }
+
+    /**
+     * Update Proses massal: set tahap + persen yang sama untuk banyak unit sekaligus (satu SPK / satu blok /
+     * unit yang dipilih satu per satu). Satu transaksi: semua berubah atau tidak ada. Unit yang progresnya
+     * tidak serentak cukup tidak dipilih, lalu diubah sendiri lewat tabel. Catatan unit TIDAK disentuh.
+     */
+    public function updateMassal(Request $request, Project $project): RedirectResponse
+    {
+        $this->authorizeProjectAccess($project);
+        abort_unless(Auth::user()->can('update status bangun'), 403);
+
+        $validated = $request->validate([
+            'kavling_ids'            => 'required|array|min:1|max:200',
+            'kavling_ids.*'          => 'integer|distinct',
+            'status_bangun_stage_id' => 'required|exists:status_bangun_stages,id',
+            'persen'                 => 'nullable|numeric|min:0|max:100',
+            'lewati_selesai'         => 'nullable|boolean',
+        ], [
+            'kavling_ids.required' => 'Pilih minimal satu unit.',
+            'kavling_ids.min'      => 'Pilih minimal satu unit.',
+            'kavling_ids.max'      => 'Maksimal 200 unit sekali update.',
+        ]);
+
+        $stage = StatusBangunStage::findOrFail($validated['status_bangun_stage_id']);
+        $default = StatusBangunStage::defaultStage();
+        $persen = $default && $stage->id === $default->id ? 0.0 : ($validated['persen'] ?? null);
+        if ($persen === null) {
+            throw ValidationException::withMessages(['persen' => 'Isi persen penyelesaian untuk tahap ini.']);
+        }
+        $persen = (float) $persen;
+
+        $ids = array_values(array_unique(array_map('intval', $validated['kavling_ids'])));
+        $units = $project->kavlings()->whereIn('id', $ids)->get();
+        abort_if($units->count() !== count($ids), 422, 'Ada unit yang bukan bagian dari proyek ini.');
+
+        $lewatiSelesai = $request->boolean('lewati_selesai', true);
+        $finalId = StatusBangunStage::finalStage()?->id;
+        $diubah = $dilewati = $sama = 0;
+
+        DB::transaction(function () use ($units, $stage, $persen, $lewatiSelesai, $finalId, &$diubah, &$dilewati, &$sama) {
+            foreach ($units as $unit) {
+                $selesai = $finalId && (int) $unit->status_bangun_stage_id === (int) $finalId && (float) $unit->status_bangun_persen >= 100;
+                if ($lewatiSelesai && $selesai) {
+                    $dilewati++;
+                    continue;
+                }
+                if ((int) $unit->status_bangun_stage_id === $stage->id && abs((float) $unit->status_bangun_persen - $persen) < 0.005) {
+                    $sama++;
+                    continue;
+                }
+                $unit->update(['status_bangun_stage_id' => $stage->id, 'status_bangun_persen' => $persen]);
+                $diubah++;
+            }
+        });
+
+        activity('proses_bangun')
+            ->causedBy($request->user())
+            ->withProperties(['project_id' => $project->id, 'unit_ids' => $ids, 'tahap' => $stage->nama, 'persen' => $persen, 'diubah' => $diubah, 'dilewati' => $dilewati, 'sama' => $sama])
+            ->log("Update massal proses bangun: {$diubah} unit ke {$stage->nama} {$persen}%");
+
+        $pesan = "Update proses: {$diubah} unit diubah ke {$stage->nama} " . rtrim(rtrim(number_format($persen, 2, ',', ''), '0'), ',') . '%';
+        if ($dilewati) $pesan .= ", {$dilewati} unit selesai dilewati";
+        if ($sama) $pesan .= ", {$sama} unit sudah sama";
+
+        return back()->with('success', $pesan . '.');
     }
 
     private function formatRow(Kavling $k): array

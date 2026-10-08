@@ -46,16 +46,16 @@ const navGroups = [
         ],
     },
     {
-        label: 'Sistem',
-        items: [
-            { label: 'Pindah Master Data', route: 'pengaturan.pindah-master', permission: 'manage system settings' },
-        ],
-    },
-    {
         label: 'Konstruksi',
         items: [
             { label: 'Status Bangun', route: 'pengaturan.status-bangun', permission: 'manage status bangun master' },
             { label: 'Kontraktor',    route: 'pengaturan.kontraktor', permission: 'manage kontraktor' },
+        ],
+    },
+    {
+        label: 'Sistem',
+        items: [
+            { label: 'Pindah Master Data', route: 'pengaturan.pindah-master', permission: 'manage system settings' },
         ],
     },
 ];
