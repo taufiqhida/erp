@@ -316,42 +316,42 @@ onMounted(() => {
                     <!-- Detail Unit -->
                     <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-slate-800/40 rounded-lg p-3">
                         <div>
-                            <div class="text-slate-500 text-[11px]">Unit</div>
+                            <div class="text-slate-500 text-[0.6875rem]">Unit</div>
                             <div class="text-slate-200 text-sm mt-0.5">{{ trx.kavling_nomor }}</div>
                         </div>
                         <div>
-                            <div class="text-slate-500 text-[11px]">Proyek</div>
+                            <div class="text-slate-500 text-[0.6875rem]">Proyek</div>
                             <div class="text-slate-200 text-sm mt-0.5">{{ trx.project_nama }}</div>
                         </div>
                         <div>
-                            <div class="text-slate-500 text-[11px]">Tipe</div>
+                            <div class="text-slate-500 text-[0.6875rem]">Tipe</div>
                             <div class="text-slate-200 text-sm mt-0.5">{{ trx.tipe_unit ?? '-' }}</div>
                         </div>
                         <div>
-                            <div class="text-slate-500 text-[11px]">Luas Tanah/Bangunan</div>
+                            <div class="text-slate-500 text-[0.6875rem]">Luas Tanah/Bangunan</div>
                             <div class="text-slate-200 text-sm mt-0.5">{{ trx.luas_tanah ?? '-' }}/{{ trx.luas_bangunan ?? '-' }} m²</div>
                         </div>
                         <div>
-                            <div class="text-slate-500 text-[11px] mb-1">Status Bangun</div>
+                            <div class="text-slate-500 text-[0.6875rem] mb-1">Status Bangun</div>
                             <span :style="`background:${statusBangunColorHex[trx.status_bangun_stage_id]}25; color:${statusBangunColorHex[trx.status_bangun_stage_id]}`"
                                 class="px-2 py-0.5 text-xs rounded-full font-medium">
                                 {{ trx.status_bangun_label }}
                             </span>
                         </div>
                         <div v-if="trx.is_kpr">
-                            <div class="text-slate-500 text-[11px]">Bank Rekanan KPR</div>
+                            <div class="text-slate-500 text-[0.6875rem]">Bank Rekanan KPR</div>
                             <div class="text-slate-200 text-sm mt-0.5">{{ trx.bank_rekanan_kpr ?? '-' }}</div>
                         </div>
                         <div>
-                            <div class="text-slate-500 text-[11px] mb-1">ID Rumah (Tapera/SIKUMBANG)</div>
+                            <div class="text-slate-500 text-[0.6875rem] mb-1">ID Rumah (Tapera/SIKUMBANG)</div>
                             <div class="text-slate-200 text-sm mt-0.5 font-mono">{{ trx.id_rumah ?? '-' }}</div>
                         </div>
                         <div>
-                            <div class="text-slate-500 text-[11px]">Tanggal Booking</div>
+                            <div class="text-slate-500 text-[0.6875rem]">Tanggal Booking</div>
                             <div class="text-slate-200 text-sm mt-0.5">{{ trx.tanggal_booking ?? '-' }}</div>
                         </div>
                         <div>
-                            <div class="text-slate-500 text-[11px]">Tanggal Akad</div>
+                            <div class="text-slate-500 text-[0.6875rem]">Tanggal Akad</div>
                             <div class="text-slate-200 text-sm mt-0.5">{{ trx.tanggal_akad ?? '-' }}</div>
                         </div>
                     </div>
@@ -378,43 +378,43 @@ onMounted(() => {
                         <h3 class="text-slate-300 text-sm font-semibold flex items-center gap-1.5">🪪 Identitas Konsumen</h3>
                         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-800/40 rounded-lg p-3">
                             <div>
-                                <div class="text-slate-500 text-[11px]">Nama Lengkap</div>
+                                <div class="text-slate-500 text-[0.6875rem]">Nama Lengkap</div>
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.nama }}</div>
                             </div>
                             <div>
-                                <div class="text-slate-500 text-[11px]">No. HP</div>
+                                <div class="text-slate-500 text-[0.6875rem]">No. HP</div>
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.no_hp ?? '-' }}</div>
                             </div>
                             <div>
-                                <div class="text-slate-500 text-[11px]">NIK</div>
+                                <div class="text-slate-500 text-[0.6875rem]">NIK</div>
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.nik ?? '-' }}</div>
                             </div>
                             <div>
-                                <div class="text-slate-500 text-[11px]">NPWP</div>
+                                <div class="text-slate-500 text-[0.6875rem]">NPWP</div>
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.npwp ?? '-' }}</div>
                             </div>
                             <div>
-                                <div class="text-slate-500 text-[11px]">Email</div>
+                                <div class="text-slate-500 text-[0.6875rem]">Email</div>
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.email ?? '-' }}</div>
                             </div>
                             <div>
-                                <div class="text-slate-500 text-[11px]">Jenis Pekerjaan</div>
+                                <div class="text-slate-500 text-[0.6875rem]">Jenis Pekerjaan</div>
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.pekerjaan_label ?? '-' }}</div>
                             </div>
                             <div>
-                                <div class="text-slate-500 text-[11px]">Status Pernikahan</div>
+                                <div class="text-slate-500 text-[0.6875rem]">Status Pernikahan</div>
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.status_pernikahan_label ?? '-' }}</div>
                             </div>
                             <div>
-                                <div class="text-slate-500 text-[11px]">Sumber Lead</div>
+                                <div class="text-slate-500 text-[0.6875rem]">Sumber Lead</div>
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.sumber_lead_nama ?? '-' }}<span v-if="konsumen.referral_keterangan" class="text-slate-400"> — {{ konsumen.referral_keterangan }}</span></div>
                             </div>
                             <div>
-                                <div class="text-slate-500 text-[11px]">Alamat</div>
+                                <div class="text-slate-500 text-[0.6875rem]">Alamat</div>
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.alamat ?? '-' }}</div>
                             </div>
                             <div v-if="konsumen.catatan" class="col-span-2 sm:col-span-3">
-                                <div class="text-slate-500 text-[11px]">Catatan Sales</div>
+                                <div class="text-slate-500 text-[0.6875rem]">Catatan Sales</div>
                                 <div class="text-slate-300 text-sm mt-0.5">{{ konsumen.catatan }}</div>
                             </div>
                         </div>
@@ -450,15 +450,15 @@ onMounted(() => {
                             </div>
 
                             <div class="pt-2 mt-1 border-t border-slate-700/60">
-                                <div class="text-slate-500 text-[11px] uppercase tracking-wide mb-1">
+                                <div class="text-slate-500 text-[0.6875rem] uppercase tracking-wide mb-1">
                                     Cara Pembayaran: {{ trx.cara_bayar_label }}
-                                    <span v-if="trx.skema_dp_preset" class="text-slate-600 normal-case">· Skema: {{ trx.skema_dp_preset.nama }}</span>
-                                    <span v-if="trx.program_all_in_nama" class="text-slate-600 normal-case">· Program All In: {{ trx.program_all_in_nama }}</span>
+                                    <span v-if="trx.skema_dp_preset" class="text-slate-500 normal-case">· Skema: {{ trx.skema_dp_preset.nama }}</span>
+                                    <span v-if="trx.program_all_in_nama" class="text-slate-500 normal-case">· Program All In: {{ trx.program_all_in_nama }}</span>
                                 </div>
                                 <div v-if="trx.booking_fee > 0" class="flex justify-between text-slate-400">
                                     <span>
                                         Booking Fee
-                                        <span v-if="trx.skema_dp_preset?.booking_fee_aktif" class="text-slate-600 text-xs ml-1">
+                                        <span v-if="trx.skema_dp_preset?.booking_fee_aktif" class="text-slate-500 text-xs ml-1">
                                             ({{ trx.skema_dp_preset.booking_fee_tipe === 'persen' ? trx.skema_dp_preset.booking_fee_nilai + '%' : 'nominal tetap' }},
                                             {{ trx.skema_dp_preset.booking_fee_tenor }}x,
                                             {{ trx.skema_dp_preset.booking_fee_masuk_harga_jual ? 'masuk harga jual' : 'di luar harga jual' }})
@@ -469,7 +469,7 @@ onMounted(() => {
                                 <div v-if="trx.dp_nominal > 0" class="flex justify-between text-slate-400">
                                     <span>
                                         DP
-                                        <span v-if="trx.skema_dp_preset?.dp_aktif" class="text-slate-600 text-xs ml-1">
+                                        <span v-if="trx.skema_dp_preset?.dp_aktif" class="text-slate-500 text-xs ml-1">
                                             ({{ trx.skema_dp_preset.dp_tipe === 'persen' ? trx.skema_dp_preset.dp_nilai + '%' : 'nominal tetap' }},
                                             {{ trx.skema_dp_preset.dp_tenor }}x,
                                             {{ trx.skema_dp_preset.dp_masuk_harga_jual ? 'masuk harga jual' : 'di luar harga jual' }})
@@ -478,10 +478,10 @@ onMounted(() => {
                                     <span class="text-slate-300">{{ formatRp(trx.dp_nominal) }}</span>
                                 </div>
                                 <div v-if="trx.titipan_biaya_akad_nominal > 0" class="flex justify-between text-slate-400">
-                                    <span>Titipan Biaya Akad<span class="text-slate-600 text-xs ml-1">(dari Program All In)</span></span>
+                                    <span>Titipan Biaya Akad<span class="text-slate-500 text-xs ml-1">(dari Program All In)</span></span>
                                     <span class="text-slate-300">{{ formatRp(trx.titipan_biaya_akad_nominal) }}</span>
                                 </div>
-                                <div v-if="!(trx.booking_fee > 0) && !(trx.dp_nominal > 0) && !(trx.titipan_biaya_akad_nominal > 0)" class="text-slate-600 text-xs">Tidak ada booking fee maupun DP.</div>
+                                <div v-if="!(trx.booking_fee > 0) && !(trx.dp_nominal > 0) && !(trx.titipan_biaya_akad_nominal > 0)" class="text-slate-500 text-xs">Tidak ada booking fee maupun DP.</div>
                             </div>
                         </div>
 
@@ -539,7 +539,7 @@ onMounted(() => {
                                         <MoneyInput v-model="bt.nominal" placeholder="Nominal"
                                             class="w-28 px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                         <button type="button" @click="removeRincianBiayaTambahan(trx, idx)"
-                                            class="text-rose-400 hover:bg-rose-500/10 rounded p-1.5 flex-shrink-0">
+                                            class="text-rose-400 hover:bg-rose-500/10 rounded p-1.5 flex-shrink-0" aria-label="Hapus">
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                                             </svg>
@@ -586,7 +586,7 @@ onMounted(() => {
                             <p v-if="Object.keys(getRincianForm(trx).errors).length" class="text-rose-400 text-xs space-y-0.5">
                                 <span v-for="(msg, field) in getRincianForm(trx).errors" :key="field" class="block">{{ msg }}</span>
                             </p>
-                            <p class="text-slate-600 text-[11px]">Cara Bayar &amp; Skema DP tidak bisa diubah di sini — kalau memang perlu ganti, transaksi harus dibatalkan &amp; booking ulang. Booking Fee/DP yang sudah digenerate juga tidak ikut berubah.</p>
+                            <p class="text-slate-500 text-[0.6875rem]">Cara Bayar &amp; Skema DP tidak bisa diubah di sini — kalau memang perlu ganti, transaksi harus dibatalkan &amp; booking ulang. Booking Fee/DP yang sudah digenerate juga tidak ikut berubah.</p>
 
                             <div class="flex justify-end gap-2 pt-1">
                                 <button type="button" @click="cancelEditRincian(trx.id)" class="px-3 py-1.5 text-slate-400 hover:text-slate-200 text-xs">Batal</button>
@@ -623,9 +623,9 @@ onMounted(() => {
                                     <div class="flex items-center gap-2">
                                         <span class="text-base">{{ dok.status_icon }}</span>
                                         <span class="text-slate-300 text-sm">{{ dok.nama_dokumen }}</span>
-                                        <span v-if="dok.sifat !== 'wajib'" class="text-slate-600 text-xs">({{ dok.sifat_label }})</span>
+                                        <span v-if="dok.sifat !== 'wajib'" class="text-slate-500 text-xs">({{ dok.sifat_label }})</span>
                                     </div>
-                                    <span class="text-xs" :class="dok.status === 'sudah_ada' ? 'text-emerald-400' : ['perlu_revisi','ditolak'].includes(dok.status) ? 'text-amber-400' : 'text-slate-600'">
+                                    <span class="text-xs" :class="dok.status === 'sudah_ada' ? 'text-emerald-400' : ['perlu_revisi','ditolak'].includes(dok.status) ? 'text-amber-400' : 'text-slate-500'">
                                         {{ dok.status_label }}
                                     </span>
                                 </div>
@@ -637,7 +637,7 @@ onMounted(() => {
                                 </Link>
                             </div>
                         </div>
-                        <div v-else class="text-slate-600 text-xs px-1">Belum ada template dokumen untuk cara bayar ini.</div>
+                        <div v-else class="text-slate-500 text-xs px-1">Belum ada template dokumen untuk cara bayar ini.</div>
                     </div>
 
                     <!-- ═══ Cetak Dokumen (generate dari Template Surat) ═══ -->
@@ -685,7 +685,7 @@ onMounted(() => {
                             </div>
 
                             <div class="rounded-lg border border-slate-800 overflow-hidden">
-                                <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[11px] font-semibold uppercase tracking-wide">
+                                <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[0.6875rem] font-semibold uppercase tracking-wide">
                                     Nama Biaya / Subjek / Nominal / Status
                                 </div>
 
@@ -700,8 +700,8 @@ onMounted(() => {
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                                             </svg>
                                             <span class="text-slate-300">{{ row.nama }}</span>
-                                            <span class="text-slate-600 text-xs ml-2">{{ row.subjek }}</span>
-                                            <span v-if="row.progress" class="text-slate-600 text-xs ml-2">({{ row.progress }})</span>
+                                            <span class="text-slate-500 text-xs ml-2">{{ row.subjek }}</span>
+                                            <span v-if="row.progress" class="text-slate-500 text-xs ml-2">({{ row.progress }})</span>
                                         </div>
                                         <div class="flex items-center gap-3 flex-shrink-0">
                                             <span class="text-slate-200 font-medium min-w-[110px] text-right">{{ nominalLabel(row.nominal, row.jumlah_dibayar, row.status) }}</span>
@@ -722,7 +722,7 @@ onMounted(() => {
                                             class="flex flex-wrap items-center justify-between gap-2 pl-8 pr-3 py-2 text-sm border-b border-slate-800/40 last:border-b-0">
                                             <div class="flex-1">
                                                 <span class="text-slate-400">{{ j.jenis_label }} #{{ j.nomor_cicilan }}</span>
-                                                <span class="text-slate-600 text-xs ml-2">jatuh tempo {{ j.tanggal_jatuh_tempo }}</span>
+                                                <span class="text-slate-500 text-xs ml-2">jatuh tempo {{ j.tanggal_jatuh_tempo }}</span>
                                                 <span v-if="j.status !== 'lunas' && j.is_terlambat" class="ml-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-500/15 text-rose-400">Terlambat</span>
                                             </div>
                                             <div class="flex items-center gap-3 flex-shrink-0">
@@ -745,16 +745,16 @@ onMounted(() => {
                                                 class="flex flex-wrap items-center justify-between gap-2 pl-8 pr-3 py-2 text-sm border-b border-slate-800/40 last:border-b-0">
                                                 <div class="flex-1">
                                                     <span class="text-slate-300 font-medium">{{ formatRp(c.jumlah) }}</span>
-                                                    <span class="text-slate-600 text-xs ml-2">dibayar {{ c.tanggal_bayar }}</span>
-                                                    <span v-if="c.keterangan" class="text-slate-600 text-xs ml-2">· {{ c.keterangan }}</span>
+                                                    <span class="text-slate-500 text-xs ml-2">dibayar {{ c.tanggal_bayar }}</span>
+                                                    <span v-if="c.keterangan" class="text-slate-500 text-xs ml-2">· {{ c.keterangan }}</span>
                                                 </div>
                                             </div>
-                                            <div v-if="!row.cicilan?.length" class="pl-8 pr-3 py-2 text-slate-600 text-xs">Belum ada cicilan tercatat.</div>
+                                            <div v-if="!row.cicilan?.length" class="pl-8 pr-3 py-2 text-slate-500 text-xs">Belum ada cicilan tercatat.</div>
                                         </div>
                                     </div>
                                 </template>
 
-                                <div v-if="!trx.kartu_piutang_static?.length" class="px-3 py-4 text-center text-slate-600 text-xs">
+                                <div v-if="!trx.kartu_piutang_static?.length" class="px-3 py-4 text-center text-slate-500 text-xs">
                                     Belum ada data piutang.
                                 </div>
                             </div>
@@ -776,12 +776,12 @@ onMounted(() => {
                             <div class="rounded-lg border border-slate-800 overflow-hidden">
                                 <!-- 1. Sales input SBUM (khusus KPR Subsidi) -->
                                 <template v-if="trx.is_kpr_subsidi">
-                                    <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[11px] font-semibold uppercase tracking-wide">SBUM</div>
+                                    <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[0.6875rem] font-semibold uppercase tracking-wide">SBUM</div>
                                     <div v-for="item in sbumItems(trx)" :key="`sbum-${item.id}`"
                                         class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-slate-800/60 text-sm group">
                                         <div>
                                             <span class="text-slate-300">{{ item.nama }}</span>
-                                            <span class="text-slate-600 text-xs ml-2">Pemerintah/Bank</span>
+                                            <span class="text-slate-500 text-xs ml-2">Pemerintah/Bank</span>
                                         </div>
                                         <div class="flex items-center gap-1.5">
                                             <template v-if="item.status !== 'lunas' && canEditBiayaAkad(trx)">
@@ -789,7 +789,7 @@ onMounted(() => {
                                                     @commit="updateBiayaAkadNominal(item, $event)"
                                                     class="w-24 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-right text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                                 <button @click="removeBiayaAkad(item)"
-                                                    class="opacity-0 group-hover:opacity-100 text-rose-400 hover:bg-rose-500/10 rounded p-1 transition-all flex-shrink-0">
+                                                    class="opacity-0 group-hover:opacity-100 text-rose-400 hover:bg-rose-500/10 rounded p-1 transition-all flex-shrink-0" aria-label="Hapus">
                                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
                                                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                                                     </svg>
@@ -830,12 +830,12 @@ onMounted(() => {
                                 </div>
 
                                 <!-- 3. Sales input Dana Jaminan -->
-                                <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[11px] font-semibold uppercase tracking-wide">Dana Jaminan</div>
+                                <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[0.6875rem] font-semibold uppercase tracking-wide">Dana Jaminan</div>
                                 <div v-for="item in dajamItems(trx)" :key="`dajam-${item.id}`"
                                     class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-slate-800/60 text-sm group">
                                     <div>
                                         <span class="text-slate-300">{{ item.nama }}</span>
-                                        <span class="text-slate-600 text-xs ml-2">Bank</span>
+                                        <span class="text-slate-500 text-xs ml-2">Bank</span>
                                     </div>
                                     <div class="flex items-center gap-1.5">
                                         <template v-if="item.status !== 'lunas' && canEditBiayaAkad(trx)">
@@ -843,7 +843,7 @@ onMounted(() => {
                                                 @commit="updateBiayaAkadNominal(item, $event)"
                                                 class="w-24 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-right text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                             <button @click="removeBiayaAkad(item)"
-                                                class="opacity-0 group-hover:opacity-100 text-rose-400 hover:bg-rose-500/10 rounded p-1 transition-all flex-shrink-0">
+                                                class="opacity-0 group-hover:opacity-100 text-rose-400 hover:bg-rose-500/10 rounded p-1 transition-all flex-shrink-0" aria-label="Hapus">
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                                                 </svg>
@@ -876,7 +876,7 @@ onMounted(() => {
 
                                 <!-- 4. (-) Turun Plafon — aksinya di baris Tambahan Uang Muka Kartu Piutang -->
                                 <div v-if="tambahanUmRow(trx)" class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60">
-                                    <span class="text-slate-400">(−) Turun Plafon <span class="text-slate-600 text-xs">— lihat baris Tambahan Uang Muka di Kartu Piutang</span></span>
+                                    <span class="text-slate-400">(−) Turun Plafon <span class="text-slate-500 text-xs">— lihat baris Tambahan Uang Muka di Kartu Piutang</span></span>
                                     <span class="text-amber-300 font-medium">{{ formatRp(tambahanUmRow(trx).nominal) }}</span>
                                 </div>
 
@@ -900,10 +900,10 @@ onMounted(() => {
                                     <div v-for="t in trx.pencairan_kpr_tahaps" :key="t.id"
                                         class="pl-8 pr-3 py-2 text-sm border-b border-slate-800/40 last:border-b-0">
                                         <span class="text-slate-300 font-medium">{{ formatRp(t.nominal) }}</span>
-                                        <span class="text-slate-600 text-xs ml-2">cair {{ t.tanggal_cair }}</span>
-                                        <span v-if="t.keterangan" class="text-slate-600 text-xs ml-2">· {{ t.keterangan }}</span>
+                                        <span class="text-slate-500 text-xs ml-2">cair {{ t.tanggal_cair }}</span>
+                                        <span v-if="t.keterangan" class="text-slate-500 text-xs ml-2">· {{ t.keterangan }}</span>
                                     </div>
-                                    <div v-if="!trx.pencairan_kpr_tahaps?.length" class="pl-8 pr-3 py-2 text-slate-600 text-xs">Belum ada pencairan tercatat.</div>
+                                    <div v-if="!trx.pencairan_kpr_tahaps?.length" class="pl-8 pr-3 py-2 text-slate-500 text-xs">Belum ada pencairan tercatat.</div>
                                 </div>
                             </div>
                         </div>
@@ -920,7 +920,7 @@ onMounted(() => {
                                     </div>
                                     <div class="text-right">
                                         <div class="text-emerald-400 font-medium">{{ formatRp(p.jumlah) }}</div>
-                                        <div class="text-slate-600 text-xs">{{ p.tanggal_bayar }}</div>
+                                        <div class="text-slate-500 text-xs">{{ p.tanggal_bayar }}</div>
                                     </div>
                                 </div>
                             </div>

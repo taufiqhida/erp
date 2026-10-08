@@ -77,7 +77,7 @@ const printPage = () => window.print();
             <!-- Title -->
             <div class="text-center py-6 border-b border-slate-100">
                 <h1 class="text-2xl font-bold text-slate-900 tracking-wide uppercase">Kuitansi</h1>
-                <div class="text-slate-500 text-sm mt-1">No. KWT-{{ String(pembayaran.id).padStart(6, '0') }}</div>
+                <div class="text-slate-600 text-sm mt-1">No. KWT-{{ String(pembayaran.id).padStart(6, '0') }}</div>
             </div>
 
             <!-- Content -->
@@ -85,28 +85,28 @@ const printPage = () => window.print();
                 <table class="w-full text-sm">
                     <tbody>
                         <tr class="border-b border-slate-100">
-                            <td class="py-2.5 text-slate-500 w-40">Telah diterima dari</td>
-                            <td class="py-2.5 text-slate-500 w-4">:</td>
+                            <td class="py-2.5 text-slate-600 w-40">Telah diterima dari</td>
+                            <td class="py-2.5 text-slate-600 w-4">:</td>
                             <td class="py-2.5 text-slate-900 font-semibold">{{ konsumen.nama }}</td>
                         </tr>
                         <tr class="border-b border-slate-100">
-                            <td class="py-2.5 text-slate-500">Unit</td>
-                            <td class="py-2.5 text-slate-500">:</td>
+                            <td class="py-2.5 text-slate-600">Unit</td>
+                            <td class="py-2.5 text-slate-600">:</td>
                             <td class="py-2.5 text-slate-900">{{ kavling.nomor_lengkap }} – {{ kavling.project_nama }}</td>
                         </tr>
                         <tr class="border-b border-slate-100">
-                            <td class="py-2.5 text-slate-500">Jenis Pembayaran</td>
-                            <td class="py-2.5 text-slate-500">:</td>
+                            <td class="py-2.5 text-slate-600">Jenis Pembayaran</td>
+                            <td class="py-2.5 text-slate-600">:</td>
                             <td class="py-2.5 text-slate-900 font-medium">{{ pembayaran.jenis_label }}</td>
                         </tr>
                         <tr class="border-b border-slate-100">
-                            <td class="py-2.5 text-slate-500">Tanggal</td>
-                            <td class="py-2.5 text-slate-500">:</td>
+                            <td class="py-2.5 text-slate-600">Tanggal</td>
+                            <td class="py-2.5 text-slate-600">:</td>
                             <td class="py-2.5 text-slate-900">{{ pembayaran.tanggal_bayar }}</td>
                         </tr>
                         <tr v-if="pembayaran.keterangan" class="border-b border-slate-100">
-                            <td class="py-2.5 text-slate-500">Keterangan</td>
-                            <td class="py-2.5 text-slate-500">:</td>
+                            <td class="py-2.5 text-slate-600">Keterangan</td>
+                            <td class="py-2.5 text-slate-600">:</td>
                             <td class="py-2.5 text-slate-700">{{ pembayaran.keterangan }}</td>
                         </tr>
                     </tbody>
@@ -114,9 +114,9 @@ const printPage = () => window.print();
 
                 <!-- Amount Box -->
                 <div class="bg-slate-50 rounded-xl p-5 text-center border border-slate-200 mt-4">
-                    <div class="text-slate-500 text-sm mb-1">Jumlah Pembayaran</div>
+                    <div class="text-slate-600 text-sm mb-1">Jumlah Pembayaran</div>
                     <div class="text-3xl font-bold text-violet-700">{{ formatRp(pembayaran.jumlah) }}</div>
-                    <div class="text-slate-500 text-sm mt-1.5 capitalize italic">
+                    <div class="text-slate-600 text-sm mt-1.5 capitalize italic">
                         Terbilang: {{ terbilang(pembayaran.jumlah) }}
                     </div>
                 </div>
@@ -126,10 +126,10 @@ const printPage = () => window.print();
             <div class="px-8 pb-8">
                 <div class="flex justify-end">
                     <div class="text-center">
-                        <div class="text-slate-500 text-sm">{{ developer.nama }}</div>
+                        <div class="text-slate-600 text-sm">{{ developer.nama }}</div>
                         <div class="mt-16 mb-1 border-b border-slate-400 w-40"></div>
                         <div class="text-slate-700 text-sm font-medium">{{ pembayaran.created_by ?? 'Admin' }}</div>
-                        <div class="text-slate-500 text-xs">Penerima</div>
+                        <div class="text-slate-600 text-xs">Penerima</div>
                     </div>
                 </div>
             </div>

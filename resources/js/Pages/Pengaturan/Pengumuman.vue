@@ -127,7 +127,7 @@ const hapus = async (p) => {
                     </div>
                 </div>
             </div>
-            <div v-else class="px-5 py-8 text-center text-slate-600 text-sm">Belum ada pengumuman.</div>
+            <div v-else class="px-5 py-8 text-center text-slate-500 text-sm">Belum ada pengumuman.</div>
         </div>
     </PengaturanLayout>
 </template>

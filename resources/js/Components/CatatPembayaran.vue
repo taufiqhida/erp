@@ -64,17 +64,17 @@ const remove = async () => {
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
-            <span v-if="tanggalBayar" class="text-slate-600 text-[10px] whitespace-nowrap">{{ tanggalBayar }}</span>
+            <span v-if="tanggalBayar" class="text-slate-500 text-[0.625rem] whitespace-nowrap">{{ tanggalBayar }}</span>
         </div>
         <div v-else class="w-56 bg-slate-900 border border-slate-700 rounded-lg p-2.5 space-y-1.5">
-            <p v-if="requireNote && warningMessage" class="text-amber-400 text-[11px] bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5">
+            <p v-if="requireNote && warningMessage" class="text-amber-400 text-[0.6875rem] bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5">
                 ⚠ {{ warningMessage }}
             </p>
             <MoneyInput v-model="form.jumlah" placeholder="Jumlah"
                 class="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
             <input v-model="form.tanggal_bayar" type="date"
                 class="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
-            <p v-if="form.tanggal_bayar > todayIso()" class="text-amber-400 text-[11px]">⚠ Tanggal di masa depan — pastikan pembayaran sudah benar-benar diterima.</p>
+            <p v-if="form.tanggal_bayar > todayIso()" class="text-amber-400 text-[0.6875rem]">⚠ Tanggal di masa depan — pastikan pembayaran sudah benar-benar diterima.</p>
             <input v-model="form.keterangan" type="text" :placeholder="requireNote ? 'Alasan (wajib diisi)' : 'Keterangan (opsional)'"
                 class="w-full px-2 py-1 bg-slate-800 border rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500"
                 :class="requireNote && !form.keterangan.trim() ? 'border-amber-500/50' : 'border-slate-700'" />
@@ -87,5 +87,5 @@ const remove = async () => {
             </div>
         </div>
     </div>
-    <span v-else-if="tanggalBayar" class="text-slate-600 text-[10px] whitespace-nowrap">{{ tanggalBayar }}</span>
+    <span v-else-if="tanggalBayar" class="text-slate-500 text-[0.625rem] whitespace-nowrap">{{ tanggalBayar }}</span>
 </template>

@@ -111,23 +111,23 @@ const statusPenjualanConfig = computed(() => {
             <!-- Ringkasan (ikut filter aktif) -->
             <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
                 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
-                    <div class="text-slate-500 text-[11px]">Jumlah transaksi</div>
+                    <div class="text-slate-500 text-[0.6875rem]">Jumlah transaksi</div>
                     <div class="text-white text-lg font-bold mt-0.5">{{ summary.jumlah }}</div>
                 </div>
                 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
-                    <div class="text-slate-500 text-[11px]">Sudah terbayar</div>
+                    <div class="text-slate-500 text-[0.6875rem]">Sudah terbayar</div>
                     <div class="text-emerald-400 text-lg font-bold mt-0.5">{{ formatRp(summary.total_terbayar) }}</div>
                 </div>
                 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
-                    <div class="text-slate-500 text-[11px]">Total sisa piutang</div>
+                    <div class="text-slate-500 text-[0.6875rem]">Total sisa piutang</div>
                     <div class="text-amber-400 text-lg font-bold mt-0.5">{{ formatRp(summary.total_sisa) }}</div>
                 </div>
                 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
-                    <div class="text-slate-500 text-[11px]">Cicilan terlambat</div>
+                    <div class="text-slate-500 text-[0.6875rem]">Cicilan terlambat</div>
                     <div class="text-lg font-bold mt-0.5" :class="Number(summary.terlambat) > 0 ? 'text-rose-400' : 'text-slate-300'">{{ summary.terlambat }} konsumen</div>
                 </div>
                 <div v-if="Number(summary.kelebihan) > 0" class="bg-slate-900 border border-amber-500/30 rounded-xl px-4 py-3">
-                    <div class="text-slate-500 text-[11px]">Kelebihan bayar (cek input)</div>
+                    <div class="text-slate-500 text-[0.6875rem]">Kelebihan bayar (cek input)</div>
                     <div class="text-amber-400 text-lg font-bold mt-0.5">{{ summary.kelebihan }} transaksi</div>
                 </div>
             </div>
@@ -199,18 +199,18 @@ const statusPenjualanConfig = computed(() => {
                                 <td class="px-4 py-3 text-slate-200 font-medium">{{ row.konsumen_nama }}</td>
                                 <td class="px-4 py-3 text-slate-400">
                                     {{ row.kavling_nomor }}
-                                    <div class="text-slate-600 text-xs">{{ row.project_nama }}</div>
+                                    <div class="text-slate-500 text-xs">{{ row.project_nama }}</div>
                                 </td>
                                 <td class="px-4 py-3">
                                     <span class="px-2 py-0.5 text-xs rounded-full font-medium" :style="statusPenjualanConfig[row.status_penjualan]?.style">{{ row.status_penjualan_label }}</span>
-                                    <div v-if="row.status === 'completed'" class="mt-1"><span class="px-2 py-0.5 text-[10px] rounded-full font-medium bg-emerald-500/15 text-emerald-400">✅ Selesai</span></div>
-                                    <div v-else-if="row.siap_selesai" class="mt-1"><span class="px-2 py-0.5 text-[10px] rounded-full font-medium bg-emerald-500/15 text-emerald-400">Siap ditandai Selesai</span></div>
+                                    <div v-if="row.status === 'completed'" class="mt-1"><span class="px-2 py-0.5 text-[0.625rem] rounded-full font-medium bg-emerald-500/15 text-emerald-400">✅ Selesai</span></div>
+                                    <div v-else-if="row.siap_selesai" class="mt-1"><span class="px-2 py-0.5 text-[0.625rem] rounded-full font-medium bg-emerald-500/15 text-emerald-400">Siap ditandai Selesai</span></div>
                                 </td>
                                 <td class="px-4 py-3 text-slate-200 text-right font-medium">{{ formatRp(row.kategori_resmi) }}</td>
                                 <td class="px-4 py-3 text-slate-300 text-right">{{ formatRp(row.kategori_titipan) }}</td>
                                 <td class="px-4 py-3 text-slate-400">
                                     {{ row.cara_bayar_label }}
-                                    <div class="text-slate-600 text-xs">{{ row.bank_rekanan_kpr ?? '-' }}</div>
+                                    <div class="text-slate-500 text-xs">{{ row.bank_rekanan_kpr ?? '-' }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{{ row.tanggal_akad ?? '-' }}</td>
                                 <td class="px-4 py-3">
@@ -218,7 +218,7 @@ const statusPenjualanConfig = computed(() => {
                                     <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden mt-1 w-32">
                                         <div class="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full" :style="`width: ${pct(row.total_terbayar, row.total_piutang)}%`" />
                                     </div>
-                                    <div class="text-slate-600 text-[10px] mt-0.5">{{ pct(row.total_terbayar, row.total_piutang) }}%</div>
+                                    <div class="text-slate-500 text-[0.625rem] mt-0.5">{{ pct(row.total_terbayar, row.total_piutang) }}%</div>
                                 </td>
                                 <td class="px-4 py-3 text-right whitespace-nowrap">
                                     <div v-if="row.sisa > 0.009" class="text-amber-400 font-medium">{{ formatRp(row.sisa) }}</div>
@@ -228,9 +228,9 @@ const statusPenjualanConfig = computed(() => {
                                 <td class="px-4 py-3 text-xs whitespace-nowrap">
                                     <template v-if="row.jatuh_tempo">
                                         <div :class="row.terlambat ? 'text-rose-400 font-medium' : 'text-slate-400'">{{ row.jatuh_tempo }}</div>
-                                        <div v-if="row.terlambat" class="text-rose-400/80 text-[10px]">Terlambat {{ row.hari_terlambat }} hari</div>
+                                        <div v-if="row.terlambat" class="text-rose-400/80 text-[0.625rem]">Terlambat {{ row.hari_terlambat }} hari</div>
                                     </template>
-                                    <span v-else class="text-slate-600">-</span>
+                                    <span v-else class="text-slate-500">-</span>
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     <Link :href="route('keuangan.detail', row.id)" title="Lihat Detail"

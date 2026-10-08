@@ -80,7 +80,7 @@ const isActive = (routeName) => route().current(routeName) || route().current(`$
                 <!-- Sidebar kategori -->
                 <div class="lg:w-56 flex-shrink-0 space-y-5">
                     <div v-for="group in visibleNavGroups" :key="group.label">
-                        <div class="text-slate-500 text-[10px] font-semibold uppercase tracking-wider px-3 mb-1.5">
+                        <div class="text-slate-500 text-[0.625rem] font-semibold uppercase tracking-wider px-3 mb-1.5">
                             {{ group.label }}
                         </div>
                         <div class="space-y-0.5">

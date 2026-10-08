@@ -158,7 +158,7 @@ const showRiwayat = ref(false);
                     </svg>
                 </button>
                 <div v-if="showRiwayat">
-                    <div v-if="!spkRiwayat.length" class="px-5 py-6 text-center text-slate-600 text-sm border-t border-slate-800">
+                    <div v-if="!spkRiwayat.length" class="px-5 py-6 text-center text-slate-500 text-sm border-t border-slate-800">
                         Belum ada SPK diterbitkan untuk proyek ini.
                     </div>
                     <div v-for="spk in spkRiwayat" :key="spk.id"
@@ -247,7 +247,7 @@ const showRiwayat = ref(false);
                                     <span v-else class="text-slate-400 text-xs">{{ k.status_bangun_label }}</span>
                                 </td>
                                 <td class="px-4 py-3.5">
-                                    <div v-if="isDefaultStage(k)" class="text-slate-600 text-xs">-</div>
+                                    <div v-if="isDefaultStage(k)" class="text-slate-500 text-xs">-</div>
                                     <div v-else-if="canManage" class="flex items-center gap-1">
                                         <input type="number" min="0" max="100" step="1"
                                             :value="rowPersen(k)"
@@ -271,13 +271,13 @@ const showRiwayat = ref(false);
                                     <span v-if="k.spk_deadline" :class="deadlineBadge[k.spk_deadline_status]?.cls" class="px-2 py-0.5 rounded-full text-xs font-medium">
                                         {{ k.spk_deadline }}
                                     </span>
-                                    <span v-else class="text-slate-600 text-xs">-</span>
+                                    <span v-else class="text-slate-500 text-xs">-</span>
                                 </td>
                                 <td class="px-4 py-3.5 text-center relative">
                                     <button type="button" @click="toggleCatatan(k)"
                                         :title="k.catatan ? 'Ada catatan — klik untuk baca' : 'Belum ada catatan — klik untuk isi'"
                                         class="inline-flex p-1.5 rounded-lg transition-colors"
-                                        :class="k.catatan ? 'text-amber-400 hover:bg-amber-400/10' : 'text-slate-600 hover:text-slate-400 hover:bg-slate-800'">
+                                        :class="k.catatan ? 'text-amber-400 hover:bg-amber-400/10' : 'text-slate-500 hover:text-slate-400 hover:bg-slate-800'">
                                         <svg v-if="k.catatan" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
                                             <path fill-rule="evenodd" d="M4.804 21.644A6.707 6.707 0 006 21.75a6.721 6.721 0 003.583-1.029c.774.182 1.584.279 2.417.279 5.322 0 9.75-3.97 9.75-9 0-5.03-4.428-9-9.75-9s-9.75 3.97-9.75 9c0 2.409 1.025 4.587 2.674 6.192.232.226.277.428.254.543a3.73 3.73 0 01-.814 1.686.75.75 0 00.44 1.223zM8.25 10.875a1.125 1.125 0 100 2.25 1.125 1.125 0 000-2.25zM10.875 12a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zm4.875-1.125a1.125 1.125 0 100 2.25 1.125 1.125 0 000-2.25z" clip-rule="evenodd" />
                                         </svg>
@@ -298,7 +298,7 @@ const showRiwayat = ref(false);
                                 </td>
                             </tr>
                             <tr v-if="!kavlings.data.length">
-                                <td colspan="9" class="px-5 py-8 text-center text-slate-600 text-sm">Tidak ada kavling yang cocok dengan filter.</td>
+                                <td colspan="9" class="px-5 py-8 text-center text-slate-500 text-sm">Tidak ada kavling yang cocok dengan filter.</td>
                             </tr>
                         </tbody>
                     </table>

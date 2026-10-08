@@ -22,7 +22,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
 <template>
     <Teleport to="body">
         <div v-if="confirmState.open" class="fixed inset-0 z-[100] flex items-center justify-center p-4"
-            role="dialog" aria-modal="true" :aria-label="confirmState.title">
+            role="dialog" aria-modal="true" data-esc-sendiri :aria-label="confirmState.title">
             <div class="absolute inset-0 bg-black/60" @click="tutupKonfirmasi(false)" />
             <div class="relative w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5">
                 <div class="flex items-start gap-3">

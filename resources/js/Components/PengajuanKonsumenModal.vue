@@ -53,7 +53,7 @@ const close = () => emit('close');
 </script>
 
 <template>
-    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" @click.self="close">
+    <div v-if="show" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" @click.self="close">
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 w-full max-w-md">
             <h2 class="text-slate-200 font-semibold text-sm mb-4">{{ title }}</h2>
 

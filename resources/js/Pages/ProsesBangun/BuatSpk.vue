@@ -173,9 +173,9 @@ const submit = () => {
                             class="rounded bg-slate-800 border-slate-700 text-violet-600 focus:ring-violet-500" />
                         <span class="text-slate-200 text-sm font-medium">{{ k.nomor_lengkap }}</span>
                         <span class="text-slate-500 text-xs">{{ k.tipe_unit_nama ?? '-' }}</span>
-                        <span v-if="k.kluster" class="text-slate-600 text-xs ml-auto">{{ k.kluster }}</span>
+                        <span v-if="k.kluster" class="text-slate-500 text-xs ml-auto">{{ k.kluster }}</span>
                     </label>
-                    <div v-if="!filteredKavlings.length" class="px-5 py-8 text-center text-slate-600 text-sm">
+                    <div v-if="!filteredKavlings.length" class="px-5 py-8 text-center text-slate-500 text-sm">
                         Tidak ada unit yang cocok.
                     </div>
                 </div>

@@ -107,19 +107,19 @@ const statusPenjualanConfig = computed(() => {
 
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
-                    <div class="text-slate-500 text-[11px]">Jumlah transaksi</div>
+                    <div class="text-slate-500 text-[0.6875rem]">Jumlah transaksi</div>
                     <div class="text-white text-lg font-bold mt-0.5">{{ summary.jumlah }}</div>
                 </div>
                 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
-                    <div class="text-slate-500 text-[11px]">Sudah cair</div>
+                    <div class="text-slate-500 text-[0.6875rem]">Sudah cair</div>
                     <div class="text-emerald-400 text-lg font-bold mt-0.5">{{ formatRp(summary.total_terbayar) }}</div>
                 </div>
                 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
-                    <div class="text-slate-500 text-[11px]">Total sisa pencairan</div>
+                    <div class="text-slate-500 text-[0.6875rem]">Total sisa pencairan</div>
                     <div class="text-amber-400 text-lg font-bold mt-0.5">{{ formatRp(summary.total_sisa) }}</div>
                 </div>
                 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
-                    <div class="text-slate-500 text-[11px]">Lewat 30 hari sejak akad, belum cair penuh</div>
+                    <div class="text-slate-500 text-[0.6875rem]">Lewat 30 hari sejak akad, belum cair penuh</div>
                     <div class="text-lg font-bold mt-0.5" :class="Number(summary.lewat_30_hari) > 0 ? 'text-rose-400' : 'text-slate-300'">{{ summary.lewat_30_hari }} konsumen</div>
                 </div>
             </div>
@@ -187,21 +187,21 @@ const statusPenjualanConfig = computed(() => {
                                 <td class="px-4 py-3 text-slate-200 font-medium">{{ row.konsumen_nama }}</td>
                                 <td class="px-4 py-3 text-slate-400">
                                     {{ row.kavling_nomor }}
-                                    <div class="text-slate-600 text-xs">{{ row.project_nama }}</div>
+                                    <div class="text-slate-500 text-xs">{{ row.project_nama }}</div>
                                 </td>
                                 <td class="px-4 py-3">
                                     <span class="px-2 py-0.5 text-xs rounded-full font-medium" :style="statusPenjualanConfig[row.status_penjualan]?.style">{{ row.status_penjualan_label }}</span>
                                 </td>
                                 <td class="px-4 py-3 text-slate-400">
                                     {{ row.bank_rekanan_kpr ?? '-' }}
-                                    <div class="text-slate-600 text-xs">{{ row.cara_bayar_label }}</div>
+                                    <div class="text-slate-500 text-xs">{{ row.cara_bayar_label }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-xs whitespace-nowrap">
                                     <template v-if="row.tanggal_akad">
                                         <div class="text-slate-400">{{ row.tanggal_akad }}</div>
-                                        <div class="text-[10px]" :class="row.hari_sejak_akad > 30 && row.sisa > 0.009 ? 'text-rose-400' : 'text-slate-600'">{{ row.hari_sejak_akad }} hari lalu</div>
+                                        <div class="text-[0.625rem]" :class="row.hari_sejak_akad > 30 && row.sisa > 0.009 ? 'text-rose-400' : 'text-slate-500'">{{ row.hari_sejak_akad }} hari lalu</div>
                                     </template>
-                                    <span v-else class="text-slate-600">-</span>
+                                    <span v-else class="text-slate-500">-</span>
                                 </td>
                                 <td class="px-4 py-3 text-slate-300 text-right whitespace-nowrap">{{ row.plafon_kpr !== null ? formatRp(row.plafon_kpr) : '-' }}</td>
                                 <td class="px-4 py-3">
@@ -209,7 +209,7 @@ const statusPenjualanConfig = computed(() => {
                                     <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden mt-1 w-32">
                                         <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full" :style="`width: ${pct(row.total_terbayar, row.total_piutang)}%`" />
                                     </div>
-                                    <div class="text-slate-600 text-[10px] mt-0.5">{{ pct(row.total_terbayar, row.total_piutang) }}%</div>
+                                    <div class="text-slate-500 text-[0.625rem] mt-0.5">{{ pct(row.total_terbayar, row.total_piutang) }}%</div>
                                 </td>
                                 <td class="px-4 py-3 text-right whitespace-nowrap">
                                     <div v-if="row.sisa > 0.009" class="text-amber-400 font-medium">{{ formatRp(row.sisa) }}</div>

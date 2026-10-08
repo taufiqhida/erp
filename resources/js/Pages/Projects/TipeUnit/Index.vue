@@ -124,13 +124,13 @@ const handleFileChange = (e, tipeUnit, fieldTipe) => {
                     <!-- Foto fasad -->
                     <div class="aspect-video bg-slate-800 relative">
                         <img v-if="t.foto_rumah" :src="t.foto_rumah" class="w-full h-full object-cover" />
-                        <div v-else class="w-full h-full flex items-center justify-center text-slate-600 text-xs">Belum ada foto fasad</div>
-                        <label class="absolute bottom-2 right-2 px-2 py-1 bg-black/60 hover:bg-black/80 text-white text-[10px] rounded cursor-pointer transition-colors">
+                        <div v-else class="w-full h-full flex items-center justify-center text-slate-500 text-xs">Belum ada foto fasad</div>
+                        <label class="absolute bottom-2 right-2 px-2 py-1 bg-black/60 hover:bg-black/80 text-white text-[0.625rem] rounded cursor-pointer transition-colors">
                             <span v-if="uploadingFor?.id === t.id && uploadingFor?.tipe === 'foto_rumah'">Mengupload...</span>
                             <span v-else>📷 Upload Foto</span>
                             <input type="file" accept="image/*" class="hidden" @change="handleFileChange($event, t, 'foto_rumah')" />
                         </label>
-                        <span v-if="!t.is_active" class="absolute top-2 left-2 px-2 py-0.5 bg-slate-700 text-slate-300 text-[10px] rounded-full font-medium">Nonaktif</span>
+                        <span v-if="!t.is_active" class="absolute top-2 left-2 px-2 py-0.5 bg-slate-700 text-slate-300 text-[0.625rem] rounded-full font-medium">Nonaktif</span>
                     </div>
 
                     <div class="p-4 space-y-3">
@@ -177,12 +177,12 @@ const handleFileChange = (e, tipeUnit, fieldTipe) => {
 
         <!-- MODAL: TAMBAH TIPE -->
         <Teleport to="body">
-            <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div v-if="showAddModal" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showAddModal = false" />
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
                     <div class="flex items-center justify-between p-5 border-b border-slate-800">
                         <h3 class="text-white font-semibold">Tambah Tipe Unit</h3>
-                        <button @click="showAddModal = false" class="text-slate-500 hover:text-slate-300">
+                        <button @click="showAddModal = false" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
                         </button>
                     </div>
@@ -226,7 +226,7 @@ const handleFileChange = (e, tipeUnit, fieldTipe) => {
                                 <input v-model="addForm.spek_pondasi" type="text" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"/>
                             </div>
                         </div>
-                        <p class="text-slate-600 text-xs">Foto fasad &amp; denah bisa diupload setelah tipe dibuat.</p>
+                        <p class="text-slate-500 text-xs">Foto fasad &amp; denah bisa diupload setelah tipe dibuat.</p>
                         <div class="flex justify-end gap-3">
                             <button type="button" @click="showAddModal = false" class="px-4 py-2.5 text-slate-400 text-sm">Batal</button>
                             <button type="submit" :disabled="addForm.processing" class="px-4 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors">
@@ -240,12 +240,12 @@ const handleFileChange = (e, tipeUnit, fieldTipe) => {
 
         <!-- MODAL: EDIT TIPE -->
         <Teleport to="body">
-            <div v-if="showEditModal && editingTipe" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div v-if="showEditModal && editingTipe" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showEditModal = false" />
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
                     <div class="flex items-center justify-between p-5 border-b border-slate-800">
                         <h3 class="text-white font-semibold">Edit Tipe Unit</h3>
-                        <button @click="showEditModal = false" class="text-slate-500 hover:text-slate-300">
+                        <button @click="showEditModal = false" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
                         </button>
                     </div>

@@ -15,6 +15,9 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, HasRoles;
 
+    /** Pilihan ukuran teks (diterapkan lewat atribut data-ukuran pada <html>, lihat resources/css/app.css). */
+    public const UKURAN_FONT = ['normal', 'besar', 'lebih-besar'];
+
     protected $fillable = [
         'name',
         'email',
@@ -40,7 +43,16 @@ class User extends Authenticatable
             'must_change_password' => 'boolean',
             'is_active'            => 'boolean',
             'password_changed_at'  => 'datetime',
+            'preferences'          => 'array',
         ];
+    }
+
+    /** Ukuran teks pilihan pengguna, selalu salah satu nilai UKURAN_FONT. */
+    public function ukuranFont(): string
+    {
+        $v = $this->preferences['ukuran_font'] ?? 'normal';
+
+        return in_array($v, self::UKURAN_FONT, true) ? $v : 'normal';
     }
 
     /* ---------------------------------------------------------------

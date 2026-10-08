@@ -34,6 +34,16 @@ router.on('exception', (event) => {
     }));
 });
 
+// Escape menutup modal buatan sendiri (div role="dialog"): meniru klik pada latar gelapnya, jadi memakai
+// handler penutup yang sudah ada di tiap halaman. ConfirmDialog menangani Escape-nya sendiri.
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    const dialogs = document.querySelectorAll('div[role="dialog"][aria-modal="true"]');
+    const atas = dialogs[dialogs.length - 1];
+    if (!atas || atas.hasAttribute('data-esc-sendiri')) return;
+    (atas.querySelector(':scope > .absolute.inset-0') ?? atas).click();
+});
+
 createInertiaApp({
     title: (title) => (title ? `${appName} - ${title}` : appName),
     resolve: (name) =>

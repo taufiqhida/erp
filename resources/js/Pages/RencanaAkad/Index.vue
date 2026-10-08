@@ -87,23 +87,23 @@ const formatRp = (v) => 'Rp ' + Number(v ?? 0).toLocaleString('id-ID');
 
             <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
                 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
-                    <div class="text-slate-500 text-[11px]">Total di tahap ini</div>
+                    <div class="text-slate-500 text-[0.6875rem]">Total di tahap ini</div>
                     <div class="text-white text-lg font-bold mt-0.5">{{ stats.total }}</div>
                 </div>
                 <div class="bg-slate-900 border rounded-xl px-4 py-3" :class="stats.tanpaTanggal ? 'border-amber-500/40' : 'border-slate-800'">
-                    <div class="text-slate-500 text-[11px]">Tanggal belum diisi</div>
+                    <div class="text-slate-500 text-[0.6875rem]">Tanggal belum diisi</div>
                     <div class="text-lg font-bold mt-0.5" :class="stats.tanpaTanggal ? 'text-amber-400' : 'text-slate-300'">{{ stats.tanpaTanggal }}</div>
                 </div>
                 <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
-                    <div class="text-slate-500 text-[11px]">Akad ≤ 7 hari ke depan</div>
+                    <div class="text-slate-500 text-[0.6875rem]">Akad ≤ 7 hari ke depan</div>
                     <div class="text-lg font-bold mt-0.5 text-slate-200">{{ stats.minggu }}</div>
                 </div>
                 <div class="bg-slate-900 border rounded-xl px-4 py-3" :class="stats.lewat ? 'border-rose-500/40' : 'border-slate-800'">
-                    <div class="text-slate-500 text-[11px]">Lewat tanggal, belum akad</div>
+                    <div class="text-slate-500 text-[0.6875rem]">Lewat tanggal, belum akad</div>
                     <div class="text-lg font-bold mt-0.5" :class="stats.lewat ? 'text-rose-400' : 'text-slate-300'">{{ stats.lewat }}</div>
                 </div>
                 <div class="bg-slate-900 border rounded-xl px-4 py-3" :class="stats.sp3k ? 'border-rose-500/40' : 'border-slate-800'">
-                    <div class="text-slate-500 text-[11px]">SP3K bermasalah</div>
+                    <div class="text-slate-500 text-[0.6875rem]">SP3K bermasalah</div>
                     <div class="text-lg font-bold mt-0.5" :class="stats.sp3k ? 'text-rose-400' : 'text-slate-300'">{{ stats.sp3k }}</div>
                 </div>
             </div>
@@ -137,34 +137,34 @@ const formatRp = (v) => 'Rp ' + Number(v ?? 0).toLocaleString('id-ID');
                             <tr v-for="r in sorted" :key="r.id" class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
                                 <td class="px-4 py-3">
                                     <div class="text-slate-200 font-medium">{{ r.konsumen_nama }}</div>
-                                    <div class="text-slate-600 text-xs">{{ r.konsumen_no_hp ?? '-' }}</div>
+                                    <div class="text-slate-500 text-xs">{{ r.konsumen_no_hp ?? '-' }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-slate-400">
                                     {{ r.kavling_nomor }}
-                                    <div class="text-slate-600 text-xs">{{ r.project_nama }}</div>
+                                    <div class="text-slate-500 text-xs">{{ r.project_nama }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-slate-400">
                                     {{ CARA_BAYAR[r.cara_bayar] ?? r.cara_bayar }}
-                                    <div v-if="r.bank" class="text-slate-600 text-xs">{{ r.bank }}</div>
+                                    <div v-if="r.bank" class="text-slate-500 text-xs">{{ r.bank }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-xs">
                                     <span v-if="r.notaris_nama" class="text-slate-300">{{ r.notaris_nama }}</span>
-                                    <span v-else class="text-slate-600">Belum dipilih</span>
+                                    <span v-else class="text-slate-500">Belum dipilih</span>
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap">
                                     <template v-if="r.tanggal_akad">
                                         <div class="text-slate-200 text-sm">{{ r.tanggal_akad_label }}</div>
-                                        <div class="text-[11px]" :class="hariCls(r)">{{ hariLabel(r) }}</div>
+                                        <div class="text-[0.6875rem]" :class="hariCls(r)">{{ hariLabel(r) }}</div>
                                     </template>
                                     <span v-else class="px-2 py-0.5 text-xs rounded-full font-medium bg-amber-500/15 text-amber-400">Belum diisi</span>
                                 </td>
                                 <td class="px-4 py-3 text-xs whitespace-nowrap">
                                     <template v-if="r.sp3k_expired">
                                         <div class="text-slate-400">s.d. {{ r.sp3k_expired }}</div>
-                                        <div v-if="r.sp3k_warning === 'sudah_expired'" class="text-rose-400 text-[11px]">Sudah kedaluwarsa</div>
-                                        <div v-else-if="r.sp3k_warning === 'sebelum_akad'" class="text-rose-400 text-[11px]">Kedaluwarsa sebelum tgl akad</div>
+                                        <div v-if="r.sp3k_warning === 'sudah_expired'" class="text-rose-400 text-[0.6875rem]">Sudah kedaluwarsa</div>
+                                        <div v-else-if="r.sp3k_warning === 'sebelum_akad'" class="text-rose-400 text-[0.6875rem]">Kedaluwarsa sebelum tgl akad</div>
                                     </template>
-                                    <span v-else class="text-slate-600">-</span>
+                                    <span v-else class="text-slate-500">-</span>
                                 </td>
                                 <td class="px-4 py-3 text-right text-xs whitespace-nowrap">
                                     <Link v-if="canViewKeuangan" :href="route('keuangan.detail', r.id)" title="Buka di Keuangan"

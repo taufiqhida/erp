@@ -75,6 +75,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::patch('/preferensi', [\App\Http\Controllers\PreferensiController::class, 'update'])->name('preferensi.update');
 
     // ── Halaman Utama Pilih Proyek ──────────────────────────────────────
     // Landing page setelah login — bukan bagian dari resource "projects"

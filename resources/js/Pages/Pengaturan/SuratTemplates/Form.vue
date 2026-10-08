@@ -63,7 +63,7 @@ const submit = () => {
                                 <span class="text-slate-400 text-sm">{{ fileName ?? 'Klik untuk pilih file .docx' }}</span>
                                 <input type="file" accept=".docx" class="hidden" @change="onFileChange" />
                             </label>
-                            <p v-if="isEdit" class="text-slate-600 text-xs mt-1">Kosongkan kalau tidak mau ganti file.</p>
+                            <p v-if="isEdit" class="text-slate-500 text-xs mt-1">Kosongkan kalau tidak mau ganti file.</p>
                             <p v-if="form.errors.file" class="text-rose-400 text-xs mt-1">{{ form.errors.file }}</p>
                         </div>
                     </div>
@@ -90,7 +90,7 @@ const submit = () => {
                             <div v-for="(label, key) in placeholders" :key="key"
                                 class="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-slate-800 rounded-lg">
                                 <span class="text-violet-300 text-xs font-mono">{{ key }}</span>
-                                <span class="text-slate-500 text-[11px] text-right">{{ label }}</span>
+                                <span class="text-slate-500 text-[0.6875rem] text-right">{{ label }}</span>
                             </div>
                         </div>
 
@@ -100,7 +100,7 @@ const submit = () => {
                             <div v-for="(label, key) in jadwalPlaceholders" :key="key"
                                 class="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-slate-800 rounded-lg">
                                 <span class="text-violet-300 text-xs font-mono">{{ key }}</span>
-                                <span class="text-slate-500 text-[11px] text-right">{{ label }}</span>
+                                <span class="text-slate-500 text-[0.6875rem] text-right">{{ label }}</span>
                             </div>
                         </div>
                     </div>

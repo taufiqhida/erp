@@ -460,11 +460,11 @@ const isBookable = (k) => k.status_jual === 'available';
                                     <div class="text-white text-xs font-semibold">{{ kavling.nomor_lengkap }}</div>
                                     <div class="flex items-center gap-1 mt-0.5">
                                         <span :style="statusConfig[kavling.status_jual]?.dotStyle" class="w-1.5 h-1.5 rounded-full inline-block"></span>
-                                        <span class="text-slate-300 text-[11px]">{{ statusConfig[kavling.status_jual]?.label }}</span>
+                                        <span class="text-slate-300 text-[0.6875rem]">{{ statusConfig[kavling.status_jual]?.label }}</span>
                                     </div>
                                     <div class="flex items-center gap-1 mt-0.5">
                                         <span class="w-1.5 h-1.5 rounded-full inline-block" :style="`background:${statusBangunColorHex[kavling.status_bangun_stage_id]}`"></span>
-                                        <span class="text-slate-400 text-[11px]">{{ kavling.status_bangun_label }}</span>
+                                        <span class="text-slate-400 text-[0.6875rem]">{{ kavling.status_bangun_label }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -519,7 +519,7 @@ const isBookable = (k) => k.status_jual === 'available';
                                         <div class="w-12 h-1 bg-slate-800 rounded-full overflow-hidden flex-shrink-0">
                                             <div class="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full" :style="{ width: (k.progress_bangun ?? 0) + '%' }"/>
                                         </div>
-                                        <span class="text-slate-500 text-[11px] tabular-nums flex-shrink-0">{{ k.progress_bangun ?? 0 }}%</span>
+                                        <span class="text-slate-500 text-[0.6875rem] tabular-nums flex-shrink-0">{{ k.progress_bangun ?? 0 }}%</span>
                                     </div>
                                 </td>
                                 <td class="px-4 py-2.5 text-slate-400 text-xs">{{ k.konsumen_nama ?? '-' }}</td>
@@ -550,7 +550,7 @@ const isBookable = (k) => k.status_jual === 'available';
         <!-- ── Detail Modal (setara dengan modal di halaman Proyek, minus edit) ── -->
         <Teleport to="body">
             <div v-if="showDetailModal && selectedKavling"
-                class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4"
                 @click.self="showDetailModal = false">
                 <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="showDetailModal = false" />
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
@@ -573,7 +573,7 @@ const isBookable = (k) => k.status_jual === 'available';
                                 <div class="text-slate-400 text-sm mt-0.5">{{ project.nama }}</div>
                             </div>
                         </div>
-                        <button @click="showDetailModal = false" class="text-slate-500 hover:text-slate-300 transition-colors p-1 flex-shrink-0">
+                        <button @click="showDetailModal = false" class="text-slate-500 hover:text-slate-300 transition-colors p-1 flex-shrink-0" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-6 h-6"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
                         </button>
                     </div>
@@ -692,7 +692,7 @@ const isBookable = (k) => k.status_jual === 'available';
 
             <!-- ── Booking Modal ─────────────────────────────────── -->
             <div v-if="showBookModal && selectedKavling"
-                class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto"
+                role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto"
                 @click.self="showBookModal = false">
                 <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl my-4">
                     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
@@ -700,7 +700,7 @@ const isBookable = (k) => k.status_jual === 'available';
                             <h3 class="text-white font-semibold">Form Booking</h3>
                             <p class="text-slate-400 text-xs mt-0.5">Unit {{ selectedKavling.nomor_lengkap }} – {{ formatRupiah(selectedKavling.harga) }}</p>
                         </div>
-                        <button @click="showBookModal = false" class="text-slate-500 hover:text-slate-300">
+                        <button @click="showBookModal = false" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                     </div>
@@ -720,19 +720,19 @@ const isBookable = (k) => k.status_jual === 'available';
                         <!-- Info Unit Terpilih -->
                         <div class="bg-slate-800/60 rounded-xl p-3 grid grid-cols-4 gap-2 text-center">
                             <div>
-                                <div class="text-slate-500 text-[10px]">Unit</div>
+                                <div class="text-slate-500 text-[0.625rem]">Unit</div>
                                 <div class="text-slate-200 text-sm font-semibold">{{ selectedKavling.nomor_lengkap }}</div>
                             </div>
                             <div>
-                                <div class="text-slate-500 text-[10px]">Tipe</div>
+                                <div class="text-slate-500 text-[0.625rem]">Tipe</div>
                                 <div class="text-slate-200 text-sm font-semibold">{{ selectedKavling.tipe_unit ?? '-' }}</div>
                             </div>
                             <div>
-                                <div class="text-slate-500 text-[10px]">Luas T/B</div>
+                                <div class="text-slate-500 text-[0.625rem]">Luas T/B</div>
                                 <div class="text-slate-200 text-sm font-semibold">{{ selectedKavling.luas_tanah ?? '-' }}/{{ selectedKavling.luas_bangunan ?? '-' }}</div>
                             </div>
                             <div>
-                                <div class="text-slate-500 text-[10px]">Harga Dasar</div>
+                                <div class="text-slate-500 text-[0.625rem]">Harga Dasar</div>
                                 <div class="text-violet-300 text-sm font-semibold">{{ formatRupiah(selectedKavling.harga) }}</div>
                             </div>
                         </div>
@@ -922,14 +922,14 @@ const isBookable = (k) => k.status_jual === 'available';
                         <div class="space-y-2">
                             <h4 class="text-slate-300 text-sm font-medium border-b border-slate-800 pb-2">Biaya Lainnya</h4>
 
-                            <div v-if="!bookForm.biaya_tambahan_selected.length" class="text-slate-600 text-xs">
+                            <div v-if="!bookForm.biaya_tambahan_selected.length" class="text-slate-500 text-xs">
                                 Belum ada biaya tambahan lain.
                             </div>
                             <div v-for="id in bookForm.biaya_tambahan_selected" :key="id" class="flex items-center gap-2">
                                 <span class="flex-1 text-slate-300 text-sm">{{ biayaPresetNama(id) }}</span>
                                 <MoneyInput v-model="bookForm.biaya_tambahan_nominals[id]" placeholder="Rp 0"
                                     class="w-32 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                                <button type="button" @click="removeBiayaTambahan(id)" class="text-slate-500 hover:text-rose-400 transition-colors p-1">
+                                <button type="button" @click="removeBiayaTambahan(id)" class="text-slate-500 hover:text-rose-400 transition-colors p-1" aria-label="Hapus">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
                                 </button>
                             </div>
@@ -941,7 +941,7 @@ const isBookable = (k) => k.status_jual === 'available';
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z"/></svg>
                                     Tambah Biaya
                                 </button>
-                                <p v-else-if="!bookForm.biaya_tambahan_selected.length" class="text-slate-600 text-xs">Belum ada preset biaya tambahan di Pengaturan.</p>
+                                <p v-else-if="!bookForm.biaya_tambahan_selected.length" class="text-slate-500 text-xs">Belum ada preset biaya tambahan di Pengaturan.</p>
 
                                 <div v-if="showBiayaPicker" class="absolute z-10 mt-1 w-56 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden">
                                     <button v-for="preset in availableBiayaPresets" :key="preset.id" type="button"
@@ -998,7 +998,7 @@ const isBookable = (k) => k.status_jual === 'available';
                         </div>
 
                         <!-- ═══ SECTION 3: Skema Pembayaran (baru terbuka setelah harga netto selesai) ═══ -->
-                        <div v-if="!canChooseSkemaPembayaran" class="text-center py-4 text-slate-600 text-xs border border-dashed border-slate-700 rounded-xl">
+                        <div v-if="!canChooseSkemaPembayaran" class="text-center py-4 text-slate-500 text-xs border border-dashed border-slate-700 rounded-xl">
                             Lengkapi harga jual netto di atas dulu sebelum memilih skema pembayaran.
                         </div>
                         <div v-else class="space-y-4 pt-1 border-t border-slate-800">
@@ -1045,7 +1045,7 @@ const isBookable = (k) => k.status_jual === 'available';
                                         </span>
                                     </div>
                                 </div>
-                                <p v-if="!selectedSkemaPreset.booking_fee_aktif && !selectedSkemaPreset.dp_aktif" class="text-slate-600 text-xs">
+                                <p v-if="!selectedSkemaPreset.booking_fee_aktif && !selectedSkemaPreset.dp_aktif" class="text-slate-500 text-xs">
                                     Skema ini tidak ada booking fee maupun DP.
                                 </p>
                             </template>
@@ -1057,7 +1057,7 @@ const isBookable = (k) => k.status_jual === 'available';
                                     class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
                             </div>
 
-                            <p v-if="['kpr_subsidi','kpr_komersil'].includes(bookForm.cara_bayar)" class="text-slate-600 text-xs">
+                            <p v-if="['kpr_subsidi','kpr_komersil'].includes(bookForm.cara_bayar)" class="text-slate-500 text-xs">
                                 Plafon KPR, tenor, dan preset Dana Jaminan/SBUM diisi belakangan di halaman database konsumen — baru bisa dihitung final setelah jumlah SBUM diketahui.
                             </p>
                         </div>

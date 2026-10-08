@@ -83,7 +83,7 @@ const presetsByKategori = computed(() => {
                             </div>
                         </div>
                     </div>
-                    <div v-else class="px-5 py-6 text-center text-slate-600 text-sm">Belum ada item {{ label }}.</div>
+                    <div v-else class="px-5 py-6 text-center text-slate-500 text-sm">Belum ada item {{ label }}.</div>
                 </div>
             </div>
 

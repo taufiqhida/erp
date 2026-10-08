@@ -109,7 +109,7 @@ const destroyStage = async (stage) => {
                                 <input :value="stage.nama"
                                     @change="updateStage(stage, { nama: $event.target.value })"
                                     class="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                                <span v-if="stage.is_default" class="flex-shrink-0 px-1.5 py-0.5 bg-slate-700 text-slate-400 text-[10px] rounded-full font-medium">Default</span>
+                                <span v-if="stage.is_default" class="flex-shrink-0 px-1.5 py-0.5 bg-slate-700 text-slate-400 text-[0.625rem] rounded-full font-medium">Default</span>
                             </div>
                         </td>
                         <td class="px-2 py-2.5">
@@ -127,18 +127,18 @@ const destroyStage = async (stage) => {
                         <td class="px-2 py-2.5">
                             <div class="flex items-center gap-1">
                                 <button v-if="!stage.is_default" @click="move(stage, 'up')" :disabled="!canMoveUp(stage, idx)"
-                                    class="p-1 text-slate-400 hover:text-violet-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-slate-400 rounded transition-colors">
+                                    class="p-1 text-slate-400 hover:text-violet-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-slate-400 rounded transition-colors" aria-label="Naikkan urutan">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M14.77 12.79a.75.75 0 01-1.06-.02L10 8.832 6.29 12.77a.75.75 0 11-1.08-1.04l4.25-4.5a.75.75 0 011.08 0l4.25 4.5a.75.75 0 01-.02 1.06z" clip-rule="evenodd"/></svg>
                                 </button>
                                 <button v-if="!stage.is_default" @click="move(stage, 'down')" :disabled="!canMoveDown(idx)"
-                                    class="p-1 text-slate-400 hover:text-violet-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-slate-400 rounded transition-colors">
+                                    class="p-1 text-slate-400 hover:text-violet-400 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-slate-400 rounded transition-colors" aria-label="Turunkan urutan">
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
                                 </button>
                             </div>
                         </td>
                         <td class="px-4 py-2.5 text-right">
                             <button v-if="!stage.is_default" @click="destroyStage(stage)"
-                                class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors">
+                                class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors" aria-label="Hapus">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
                             </button>
                         </td>

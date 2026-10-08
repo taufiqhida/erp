@@ -265,13 +265,13 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                         <span class="text-slate-500 font-medium w-28 flex-shrink-0">Status Bangun</span>
                         <span v-for="s in filterOptions.status_bangun" :key="s.id" class="flex items-center gap-1.5 text-slate-400">
-                            <span :style="`background:${s.warna}25; color:${s.warna}`" class="px-1.5 py-0.5 rounded-full text-[10px] font-medium">{{ s.nama }}</span>
+                            <span :style="`background:${s.warna}25; color:${s.warna}`" class="px-1.5 py-0.5 rounded-full text-[0.625rem] font-medium">{{ s.nama }}</span>
                         </span>
                     </div>
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                         <span class="text-slate-500 font-medium w-28 flex-shrink-0">Pipeline</span>
                         <span v-for="(cfg, key) in statusPenjualanConfig" :key="key" class="flex items-center gap-1.5 text-slate-400">
-                            <span class="px-1.5 py-0.5 rounded-full text-[10px] font-medium" :style="cfg.style">{{ cfg.label }}</span>
+                            <span class="px-1.5 py-0.5 rounded-full text-[0.625rem] font-medium" :style="cfg.style">{{ cfg.label }}</span>
                         </span>
                     </div>
                 </div>
@@ -304,24 +304,24 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                 class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
                                 <td class="px-4 py-3">
                                     <div class="text-slate-200 font-medium">{{ row.konsumen_nama }}</div>
-                                    <div class="text-slate-600 text-xs">{{ row.konsumen_no_hp ?? '-' }}</div>
+                                    <div class="text-slate-500 text-xs">{{ row.konsumen_no_hp ?? '-' }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-slate-400">
                                     {{ row.kavling_nomor }}
-                                    <div class="text-slate-600 text-xs">{{ row.project_nama }}<span v-if="row.kluster"> · {{ row.kluster }}</span></div>
+                                    <div class="text-slate-500 text-xs">{{ row.project_nama }}<span v-if="row.kluster"> · {{ row.kluster }}</span></div>
                                 </td>
                                 <td class="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{{ row.tanggal_booking ?? '-' }}</td>
                                 <td class="px-4 py-3 text-slate-300 text-right font-medium">{{ formatRp(row.harga_deal) }}</td>
                                 <td class="px-4 py-3 text-slate-400">
                                     {{ row.cara_bayar_label }}
-                                    <div v-if="row.bank_rekanan_kpr" class="text-slate-600 text-xs">{{ row.bank_rekanan_kpr }}</div>
+                                    <div v-if="row.bank_rekanan_kpr" class="text-slate-500 text-xs">{{ row.bank_rekanan_kpr }}</div>
                                 </td>
                                 <td class="px-4 py-3">
                                     <span :style="`background:${statusBangunColorHex[row.status_bangun_stage_id]}25; color:${statusBangunColorHex[row.status_bangun_stage_id]}`"
                                         class="px-2 py-0.5 text-xs rounded-full font-medium">
                                         {{ row.status_bangun_label }}
                                     </span>
-                                    <span class="text-slate-500 text-[11px] ml-1">{{ row.progress_bangun }}%</span>
+                                    <span class="text-slate-500 text-[0.6875rem] ml-1">{{ row.progress_bangun }}%</span>
                                 </td>
                                 <td class="px-4 py-3">
                                     <span class="text-slate-400 text-xs font-mono">{{ row.id_rumah ?? '-' }}</span>
@@ -338,7 +338,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                     <span class="px-2 py-0.5 text-xs rounded-full font-medium" :style="statusPenjualanConfig[row.status_penjualan]?.style">
                                         {{ statusPenjualanConfig[row.status_penjualan]?.label ?? row.status_penjualan_label }}
                                     </span>
-                                    <div v-if="row.pipeline_progress" class="text-slate-500 text-[11px] mt-1">{{ formatPipelineProgress(row.pipeline_progress) }}</div>
+                                    <div v-if="row.pipeline_progress" class="text-slate-500 text-[0.6875rem] mt-1">{{ formatPipelineProgress(row.pipeline_progress) }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     <Link :href="`${route('konsumens.show', row.konsumen_id)}?transaksi=${row.id}`" title="Detail"
@@ -385,7 +385,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                 </td>
                                 <td class="px-4 py-3 text-slate-400 text-xs">
                                     <div>{{ k.no_hp ?? '-' }}</div>
-                                    <div class="text-slate-600">{{ k.email ?? '-' }}</div>
+                                    <div class="text-slate-500">{{ k.email ?? '-' }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-slate-400 text-xs">{{ k.nik ?? '-' }}</td>
                                 <td class="px-4 py-3">
@@ -397,7 +397,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                                         </svg>
                                     </button>
-                                    <span v-else class="text-slate-600 text-xs">Belum ada unit</span>
+                                    <span v-else class="text-slate-500 text-xs">Belum ada unit</span>
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     <div class="flex items-center justify-end gap-1">
@@ -420,12 +420,12 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                             class="flex items-center justify-between px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-xs">
                                             <div>
                                                 <span class="text-slate-300">{{ unit.kavling_nomor }}</span>
-                                                <span class="text-slate-600 ml-2">{{ unit.project_nama }} · {{ unit.cara_bayar_label }}<template v-if="unit.bank_rekanan_kpr"> ({{ unit.bank_rekanan_kpr }})</template></span>
+                                                <span class="text-slate-500 ml-2">{{ unit.project_nama }} · {{ unit.cara_bayar_label }}<template v-if="unit.bank_rekanan_kpr"> ({{ unit.bank_rekanan_kpr }})</template></span>
                                             </div>
                                             <div class="flex items-center gap-2">
-                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-medium" :style="`background:${statusBangunColorHex[unit.status_bangun_stage_id]}25; color:${statusBangunColorHex[unit.status_bangun_stage_id]}`">{{ unit.status_bangun_label }} · {{ unit.progress_bangun }}%</span>
-                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-medium" :style="statusJualBadgeStyle[unit.status_jual]">{{ unit.status_jual_label }}</span>
-                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-medium" :style="statusPenjualanConfig[unit.status_penjualan]?.style">
+                                                <span class="px-2 py-0.5 rounded-full text-[0.625rem] font-medium" :style="`background:${statusBangunColorHex[unit.status_bangun_stage_id]}25; color:${statusBangunColorHex[unit.status_bangun_stage_id]}`">{{ unit.status_bangun_label }} · {{ unit.progress_bangun }}%</span>
+                                                <span class="px-2 py-0.5 rounded-full text-[0.625rem] font-medium" :style="statusJualBadgeStyle[unit.status_jual]">{{ unit.status_jual_label }}</span>
+                                                <span class="px-2 py-0.5 rounded-full text-[0.625rem] font-medium" :style="statusPenjualanConfig[unit.status_penjualan]?.style">
                                                     {{ statusPenjualanConfig[unit.status_penjualan]?.label ?? unit.status_penjualan_label }}
                                                 </span>
                                                 <Link :href="`${route('konsumens.show', k.id)}?transaksi=${unit.id}`" title="Detail"
@@ -456,7 +456,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
 
         <!-- ── MODAL: Import Konsumen ───────────────────────────────── -->
         <Teleport to="body">
-            <div v-if="showImport" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div v-if="showImport" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showImport = false" />
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
                     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
@@ -464,7 +464,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                             <h3 class="text-white font-semibold">Import Konsumen</h3>
                             <p class="text-slate-400 text-xs mt-0.5">{{ currentProject?.nama }} — upload file Excel (.xlsx) sesuai format template</p>
                         </div>
-                        <button @click="showImport = false" class="text-slate-500 hover:text-slate-300">
+                        <button @click="showImport = false" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
                         </button>
                     </div>

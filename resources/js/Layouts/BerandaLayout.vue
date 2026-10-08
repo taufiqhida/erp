@@ -1,6 +1,7 @@
 <script setup>
 import BrandMark from '@/Components/BrandMark.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
+import UkuranTeks from '@/Components/UkuranTeks.vue';
 import { computed } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { useToasts } from '@/Composables/useToasts';
@@ -31,6 +32,10 @@ const logout = () => router.post(route('logout'));
 
 <template>
     <div class="min-h-screen bg-slate-950 font-sans">
+        <a href="#konten-utama"
+            class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[110] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-violet-600 focus:text-white focus:text-sm">
+            Lewati ke konten utama
+        </a>
         <!-- Top bar — sengaja tanpa sidebar navigasi: Beranda cuma tempat
              pilih proyek & menu global, bukan bagian dari navigasi reguler. -->
         <header class="flex items-center justify-between h-16 px-6 border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm gap-4">
@@ -48,13 +53,14 @@ const logout = () => router.post(route('logout'));
             </div>
 
             <div class="flex items-center gap-2 flex-shrink-0">
+                <UkuranTeks class="hidden sm:flex" />
                 <Link :href="route('profile.edit')" class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors">
                     <div class="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
                         {{ user.name?.slice(0, 2).toUpperCase() }}
                     </div>
                     <div class="hidden sm:block text-left">
                         <div class="text-slate-200 text-xs font-medium leading-none">{{ user.name }}</div>
-                        <span :class="roleLabel.color" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium mt-1">
+                        <span :class="roleLabel.color" class="inline-flex items-center px-1.5 py-0.5 rounded text-[0.625rem] font-medium mt-1">
                             {{ roleLabel.label }}
                         </span>
                     </div>
@@ -68,13 +74,13 @@ const logout = () => router.post(route('logout'));
             </div>
         </header>
 
-        <main class="bg-slate-950">
+        <main id="konten-utama" tabindex="-1" class="bg-slate-950 focus:outline-none">
             <slot />
         </main>
 
         <!-- Toast Notifikasi -->
         <Teleport to="body">
-            <div class="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-full max-w-sm">
+            <div class="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-full max-w-sm" role="status" aria-live="polite">
                 <transition-group name="toast">
                     <div
                         v-for="toast in toasts"
@@ -87,7 +93,7 @@ const logout = () => router.post(route('logout'));
                         class="flex items-start gap-2.5 px-4 py-3 rounded-xl border shadow-2xl backdrop-blur-sm text-sm"
                     >
                         <span class="flex-1 whitespace-pre-line">{{ toast.message }}</span>
-                        <button @click="toasts = toasts.filter(t => t.id !== toast.id)" class="flex-shrink-0 opacity-60 hover:opacity-100">
+                        <button type="button" aria-label="Tutup pemberitahuan" @click="toasts = toasts.filter(t => t.id !== toast.id)" class="flex-shrink-0 opacity-60 hover:opacity-100">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
                         </button>
                     </div>

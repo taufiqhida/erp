@@ -116,7 +116,7 @@ const formatValue = (v) => {
                                             {{ row.event_label }}
                                         </span>
                                     </td>
-                                    <td class="px-4 py-3 text-slate-400 text-xs">{{ row.subject_label }} <span class="text-slate-600">#{{ row.subject_id }}</span></td>
+                                    <td class="px-4 py-3 text-slate-400 text-xs">{{ row.subject_label }} <span class="text-slate-500">#{{ row.subject_id }}</span></td>
                                     <td class="px-4 py-3 text-slate-300">{{ row.description }}</td>
                                     <td class="px-4 py-3 text-right">
                                         <button v-if="row.changes.length" @click="toggleExpand(row.id)"
@@ -147,7 +147,7 @@ const formatValue = (v) => {
                                 </tr>
                             </template>
                             <tr v-if="!rows.data.length">
-                                <td colspan="6" class="px-4 py-12 text-center text-slate-600">Belum ada aktivitas tercatat.</td>
+                                <td colspan="6" class="px-4 py-12 text-center text-slate-500">Belum ada aktivitas tercatat.</td>
                             </tr>
                         </tbody>
                     </table>

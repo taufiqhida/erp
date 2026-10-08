@@ -141,7 +141,7 @@ const submit = () => {
                             @change="onFotoSampulChange"
                             class="block w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-slate-700 file:text-slate-300 hover:file:bg-slate-600 cursor-pointer"
                         />
-                        <p class="text-slate-600 text-xs mt-1">PNG / JPG / WEBP, maks 10MB</p>
+                        <p class="text-slate-500 text-xs mt-1">PNG / JPG / WEBP, maks 10MB</p>
                     </div>
                     <div v-if="fotoSampulPreview" class="mt-2">
                         <p class="text-slate-500 text-xs mb-2">Preview:</p>
@@ -172,7 +172,7 @@ const submit = () => {
                                 @change="onSiteplanChange"
                                 class="block w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-slate-700 file:text-slate-300 hover:file:bg-slate-600 cursor-pointer"
                             />
-                            <p class="text-slate-600 text-xs mt-1">PNG / JPG / SVG, maks 10MB</p>
+                            <p class="text-slate-500 text-xs mt-1">PNG / JPG / SVG, maks 10MB</p>
                         </div>
                     </div>
                     <!-- Siteplan Preview -->

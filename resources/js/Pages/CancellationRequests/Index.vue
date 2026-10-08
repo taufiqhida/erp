@@ -118,7 +118,7 @@ const statusBadgeClass = {
                                 <td class="px-5 py-4">
                                     <div class="text-slate-200 font-medium text-sm">{{ req.kavling }}<span v-if="req.kavling_baru" class="text-slate-500"> → {{ req.kavling_baru }}</span></div>
                                     <div class="text-slate-500 text-xs">{{ req.project }}</div>
-                                    <div class="text-slate-600 text-xs mt-0.5">{{ req.created_at }}</div>
+                                    <div class="text-slate-500 text-xs mt-0.5">{{ req.created_at }}</div>
                                 </td>
                                 <td class="px-4 py-4">
                                     <div class="text-slate-300 text-sm">{{ req.konsumen }}</div>
@@ -157,7 +157,7 @@ const statusBadgeClass = {
                                             Tolak
                                         </button>
                                     </div>
-                                    <div v-else class="text-slate-600 text-xs text-right">{{ req.reviewed_at ?? '-' }}</div>
+                                    <div v-else class="text-slate-500 text-xs text-right">{{ req.reviewed_at ?? '-' }}</div>
                                 </td>
                             </tr>
                         </tbody>
@@ -171,14 +171,14 @@ const statusBadgeClass = {
 
         <!-- Modal: Review -->
         <Teleport to="body">
-            <div v-if="showReviewModal && selectedRequest" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div v-if="showReviewModal && selectedRequest" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showReviewModal = false" />
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
                     <div class="flex items-center justify-between p-5 border-b border-slate-800">
                         <h3 class="text-white font-semibold">
                             {{ reviewType === 'approve' ? `✅ Setujui ${selectedRequest.type_label}` : `❌ Tolak ${selectedRequest.type_label}` }}
                         </h3>
-                        <button @click="showReviewModal = false" class="text-slate-500 hover:text-slate-300">
+                        <button @click="showReviewModal = false" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
                         </button>
                     </div>

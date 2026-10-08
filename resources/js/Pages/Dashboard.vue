@@ -236,13 +236,13 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                     <div class="p-5">
                         <div class="flex items-center justify-between mb-1">
                             <span class="text-slate-500 text-xs">Total Nilai Transaksi Aktif</span>
-                            <button @click="toggleFinansial('nilai')" class="text-slate-500 hover:text-slate-300 text-[11px] transition-colors">{{ expandedFinansial.nilai ? '▲ Tutup' : '▼ Rincian' }}</button>
+                            <button @click="toggleFinansial('nilai')" class="text-slate-500 hover:text-slate-300 text-[0.6875rem] transition-colors">{{ expandedFinansial.nilai ? '▲ Tutup' : '▼ Rincian' }}</button>
                         </div>
                         <div class="text-white font-bold text-xl">{{ formatRp(financials?.total_pendapatan) }}</div>
-                        <div class="text-slate-600 text-xs mt-1">Harga deal transaksi berjalan + hangus dari pembatalan</div>
+                        <div class="text-slate-500 text-xs mt-1">Harga deal transaksi berjalan + hangus dari pembatalan</div>
                         <div v-if="expandedFinansial.nilai" class="mt-3 pt-3 border-t border-slate-800 space-y-3">
                             <div>
-                                <div class="flex items-center justify-between text-[11px] text-slate-500 uppercase tracking-wide mb-1">
+                                <div class="flex items-center justify-between text-[0.6875rem] text-slate-500 uppercase tracking-wide mb-1">
                                     <span>Kategori 1 — Pendapatan Resmi</span>
                                     <span class="text-slate-400 normal-case">{{ formatRp(kategoriResmiTotal) }}</span>
                                 </div>
@@ -262,7 +262,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                                 </div>
                             </div>
                             <div>
-                                <div class="flex items-center justify-between text-[11px] text-slate-500 uppercase tracking-wide mb-1">
+                                <div class="flex items-center justify-between text-[0.6875rem] text-slate-500 uppercase tracking-wide mb-1">
                                     <span>Kategori 2 — Dana Rekening Titipan</span>
                                     <span class="text-slate-400 normal-case">{{ formatRp(kategoriTitipanTotal) }}</span>
                                 </div>
@@ -286,11 +286,11 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                                 </div>
                             </div>
                             <div v-if="financials?.hangus_dari_pembatalan > 0">
-                                <div class="flex items-center justify-between text-[11px] text-slate-500 uppercase tracking-wide mb-1">
+                                <div class="flex items-center justify-between text-[0.6875rem] text-slate-500 uppercase tracking-wide mb-1">
                                     <span>Hangus dari Pembatalan</span>
                                     <span class="text-amber-400 normal-case">{{ formatRp(financials?.hangus_dari_pembatalan) }}</span>
                                 </div>
-                                <p class="text-slate-600 text-[11px] pl-2">Nominal yang dinyatakan hangus (tidak dikembalikan) saat menyetujui pengajuan pembatalan — lihat menu Pembatalan untuk rinciannya per transaksi.</p>
+                                <p class="text-slate-500 text-[0.6875rem] pl-2">Nominal yang dinyatakan hangus (tidak dikembalikan) saat menyetujui pengajuan pembatalan — lihat menu Pembatalan untuk rinciannya per transaksi.</p>
                             </div>
                         </div>
                     </div>
@@ -307,14 +307,14 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                         </div>
                         <div class="flex items-center justify-between mt-1.5">
                             <span class="text-amber-400 text-xs font-medium">Sisa {{ formatRp(financials?.sisa_piutang_konsumen) }}</span>
-                            <button @click="toggleFinansial('konsumen')" class="text-slate-500 hover:text-slate-300 text-[11px] transition-colors">{{ expandedFinansial.konsumen ? '▲ Tutup' : '▼ Rincian' }}</button>
+                            <button @click="toggleFinansial('konsumen')" class="text-slate-500 hover:text-slate-300 text-[0.6875rem] transition-colors">{{ expandedFinansial.konsumen ? '▲ Tutup' : '▼ Rincian' }}</button>
                         </div>
                         <div v-if="expandedFinansial.konsumen" class="mt-3 pt-3 border-t border-slate-800 space-y-1.5">
                             <div v-for="item in financials?.piutang_konsumen_rincian" :key="item.nama" class="flex items-center justify-between text-xs">
                                 <span class="text-slate-400">{{ item.nama }}</span>
                                 <span class="text-slate-300">{{ formatRp(item.terbayar) }} / {{ formatRp(item.nominal) }}</span>
                             </div>
-                            <div v-if="!financials?.piutang_konsumen_rincian?.length" class="text-slate-600 text-xs">Tidak ada rincian.</div>
+                            <div v-if="!financials?.piutang_konsumen_rincian?.length" class="text-slate-500 text-xs">Tidak ada rincian.</div>
                         </div>
                     </div>
                     <!-- Piutang Bank -->
@@ -330,14 +330,14 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                         </div>
                         <div class="flex items-center justify-between mt-1.5">
                             <span class="text-amber-400 text-xs font-medium">Sisa {{ formatRp(financials?.sisa_piutang_bank) }}</span>
-                            <button @click="toggleFinansial('bank')" class="text-slate-500 hover:text-slate-300 text-[11px] transition-colors">{{ expandedFinansial.bank ? '▲ Tutup' : '▼ Rincian' }}</button>
+                            <button @click="toggleFinansial('bank')" class="text-slate-500 hover:text-slate-300 text-[0.6875rem] transition-colors">{{ expandedFinansial.bank ? '▲ Tutup' : '▼ Rincian' }}</button>
                         </div>
                         <div v-if="expandedFinansial.bank" class="mt-3 pt-3 border-t border-slate-800 space-y-1.5">
                             <div v-for="item in financials?.piutang_bank_rincian" :key="item.nama" class="flex items-center justify-between text-xs">
                                 <span class="text-slate-400">{{ item.nama }}</span>
                                 <span class="text-slate-300">{{ formatRp(item.terbayar) }} / {{ formatRp(item.nominal) }}</span>
                             </div>
-                            <div v-if="!financials?.piutang_bank_rincian?.length" class="text-slate-600 text-xs">Tidak ada rincian.</div>
+                            <div v-if="!financials?.piutang_bank_rincian?.length" class="text-slate-500 text-xs">Tidak ada rincian.</div>
                         </div>
                     </div>
                 </div>
@@ -349,7 +349,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                 <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                     <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
                         <h2 class="text-slate-200 font-semibold text-sm">📊 Pipeline Penjualan</h2>
-                        <span class="text-slate-500 text-[11px]">{{ hasDateFilter ? `${dateFrom} – ${dateTo}` : 'Sekarang' }}</span>
+                        <span class="text-slate-500 text-[0.6875rem]">{{ hasDateFilter ? `${dateFrom} – ${dateTo}` : 'Sekarang' }}</span>
                     </div>
                     <!-- Live -->
                     <div v-if="!hasDateFilter" class="p-5 space-y-3">
@@ -358,12 +358,12 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                             <div class="flex-1 h-5 bg-slate-800 rounded-md overflow-hidden">
                                 <div class="h-full bg-gradient-to-r from-violet-600 to-indigo-500 rounded-md transition-all duration-500 flex items-center justify-end px-2"
                                     :style="`width: ${Math.max(4, (stage.count / pipelineMax) * 100)}%`">
-                                    <span v-if="stage.count > 0" class="text-white text-[10px] font-semibold">{{ stage.count }}</span>
+                                    <span v-if="stage.count > 0" class="text-white text-[0.625rem] font-semibold">{{ stage.count }}</span>
                                 </div>
                             </div>
-                            <span v-if="stage.count === 0" class="text-slate-600 text-xs w-4 text-right">0</span>
+                            <span v-if="stage.count === 0" class="text-slate-500 text-xs w-4 text-right">0</span>
                         </div>
-                        <div v-if="!pipelineFunnel?.some(s => s.count > 0)" class="text-center text-slate-600 text-xs py-4">Belum ada transaksi berjalan.</div>
+                        <div v-if="!pipelineFunnel?.some(s => s.count > 0)" class="text-center text-slate-500 text-xs py-4">Belum ada transaksi berjalan.</div>
                     </div>
                     <!-- Periodik -->
                     <div v-else class="p-5 space-y-4">
@@ -377,10 +377,10 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                                 <div class="flex-1 h-5 bg-slate-800 rounded-md overflow-hidden">
                                     <div :class="['h-full bg-gradient-to-r rounded-md transition-all duration-500 flex items-center justify-end px-2', stage.cls]"
                                         :style="`width: ${Math.max(4, (stage.count / pipelinePeriodicMax) * 100)}%`">
-                                        <span v-if="stage.count > 0" class="text-white text-[10px] font-semibold">{{ stage.count }}</span>
+                                        <span v-if="stage.count > 0" class="text-white text-[0.625rem] font-semibold">{{ stage.count }}</span>
                                     </div>
                                 </div>
-                                <span v-if="stage.count === 0" class="text-slate-600 text-xs w-4 text-right">0</span>
+                                <span v-if="stage.count === 0" class="text-slate-500 text-xs w-4 text-right">0</span>
                             </div>
                         </div>
                         <div class="flex items-center gap-4 pt-3 border-t border-slate-800 text-xs">
@@ -393,7 +393,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                 <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                     <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
                         <h2 class="text-slate-200 font-semibold text-sm">💳 Cara Pembayaran</h2>
-                        <span class="text-slate-500 text-[11px]">{{ hasDateFilter ? `${dateFrom} – ${dateTo}` : 'Sekarang' }}</span>
+                        <span class="text-slate-500 text-[0.6875rem]">{{ hasDateFilter ? `${dateFrom} – ${dateTo}` : 'Sekarang' }}</span>
                     </div>
                     <!-- Live -->
                     <div v-if="!hasDateFilter" class="p-5 space-y-3">
@@ -402,12 +402,12 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                             <div class="flex-1 h-5 bg-slate-800 rounded-md overflow-hidden">
                                 <div :class="['h-full bg-gradient-to-r rounded-md transition-all duration-500 flex items-center justify-end px-2', caraBayarColors[c.key]]"
                                     :style="`width: ${Math.max(4, (c.count / Math.max(1, caraBayarTotal)) * 100)}%`">
-                                    <span v-if="c.count > 0" class="text-white text-[10px] font-semibold">{{ c.count }}</span>
+                                    <span v-if="c.count > 0" class="text-white text-[0.625rem] font-semibold">{{ c.count }}</span>
                                 </div>
                             </div>
-                            <span class="text-slate-600 text-xs w-9 text-right">{{ caraBayarTotal > 0 ? Math.round((c.count / caraBayarTotal) * 100) : 0 }}%</span>
+                            <span class="text-slate-500 text-xs w-9 text-right">{{ caraBayarTotal > 0 ? Math.round((c.count / caraBayarTotal) * 100) : 0 }}%</span>
                         </div>
-                        <div v-if="caraBayarTotal === 0" class="text-center text-slate-600 text-xs py-4">Belum ada transaksi berjalan.</div>
+                        <div v-if="caraBayarTotal === 0" class="text-center text-slate-500 text-xs py-4">Belum ada transaksi berjalan.</div>
                     </div>
                     <!-- Periodik -->
                     <div v-else class="p-5 space-y-3">
@@ -416,12 +416,12 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                             <div class="flex-1 h-5 bg-slate-800 rounded-md overflow-hidden">
                                 <div :class="['h-full bg-gradient-to-r rounded-md transition-all duration-500 flex items-center justify-end px-2', caraBayarColors[c.key]]"
                                     :style="`width: ${Math.max(4, (c.count / Math.max(1, caraBayarPeriodicTotal)) * 100)}%`">
-                                    <span v-if="c.count > 0" class="text-white text-[10px] font-semibold">{{ c.count }}</span>
+                                    <span v-if="c.count > 0" class="text-white text-[0.625rem] font-semibold">{{ c.count }}</span>
                                 </div>
                             </div>
-                            <span class="text-slate-600 text-xs w-9 text-right">{{ caraBayarPeriodicTotal > 0 ? Math.round((c.count / caraBayarPeriodicTotal) * 100) : 0 }}%</span>
+                            <span class="text-slate-500 text-xs w-9 text-right">{{ caraBayarPeriodicTotal > 0 ? Math.round((c.count / caraBayarPeriodicTotal) * 100) : 0 }}%</span>
                         </div>
-                        <div v-if="caraBayarPeriodicTotal === 0" class="text-center text-slate-600 text-xs py-4">Tidak ada booking di periode ini.</div>
+                        <div v-if="caraBayarPeriodicTotal === 0" class="text-center text-slate-500 text-xs py-4">Tidak ada booking di periode ini.</div>
                     </div>
                 </div>
             </div>
@@ -438,7 +438,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                             <div class="h-full rounded-full transition-all duration-500"
                                 :style="`background:${s.color}; width: ${Math.max(s.count > 0 ? 6 : 0, (s.count / kavlingBangunMax) * 100)}%`" />
                         </div>
-                        <div class="text-slate-500 text-[11px]">{{ s.label }}</div>
+                        <div class="text-slate-500 text-[0.6875rem]">{{ s.label }}</div>
                     </div>
                 </div>
             </div>
@@ -458,7 +458,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                         <button @click="presetBulanLalu" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">Bulan Lalu</button>
                         <div class="flex items-center gap-1.5">
                             <input v-model="dateFrom" type="date" class="px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                            <span class="text-slate-600 text-xs">–</span>
+                            <span class="text-slate-500 text-xs">–</span>
                             <input v-model="dateTo" type="date" class="px-2 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                             <button @click="applyCustomRange" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium rounded-lg transition-colors">Terapkan</button>
                         </div>
@@ -473,7 +473,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                 <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                     <div class="px-5 py-4 border-b border-slate-800">
                         <h3 class="text-slate-200 font-semibold text-sm">📋 Informasi Umum</h3>
-                        <p class="text-slate-600 text-xs mt-0.5">Jumlah booking & akad dihitung gross (semua yang terjadi di periode ini) — pembatalan ditampilkan terpisah, bukan dikurangkan.</p>
+                        <p class="text-slate-500 text-xs mt-0.5">Jumlah booking & akad dihitung gross (semua yang terjadi di periode ini) — pembatalan ditampilkan terpisah, bukan dikurangkan.</p>
                     </div>
                     <div class="grid grid-cols-3 divide-x divide-slate-800/70">
                         <div class="p-5 text-center">
@@ -500,12 +500,12 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                         <div class="p-5">
                             <div class="text-slate-500 text-xs mb-1">Pembayaran Diterima</div>
                             <div class="text-emerald-400 font-bold text-lg">{{ formatRp(financialsPeriodic?.total_pembayaran_diterima) }}</div>
-                            <div class="text-slate-600 text-xs mt-1">Jatuh tempo (Booking Fee/DP): {{ formatRp(financialsPeriodic?.jatuh_tempo_piutang_konsumen) }}</div>
+                            <div class="text-slate-500 text-xs mt-1">Jatuh tempo (Booking Fee/DP): {{ formatRp(financialsPeriodic?.jatuh_tempo_piutang_konsumen) }}</div>
                         </div>
                         <div class="p-5">
                             <div class="text-slate-500 text-xs mb-1">Pencairan KPR Diterima</div>
                             <div class="text-emerald-400 font-bold text-lg">{{ formatRp(financialsPeriodic?.total_pencairan_kpr_diterima) }}</div>
-                            <div class="text-slate-600 text-xs mt-1" title="Belum ada data tanggal estimasi pencairan tersimpan">Jatuh tempo: belum ada data</div>
+                            <div class="text-slate-500 text-xs mt-1" title="Belum ada data tanggal estimasi pencairan tersimpan">Jatuh tempo: belum ada data</div>
                         </div>
                         <div class="p-5">
                             <div class="text-slate-500 text-xs mb-1">Jumlah Transaksi (Booking)</div>
@@ -520,7 +520,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                         <div class="text-slate-500 text-xs mb-2">Revenue per Proyek</div>
                         <div class="space-y-1.5">
                             <div v-for="rp in financialsPeriodic.revenue_per_proyek" :key="rp.project" class="flex items-center justify-between text-xs">
-                                <span class="text-slate-300">{{ rp.project }} <span class="text-slate-600">({{ rp.count }} unit)</span></span>
+                                <span class="text-slate-300">{{ rp.project }} <span class="text-slate-500">({{ rp.count }} unit)</span></span>
                                 <span class="text-slate-200 font-medium">{{ formatRp(rp.total) }}</span>
                             </div>
                         </div>
@@ -532,38 +532,38 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                     <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                         <div class="px-5 py-4 border-b border-slate-800">
                             <h3 class="text-slate-200 font-semibold text-sm">⚡ Kecepatan Pipeline</h3>
-                            <p class="text-slate-600 text-xs mt-0.5">Dihitung mundur dari transaksi yang MENCAPAI tiap tahap di periode ini (mis. "SP3K" = akad yang lahir di periode ini, dihitung dari kapan SP3K-nya terbit) — bukan dari kapan transaksinya dibooking. "-" berarti belum ada transaksi yang mencapai tahap itu di periode ini.</p>
+                            <p class="text-slate-500 text-xs mt-0.5">Dihitung mundur dari transaksi yang MENCAPAI tiap tahap di periode ini (mis. "SP3K" = akad yang lahir di periode ini, dihitung dari kapan SP3K-nya terbit) — bukan dari kapan transaksinya dibooking. "-" berarti belum ada transaksi yang mencapai tahap itu di periode ini.</p>
                         </div>
                         <div class="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-slate-800/70">
                             <div class="p-4 text-center">
                                 <div class="text-white font-bold text-lg">{{ formatDurasi(kecepatanPipeline?.pemberkasan) }}</div>
-                                <div class="text-slate-500 text-[11px] mt-0.5">Pemberkasan</div>
+                                <div class="text-slate-500 text-[0.6875rem] mt-0.5">Pemberkasan</div>
                             </div>
                             <div class="p-4 text-center">
                                 <div class="text-white font-bold text-lg">{{ formatDurasi(kecepatanPipeline?.proses_bank) }}</div>
-                                <div class="text-slate-500 text-[11px] mt-0.5">Proses Bank</div>
+                                <div class="text-slate-500 text-[0.6875rem] mt-0.5">Proses Bank</div>
                             </div>
                             <div class="p-4 text-center">
                                 <div class="text-white font-bold text-lg">{{ formatDurasi(kecepatanPipeline?.sp3k) }}</div>
-                                <div class="text-slate-500 text-[11px] mt-0.5">SP3K</div>
+                                <div class="text-slate-500 text-[0.6875rem] mt-0.5">SP3K</div>
                             </div>
                             <div class="p-4 text-center">
                                 <div class="text-white font-bold text-lg">{{ formatDurasi(kecepatanPipeline?.rencana_akad) }}</div>
-                                <div class="text-slate-500 text-[11px] mt-0.5">Rencana Akad</div>
+                                <div class="text-slate-500 text-[0.6875rem] mt-0.5">Rencana Akad</div>
                             </div>
                         </div>
                         <div class="grid grid-cols-3 divide-x divide-slate-800/70 border-t border-slate-800">
                             <div class="p-4 text-center">
                                 <div class="text-slate-300 font-semibold text-sm">{{ formatDurasi(kecepatanPipeline?.booking_ke_akad) }}</div>
-                                <div class="text-slate-500 text-[11px] mt-0.5">Total: Booking → Akad</div>
+                                <div class="text-slate-500 text-[0.6875rem] mt-0.5">Total: Booking → Akad</div>
                             </div>
                             <div class="p-4 text-center">
                                 <div class="text-slate-300 font-semibold text-sm">{{ formatDurasi(kecepatanPipeline?.akad_ke_bast) }}</div>
-                                <div class="text-slate-500 text-[11px] mt-0.5">Akad → BAST</div>
+                                <div class="text-slate-500 text-[0.6875rem] mt-0.5">Akad → BAST</div>
                             </div>
                             <div class="p-4 text-center">
                                 <div class="text-slate-300 font-semibold text-sm">{{ formatDurasi(kecepatanPipeline?.booking_ke_bast) }}</div>
-                                <div class="text-slate-500 text-[11px] mt-0.5">Total Cycle</div>
+                                <div class="text-slate-500 text-[0.6875rem] mt-0.5">Total Cycle</div>
                             </div>
                         </div>
                     </div>
@@ -584,7 +584,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                     <div class="px-5 py-4 border-b border-slate-800">
                         <h3 class="text-slate-200 font-semibold text-sm">🏆 Performa Sales</h3>
                     </div>
-                    <div v-if="!performaSales?.length" class="text-center text-slate-600 text-xs py-8">Belum ada booking dengan sales/agent di periode ini.</div>
+                    <div v-if="!performaSales?.length" class="text-center text-slate-500 text-xs py-8">Belum ada booking dengan sales/agent di periode ini.</div>
                     <table v-else class="w-full text-sm">
                         <thead class="border-b border-slate-800 text-xs text-slate-500 uppercase tracking-wide">
                             <tr class="font-medium">
@@ -631,7 +631,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                                 </template>
                             </svg>
                             <div class="flex mt-1">
-                                <span v-for="b in (trenTahunan?.bulan ?? [])" :key="b.label" class="flex-1 text-center text-slate-500 text-[10px]">{{ b.label }}</span>
+                                <span v-for="b in (trenTahunan?.bulan ?? [])" :key="b.label" class="flex-1 text-center text-slate-500 text-[0.625rem]">{{ b.label }}</span>
                             </div>
                         </div>
                         <!-- Revenue -->
@@ -644,7 +644,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                                 </template>
                             </svg>
                             <div class="flex mt-1">
-                                <span v-for="b in (trenTahunan?.bulan ?? [])" :key="b.label" class="flex-1 text-center text-slate-500 text-[10px]">{{ b.label }}</span>
+                                <span v-for="b in (trenTahunan?.bulan ?? [])" :key="b.label" class="flex-1 text-center text-slate-500 text-[0.625rem]">{{ b.label }}</span>
                             </div>
                         </div>
                     </div>

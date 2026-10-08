@@ -217,7 +217,7 @@ const deleteCicilanLain = async (c) => {
                     <div>
                         <div class="text-slate-500 text-xs">Unit</div>
                         <div class="text-slate-200 text-sm mt-0.5">{{ transaksi.kavling_nomor }}</div>
-                        <div class="text-slate-600 text-xs">{{ transaksi.project_nama }}</div>
+                        <div class="text-slate-500 text-xs">{{ transaksi.project_nama }}</div>
                     </div>
                     <div>
                         <div class="text-slate-500 text-xs">Harga Deal</div>
@@ -265,15 +265,15 @@ const deleteCicilanLain = async (c) => {
                     </div>
 
                     <div class="pt-2 mt-1 border-t border-slate-700/60">
-                        <div class="text-slate-500 text-[11px] uppercase tracking-wide mb-1">
+                        <div class="text-slate-500 text-[0.6875rem] uppercase tracking-wide mb-1">
                             Cara Pembayaran: {{ transaksi.cara_bayar_label }}
-                            <span v-if="transaksi.skema_dp_preset" class="text-slate-600 normal-case">· Skema: {{ transaksi.skema_dp_preset.nama }}</span>
-                            <span v-if="transaksi.program_all_in_nama" class="text-slate-600 normal-case">· Program All In: {{ transaksi.program_all_in_nama }}</span>
+                            <span v-if="transaksi.skema_dp_preset" class="text-slate-500 normal-case">· Skema: {{ transaksi.skema_dp_preset.nama }}</span>
+                            <span v-if="transaksi.program_all_in_nama" class="text-slate-500 normal-case">· Program All In: {{ transaksi.program_all_in_nama }}</span>
                         </div>
                         <div v-if="transaksi.booking_fee > 0" class="flex justify-between text-slate-400">
                             <span>
                                 Booking Fee
-                                <span v-if="transaksi.skema_dp_preset?.booking_fee_aktif" class="text-slate-600 text-xs ml-1">
+                                <span v-if="transaksi.skema_dp_preset?.booking_fee_aktif" class="text-slate-500 text-xs ml-1">
                                     ({{ transaksi.skema_dp_preset.booking_fee_tipe === 'persen' ? transaksi.skema_dp_preset.booking_fee_nilai + '%' : 'nominal tetap' }},
                                     {{ transaksi.skema_dp_preset.booking_fee_tenor }}x,
                                     {{ transaksi.skema_dp_preset.booking_fee_masuk_harga_jual ? 'masuk harga jual' : 'di luar harga jual' }})
@@ -284,7 +284,7 @@ const deleteCicilanLain = async (c) => {
                         <div v-if="transaksi.dp_nominal > 0" class="flex justify-between text-slate-400">
                             <span>
                                 DP
-                                <span v-if="transaksi.skema_dp_preset?.dp_aktif" class="text-slate-600 text-xs ml-1">
+                                <span v-if="transaksi.skema_dp_preset?.dp_aktif" class="text-slate-500 text-xs ml-1">
                                     ({{ transaksi.skema_dp_preset.dp_tipe === 'persen' ? transaksi.skema_dp_preset.dp_nilai + '%' : 'nominal tetap' }},
                                     {{ transaksi.skema_dp_preset.dp_tenor }}x,
                                     {{ transaksi.skema_dp_preset.dp_masuk_harga_jual ? 'masuk harga jual' : 'di luar harga jual' }})
@@ -293,10 +293,10 @@ const deleteCicilanLain = async (c) => {
                             <span class="text-slate-300">{{ formatRp(transaksi.dp_nominal) }}</span>
                         </div>
                         <div v-if="transaksi.titipan_biaya_akad_nominal > 0" class="flex justify-between text-slate-400">
-                            <span>Titipan Biaya Akad<span class="text-slate-600 text-xs ml-1">(dari Program All In)</span></span>
+                            <span>Titipan Biaya Akad<span class="text-slate-500 text-xs ml-1">(dari Program All In)</span></span>
                             <span class="text-slate-300">{{ formatRp(transaksi.titipan_biaya_akad_nominal) }}</span>
                         </div>
-                        <div v-if="!(transaksi.booking_fee > 0) && !(transaksi.dp_nominal > 0) && !(transaksi.titipan_biaya_akad_nominal > 0)" class="text-slate-600 text-xs">Tidak ada booking fee maupun DP.</div>
+                        <div v-if="!(transaksi.booking_fee > 0) && !(transaksi.dp_nominal > 0) && !(transaksi.titipan_biaya_akad_nominal > 0)" class="text-slate-500 text-xs">Tidak ada booking fee maupun DP.</div>
                     </div>
                 </div>
             </div>
@@ -309,7 +309,7 @@ const deleteCicilanLain = async (c) => {
                 </div>
 
                 <div class="rounded-lg border border-slate-800 overflow-hidden">
-                    <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[11px] font-semibold uppercase tracking-wide">
+                    <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[0.6875rem] font-semibold uppercase tracking-wide">
                         Nama Biaya / Subjek / Nominal / Status
                     </div>
                     <template v-for="(row, i) in transaksi.kartu_piutang_static" :key="`static-${i}`">
@@ -323,8 +323,8 @@ const deleteCicilanLain = async (c) => {
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                                 </svg>
                                 <span class="text-slate-300">{{ row.nama }}</span>
-                                <span class="text-slate-600 text-xs ml-2">{{ row.subjek }}</span>
-                                <span v-if="row.progress" class="text-slate-600 text-xs ml-2">({{ row.progress }})</span>
+                                <span class="text-slate-500 text-xs ml-2">{{ row.subjek }}</span>
+                                <span v-if="row.progress" class="text-slate-500 text-xs ml-2">({{ row.progress }})</span>
                             </div>
                             <div class="flex items-center gap-3 flex-shrink-0">
                                 <span class="text-slate-200 font-medium min-w-[110px] text-right">{{ nominalLabel(row.nominal, row.jumlah_dibayar, row.status) }}</span>
@@ -359,12 +359,12 @@ const deleteCicilanLain = async (c) => {
                                         <input v-model="tanggalForm.tanggal_jatuh_tempo" type="date"
                                             class="ml-2 px-1.5 py-0.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                         <button @click="submitEditTanggal(j)" class="ml-1 text-emerald-400 hover:text-emerald-300 text-xs">✓</button>
-                                        <button @click="editingTanggal = null" class="ml-0.5 text-slate-500 hover:text-slate-300 text-xs">✕</button>
+                                        <button @click="editingTanggal = null" class="ml-0.5 text-slate-500 hover:text-slate-300 text-xs" aria-label="Batal mengubah">✕</button>
                                     </template>
                                     <template v-else>
-                                        <span class="text-slate-600 text-xs ml-2">jatuh tempo {{ j.tanggal_jatuh_tempo }}</span>
+                                        <span class="text-slate-500 text-xs ml-2">jatuh tempo {{ j.tanggal_jatuh_tempo }}</span>
                                         <button v-if="j.status === 'belum_bayar' && canPayItem" @click="openEditTanggal(j)"
-                                            class="text-slate-600 hover:text-violet-400 text-xs ml-1" title="Ubah tanggal jatuh tempo">✎</button>
+                                            class="text-slate-500 hover:text-violet-400 text-xs ml-1" title="Ubah tanggal jatuh tempo">✎</button>
                                     </template>
                                     <span v-if="j.status !== 'lunas' && j.is_terlambat" class="ml-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-500/15 text-rose-400">Terlambat</span>
                                 </div>
@@ -406,14 +406,14 @@ const deleteCicilanLain = async (c) => {
                                             <input v-model="cicilanLainForm.keterangan" type="text" placeholder="Keterangan"
                                                 class="w-32 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                             <button @click="submitEditCicilanLain(c)" class="text-emerald-400 hover:text-emerald-300 text-xs">✓</button>
-                                            <button @click="editingCicilanLain = null" class="text-slate-500 hover:text-slate-300 text-xs">✕</button>
+                                            <button @click="editingCicilanLain = null" class="text-slate-500 hover:text-slate-300 text-xs" aria-label="Batal mengubah">✕</button>
                                         </div>
                                     </template>
                                     <template v-else>
                                         <div class="flex-1">
                                             <span class="text-slate-300 font-medium">{{ formatRp(c.jumlah) }}</span>
-                                            <span class="text-slate-600 text-xs ml-2">dibayar {{ c.tanggal_bayar }}</span>
-                                            <span v-if="c.keterangan" class="text-slate-600 text-xs ml-2">· {{ c.keterangan }}</span>
+                                            <span class="text-slate-500 text-xs ml-2">dibayar {{ c.tanggal_bayar }}</span>
+                                            <span v-if="c.keterangan" class="text-slate-500 text-xs ml-2">· {{ c.keterangan }}</span>
                                         </div>
                                         <div v-if="canPayItem" class="flex items-center gap-1 flex-shrink-0">
                                             <button @click="openEditCicilanLain(c)" title="Ubah" class="px-1 py-1 text-slate-500 hover:text-violet-400 rounded transition-colors">✎</button>
@@ -425,7 +425,7 @@ const deleteCicilanLain = async (c) => {
                                         </div>
                                     </template>
                                 </div>
-                                <div v-if="!row.cicilan?.length" class="pl-8 pr-3 py-2 text-slate-600 text-xs">Belum ada cicilan tercatat.</div>
+                                <div v-if="!row.cicilan?.length" class="pl-8 pr-3 py-2 text-slate-500 text-xs">Belum ada cicilan tercatat.</div>
 
                                 <div v-if="canPayItem" class="pl-8 pr-3 py-2">
                                     <button v-if="!showTambahCicilanLain[rowKey(row)]" @click="showTambahCicilanLain[rowKey(row)] = true"
@@ -469,7 +469,7 @@ const deleteCicilanLain = async (c) => {
                             </div>
                         </div>
                     </template>
-                    <div v-if="!transaksi.kartu_piutang_static?.length" class="px-3 py-4 text-center text-slate-600 text-xs">
+                    <div v-if="!transaksi.kartu_piutang_static?.length" class="px-3 py-4 text-center text-slate-500 text-xs">
                         Belum ada data piutang.
                     </div>
                 </div>
@@ -484,12 +484,12 @@ const deleteCicilanLain = async (c) => {
 
                 <div class="rounded-lg border border-slate-800 overflow-hidden">
                     <template v-if="transaksi.is_kpr_subsidi">
-                        <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[11px] font-semibold uppercase tracking-wide">SBUM</div>
+                        <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[0.6875rem] font-semibold uppercase tracking-wide">SBUM</div>
                         <div v-for="item in sbumItems" :key="`sbum-${item.id}`"
                             class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-slate-800/60 text-sm">
                             <div class="flex-1">
                                 <span class="text-slate-300">{{ item.nama }}</span>
-                                <span class="text-slate-600 text-xs ml-2">Pemerintah/Bank</span>
+                                <span class="text-slate-500 text-xs ml-2">Pemerintah/Bank</span>
                             </div>
                             <div class="flex items-center gap-3 flex-shrink-0">
                                 <span class="text-slate-200 font-medium min-w-[110px] text-right">{{ nominalLabel(item.nominal, item.jumlah_dibayar, item.status) }}</span>
@@ -504,7 +504,7 @@ const deleteCicilanLain = async (c) => {
                                 </span>
                             </div>
                         </div>
-                        <div v-if="!sbumItems.length" class="px-3 py-3 text-center text-slate-600 text-xs">Belum ada item SBUM (dikelola di tab Konsumen).</div>
+                        <div v-if="!sbumItems.length" class="px-3 py-3 text-center text-slate-500 text-xs">Belum ada item SBUM (dikelola di tab Konsumen).</div>
                     </template>
 
                     <div class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60 bg-slate-800/30">
@@ -515,12 +515,12 @@ const deleteCicilanLain = async (c) => {
                         </div>
                     </div>
 
-                    <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[11px] font-semibold uppercase tracking-wide">Dana Jaminan</div>
+                    <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[0.6875rem] font-semibold uppercase tracking-wide">Dana Jaminan</div>
                     <div v-for="item in dajamItems" :key="`dajam-${item.id}`"
                         class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-slate-800/60 text-sm">
                         <div class="flex-1">
                             <span class="text-slate-300">{{ item.nama }}</span>
-                            <span class="text-slate-600 text-xs ml-2">Bank</span>
+                            <span class="text-slate-500 text-xs ml-2">Bank</span>
                         </div>
                         <div class="flex items-center gap-3 flex-shrink-0">
                             <span class="text-slate-200 font-medium min-w-[110px] text-right">{{ nominalLabel(item.nominal, item.jumlah_dibayar, item.status) }}</span>
@@ -535,10 +535,10 @@ const deleteCicilanLain = async (c) => {
                             </span>
                         </div>
                     </div>
-                    <div v-if="!dajamItems.length" class="px-3 py-3 text-center text-slate-600 text-xs">Belum ada item Dana Jaminan (dikelola di tab Konsumen).</div>
+                    <div v-if="!dajamItems.length" class="px-3 py-3 text-center text-slate-500 text-xs">Belum ada item Dana Jaminan (dikelola di tab Konsumen).</div>
 
                     <div v-if="tambahanUmRow" class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60">
-                        <span class="text-slate-400">(−) Turun Plafon <span class="text-slate-600 text-xs">— lihat baris Tambahan Uang Muka di Kartu Piutang</span></span>
+                        <span class="text-slate-400">(−) Turun Plafon <span class="text-slate-500 text-xs">— lihat baris Tambahan Uang Muka di Kartu Piutang</span></span>
                         <span class="text-amber-300 font-medium">{{ formatRp(tambahanUmRow.nominal) }}</span>
                     </div>
 
@@ -570,14 +570,14 @@ const deleteCicilanLain = async (c) => {
                                     <input v-model="tahapForm.keterangan" type="text" placeholder="Keterangan"
                                         class="w-32 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                     <button @click="submitEditTahap(t)" class="text-emerald-400 hover:text-emerald-300 text-xs">✓</button>
-                                    <button @click="editingTahap = null" class="text-slate-500 hover:text-slate-300 text-xs">✕</button>
+                                    <button @click="editingTahap = null" class="text-slate-500 hover:text-slate-300 text-xs" aria-label="Batal mengubah">✕</button>
                                 </div>
                             </template>
                             <template v-else>
                                 <div>
                                     <span class="text-slate-300 font-medium">{{ formatRp(t.nominal) }}</span>
-                                    <span class="text-slate-600 text-xs ml-2">cair {{ t.tanggal_cair }}</span>
-                                    <span v-if="t.keterangan" class="text-slate-600 text-xs ml-2">· {{ t.keterangan }}</span>
+                                    <span class="text-slate-500 text-xs ml-2">cair {{ t.tanggal_cair }}</span>
+                                    <span v-if="t.keterangan" class="text-slate-500 text-xs ml-2">· {{ t.keterangan }}</span>
                                 </div>
                                 <div v-if="canPayDajamSbum" class="flex items-center gap-1 flex-shrink-0">
                                     <button @click="openEditTahap(t)" title="Ubah" class="px-1 py-1 text-slate-500 hover:text-violet-400 rounded transition-colors">✎</button>
@@ -589,7 +589,7 @@ const deleteCicilanLain = async (c) => {
                                 </div>
                             </template>
                         </div>
-                        <div v-if="!transaksi.pencairan_kpr_tahaps?.length" class="pl-8 pr-3 py-2 text-slate-600 text-xs">Belum ada pencairan tercatat.</div>
+                        <div v-if="!transaksi.pencairan_kpr_tahaps?.length" class="pl-8 pr-3 py-2 text-slate-500 text-xs">Belum ada pencairan tercatat.</div>
 
                         <div v-if="canPayDajamSbum" class="pl-8 pr-3 py-2">
                             <button v-if="!showTambahTahap" @click="showTambahTahap = true"
@@ -597,7 +597,7 @@ const deleteCicilanLain = async (c) => {
                                 + Catat Pencairan
                             </button>
                             <div v-else class="space-y-1.5">
-                                <p v-if="pencairanBelumAkad" class="text-amber-400 text-[11px] bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 max-w-md">
+                                <p v-if="pencairanBelumAkad" class="text-amber-400 text-[0.6875rem] bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 max-w-md">
                                     ⚠ {{ PENCAIRAN_WARNING }}
                                 </p>
                                 <div class="flex flex-wrap items-center gap-1.5">
@@ -605,7 +605,7 @@ const deleteCicilanLain = async (c) => {
                                     class="w-32 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                 <input v-model="tambahTahapForm.tanggal_cair" type="date"
                                     class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                                <span v-if="tambahTahapForm.tanggal_cair > new Date().toISOString().slice(0, 10)" class="text-amber-400 text-[11px]">⚠ Tanggal di masa depan</span>
+                                <span v-if="tambahTahapForm.tanggal_cair > new Date().toISOString().slice(0, 10)" class="text-amber-400 text-[0.6875rem]">⚠ Tanggal di masa depan</span>
                                 <input v-model="tambahTahapForm.keterangan" type="text" :placeholder="pencairanBelumAkad ? 'Alasan (wajib)' : 'Keterangan (opsional)'"
                                     class="w-36 px-2 py-1 bg-slate-900 border rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500"
                                     :class="pencairanBelumAkad && !tambahTahapForm.keterangan.trim() ? 'border-amber-500/50' : 'border-slate-700'" />
@@ -634,7 +634,7 @@ const deleteCicilanLain = async (c) => {
                         </div>
                         <div class="text-right">
                             <div class="text-emerald-400 font-medium">{{ formatRp(p.jumlah) }}</div>
-                            <div class="text-slate-600 text-xs">{{ p.tanggal_bayar }}</div>
+                            <div class="text-slate-500 text-xs">{{ p.tanggal_bayar }}</div>
                         </div>
                     </div>
                 </div>

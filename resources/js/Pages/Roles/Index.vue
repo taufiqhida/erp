@@ -237,7 +237,7 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                                         >
                                             {{ role }}
                                         </span>
-                                        <span v-if="!user.roles.length" class="text-slate-600 text-xs">Tanpa role</span>
+                                        <span v-if="!user.roles.length" class="text-slate-500 text-xs">Tanpa role</span>
                                     </div>
                                 </td>
                                 <td class="px-4 py-4">
@@ -246,7 +246,7 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                                             class="px-1.5 py-0.5 bg-slate-800 text-slate-400 text-xs rounded font-mono">
                                             {{ p.kode }}
                                         </span>
-                                        <span v-if="!user.projects?.length" class="text-slate-600 text-xs">–</span>
+                                        <span v-if="!user.projects?.length" class="text-slate-500 text-xs">–</span>
                                     </div>
                                 </td>
                                 <td class="px-5 py-4">
@@ -312,7 +312,7 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                             {{ user.name }}
                         </span>
                         <span v-if="!users.data.some(u => u.projects?.some(p => p.id === project.id))"
-                            class="text-slate-600 text-xs">Belum ada user</span>
+                            class="text-slate-500 text-xs">Belum ada user</span>
                     </div>
                 </div>
             </div>
@@ -320,12 +320,12 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
 
 
         <Teleport to="body">
-            <div v-if="editingUser" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div v-if="editingUser" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="editingUser = null" />
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl">
                     <div class="flex items-center justify-between p-5 border-b border-slate-800">
                         <h3 class="text-white font-semibold">Assign Role: {{ editingUser.name }}</h3>
-                        <button @click="editingUser = null" class="text-slate-500 hover:text-slate-300">
+                        <button @click="editingUser = null" class="text-slate-500 hover:text-slate-300" aria-label="Batal mengubah">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
                         </button>
                     </div>
@@ -365,7 +365,7 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
 
         <!-- ── MODAL: Tambah User Baru ───────────────────────────────────────── -->
         <Teleport to="body">
-            <div v-if="showAddUser" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div v-if="showAddUser" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showAddUser = false" />
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
                     <div class="flex items-center justify-between p-5 border-b border-slate-800">
@@ -373,7 +373,7 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                             <h3 class="text-white font-semibold">Tambah User Baru</h3>
                             <p class="text-slate-400 text-xs mt-0.5">Akun langsung aktif tanpa verifikasi email</p>
                         </div>
-                        <button @click="showAddUser = false" class="text-slate-500 hover:text-slate-300">
+                        <button @click="showAddUser = false" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
                         </button>
                     </div>
@@ -472,7 +472,7 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
         <!-- ── MODAL: Assign Users ke Proyek ───────────────────── -->
         <Teleport to="body">
             <div v-if="showProjectModal && selectedProject"
-                class="fixed inset-0 z-50 flex items-center justify-center p-4"
+                role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4"
                 @click.self="showProjectModal = false">
                 <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showProjectModal = false" />
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
@@ -481,7 +481,7 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                             <h3 class="text-white font-semibold">Assign User ke Proyek</h3>
                             <p class="text-slate-400 text-xs mt-0.5">{{ selectedProject.nama }} ({{ selectedProject.kode }})</p>
                         </div>
-                        <button @click="showProjectModal = false" class="text-slate-500 hover:text-slate-300">
+                        <button @click="showProjectModal = false" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                     </div>

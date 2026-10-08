@@ -1,3 +1,33 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Ukuran teks (preferensi pengguna) ─────────────────────────────────
+   Semua ukuran memakai rem, jadi mengubah ukuran dasar halaman membesarkan seluruh teks & jarak. */
+html[data-ukuran='besar'] { font-size: 112.5%; }
+html[data-ukuran='lebih-besar'] { font-size: 125%; }
+
+/* ── Aksesibilitas dasar ───────────────────────────────────────────────── */
+@layer base {
+    /* Cincin fokus yang jelas untuk navigasi keyboard (tidak muncul saat klik mouse). */
+    a:focus-visible,
+    button:focus-visible,
+    summary:focus-visible,
+    [role='button']:focus-visible,
+    [tabindex]:focus-visible {
+        outline: 2px solid #a78bfa;
+        outline-offset: 2px;
+    }
+
+    /* Hormati pengaturan sistem "kurangi gerakan". */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+        }
+    }
+}

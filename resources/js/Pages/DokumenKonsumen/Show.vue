@@ -357,7 +357,7 @@ const submitBast = () => {
                         <span>Kelengkapan Berkas</span>
                         <span>
                             <span class="text-violet-400 font-semibold">{{ wajibDone }}/{{ wajibTotal }}</span>
-                            <span class="text-slate-600 ml-1">dokumen wajib</span>
+                            <span class="text-slate-500 ml-1">dokumen wajib</span>
                         </span>
                     </div>
                     <div class="h-2.5 bg-slate-800 rounded-full overflow-hidden">
@@ -389,7 +389,7 @@ const submitBast = () => {
                         {{ bankRekananForm.processing ? 'Menyimpan...' : 'Simpan' }}
                     </button>
                 </div>
-                <p class="text-slate-600 text-xs mt-2">Wajib diisi sebelum lanjut ke tahap Proses Bank/SLIK.</p>
+                <p class="text-slate-500 text-xs mt-2">Wajib diisi sebelum lanjut ke tahap Proses Bank/SLIK.</p>
             </div>
 
             <!-- Pipeline KPR -->
@@ -424,15 +424,15 @@ const submitBast = () => {
                                 :class="stage.skipped ? 'bg-slate-800/50 text-slate-700 border border-dashed border-slate-700'
                                     : idx < currentStageIndex || (bastSelesai && idx === currentStageIndex) ? 'bg-emerald-500 text-white'
                                     : idx === currentStageIndex ? 'bg-violet-600 text-white ring-4 ring-violet-500/20'
-                                    : 'bg-slate-800 text-slate-600'">
+                                    : 'bg-slate-800 text-slate-500'">
                                 <span v-if="stage.skipped">–</span>
                                 <span v-else-if="idx < currentStageIndex || (bastSelesai && idx === currentStageIndex)">✓</span>
                                 <span v-else>{{ idx + 1 }}</span>
                             </div>
                             <span class="text-xs mt-1.5 text-center"
-                                :class="stage.skipped ? 'text-slate-700' : idx <= currentStageIndex ? 'text-slate-300' : 'text-slate-600'">{{ stage.label }}</span>
-                            <span v-if="stage.skipped" class="text-[10px] text-slate-700">(dilewati)</span>
-                            <span v-else-if="stageDates[stage.key]" class="text-[10px] text-slate-500 mt-0.5 text-center">{{ stageDates[stage.key] }}</span>
+                                :class="stage.skipped ? 'text-slate-700' : idx <= currentStageIndex ? 'text-slate-300' : 'text-slate-500'">{{ stage.label }}</span>
+                            <span v-if="stage.skipped" class="text-[0.625rem] text-slate-700">(dilewati)</span>
+                            <span v-else-if="stageDates[stage.key]" class="text-[0.625rem] text-slate-500 mt-0.5 text-center">{{ stageDates[stage.key] }}</span>
                         </div>
                         <div v-if="idx < PIPELINE_STAGES.length - 1" class="flex-1 h-0.5 min-w-[16px]"
                             :class="idx < currentStageIndex ? 'bg-emerald-500' : 'bg-slate-800'" />
@@ -506,7 +506,7 @@ const submitBast = () => {
                         {{ rencanaAkadForm.processing ? 'Menyimpan...' : 'Simpan' }}
                     </button>
                 </div>
-                <p class="text-slate-600 text-xs mt-3">Saat "Lanjutkan ke Akad" ditekan, ini hanya konfirmasi bahwa akad terlaksana sesuai tanggal di atas.</p>
+                <p class="text-slate-500 text-xs mt-3">Saat "Lanjutkan ke Akad" ditekan, ini hanya konfirmasi bahwa akad terlaksana sesuai tanggal di atas.</p>
             </div>
 
             <!-- Keputusan Proses Bank / SLIK -->
@@ -604,7 +604,7 @@ const submitBast = () => {
                     <MoneyInput v-model="sp3kForm.plafon_baru" :disabled="!canPemberkasanBank"
                         placeholder="cth. 250000000"
                         class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
-                    <p v-if="transaksi.plafon_kpr" class="text-slate-600 text-xs mt-1">Plafon sebelumnya: {{ formatRp(transaksi.plafon_kpr) }}</p>
+                    <p v-if="transaksi.plafon_kpr" class="text-slate-500 text-xs mt-1">Plafon sebelumnya: {{ formatRp(transaksi.plafon_kpr) }}</p>
                 </div>
 
                 <div class="mb-4">
@@ -651,7 +651,7 @@ const submitBast = () => {
                         </span>
                     </div>
                 </div>
-                <p v-if="!bangunanSiap" class="text-slate-600 text-xs mb-4">Ubah status bangunan jadi "Siap Serah Terima" di halaman Kavling untuk memenuhi syarat ini.</p>
+                <p v-if="!bangunanSiap" class="text-slate-500 text-xs mb-4">Ubah status bangunan jadi "Siap Serah Terima" di halaman Kavling untuk memenuhi syarat ini.</p>
 
                 <div class="mb-4">
                     <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal BAST</label>
@@ -683,7 +683,7 @@ const submitBast = () => {
                         class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors">
                         ✅ Konfirmasi Transaksi Selesai
                     </button>
-                    <span v-else-if="canPipelineSales && !bastSelesai" class="text-slate-600 text-xs">
+                    <span v-else-if="canPipelineSales && !bastSelesai" class="text-slate-500 text-xs">
                         Checklist & tanda tangan harus lengkap dulu untuk konfirmasi selesai
                     </span>
                 </div>
@@ -696,7 +696,7 @@ const submitBast = () => {
                     <span class="text-slate-500 text-xs">{{ dokumens.length }} dokumen</span>
                 </div>
 
-                <div v-if="!dokumens.length" class="py-12 text-center text-slate-600 text-sm">
+                <div v-if="!dokumens.length" class="py-12 text-center text-slate-500 text-sm">
                     Belum ada template dokumen. Atur di Pengaturan → Template Dokumen.
                 </div>
 
@@ -721,7 +721,7 @@ const submitBast = () => {
                                     class="text-xs px-2 py-0.5 rounded-full font-medium">
                                     {{ statusConfig[dok.status]?.label ?? dok.status }}
                                 </span>
-                                <span v-if="dok.verified_by" class="text-slate-600 text-xs">· Diverifikasi {{ dok.verified_by }}, {{ dok.tanggal_verifikasi }}</span>
+                                <span v-if="dok.verified_by" class="text-slate-500 text-xs">· Diverifikasi {{ dok.verified_by }}, {{ dok.tanggal_verifikasi }}</span>
                             </div>
                             <p v-if="['perlu_revisi','ditolak'].includes(dok.status) && dok.catatan_revisi"
                                 class="mt-1.5 text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5">
@@ -756,18 +756,18 @@ const submitBast = () => {
                 <span v-for="(cfg, st) in statusConfig" :key="st" class="flex items-center gap-1.5">
                     <span class="text-sm">{{ cfg.icon }}</span> {{ cfg.label }}
                 </span>
-                <span class="ml-auto text-slate-600">Klik icon untuk update status dokumen</span>
+                <span class="ml-auto text-slate-500">Klik icon untuk update status dokumen</span>
             </div>
         </div>
 
         <!-- Modal: Lanjutkan Tahap Pipeline -->
         <Teleport to="body">
-            <div v-if="showAdvanceModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div v-if="showAdvanceModal" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showAdvanceModal = false" />
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
                     <div class="flex items-center justify-between p-5 border-b border-slate-800">
                         <h3 class="text-white font-semibold">Lanjutkan ke {{ nextStage?.label }}</h3>
-                        <button @click="showAdvanceModal = false" class="text-slate-500 hover:text-slate-300">
+                        <button @click="showAdvanceModal = false" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
                         </button>
                     </div>
@@ -789,7 +789,7 @@ const submitBast = () => {
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Pengajuan ke Bank</label>
                             <input v-model="advanceForm.tanggal_pengajuan_bank" type="date"
                                 class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                            <p class="text-slate-600 text-xs mt-1">
+                            <p class="text-slate-500 text-xs mt-1">
                                 {{ transaksi.tanggal_pengajuan_bank
                                     ? 'Transaksi ini pernah masuk Proses Bank sebelumnya — default ke tanggal pengajuan yang lama. Ubah kalau memang submit ulang ke bank.'
                                     : 'Default hari ini — ubah kalau berkas sudah disubmit ke bank di tanggal lain.' }}

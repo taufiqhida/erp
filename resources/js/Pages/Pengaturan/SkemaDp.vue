@@ -111,7 +111,7 @@ const nilaiLabel = (tipe, nilai, basis) => tipe === 'persen'
 
             <!-- List -->
             <div class="space-y-3">
-                <div v-if="!presets.length" class="bg-slate-900 border border-dashed border-slate-700 rounded-xl px-5 py-8 text-center text-slate-600 text-sm">
+                <div v-if="!presets.length" class="bg-slate-900 border border-dashed border-slate-700 rounded-xl px-5 py-8 text-center text-slate-500 text-sm">
                     Belum ada preset skema DP.
                 </div>
 
@@ -129,7 +129,7 @@ const nilaiLabel = (tipe, nilai, basis) => tipe === 'persen'
                             <div class="text-slate-500 text-xs mt-1 flex gap-3 flex-wrap">
                                 <span>
                                     Booking Fee:
-                                    <span :class="preset.booking_fee_aktif ? 'text-slate-300' : 'text-slate-600'">
+                                    <span :class="preset.booking_fee_aktif ? 'text-slate-300' : 'text-slate-500'">
                                         {{ preset.booking_fee_aktif
                                             ? `${nilaiLabel(preset.booking_fee_tipe, preset.booking_fee_nilai, preset.booking_fee_basis)} · ${preset.booking_fee_tenor}x cicilan · ${preset.booking_fee_masuk_harga_jual ? 'masuk harga jual' : 'di luar harga jual'}`
                                             : 'Nonaktif' }}
@@ -137,7 +137,7 @@ const nilaiLabel = (tipe, nilai, basis) => tipe === 'persen'
                                 </span>
                                 <span>
                                     DP:
-                                    <span :class="preset.dp_aktif ? 'text-slate-300' : 'text-slate-600'">
+                                    <span :class="preset.dp_aktif ? 'text-slate-300' : 'text-slate-500'">
                                         {{ preset.dp_aktif
                                             ? `${nilaiLabel(preset.dp_tipe, preset.dp_nilai, preset.dp_basis)} · ${preset.dp_tenor}x cicilan · ${preset.dp_masuk_harga_jual ? 'masuk harga jual' : 'di luar harga jual'}`
                                             : 'Nonaktif' }}
@@ -176,30 +176,30 @@ const nilaiLabel = (tipe, nilai, basis) => tipe === 'persen'
                                 <template v-if="editForm.booking_fee_aktif">
                                     <div class="grid grid-cols-3 gap-2">
                                         <div>
-                                            <label class="block text-slate-500 text-[10px] mb-0.5">Tipe</label>
+                                            <label class="block text-slate-500 text-[0.625rem] mb-0.5">Tipe</label>
                                             <select v-model="editForm.booking_fee_tipe" class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-300 text-xs">
                                                 <option value="nominal">Nominal (Rp)</option>
                                                 <option value="persen">% dari harga unit</option>
                                             </select>
                                         </div>
                                         <div>
-                                            <label class="block text-slate-500 text-[10px] mb-0.5">Nilai</label>
+                                            <label class="block text-slate-500 text-[0.625rem] mb-0.5">Nilai</label>
                                             <MoneyInput :plain="editForm.booking_fee_tipe === 'persen'" v-model.number="editForm.booking_fee_nilai" :placeholder="editForm.booking_fee_tipe === 'persen' ? '%' : 'Rp'"
                                                 class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs" />
                                         </div>
                                         <div>
-                                            <label class="block text-slate-500 text-[10px] mb-0.5">Tenor (x cicilan)</label>
+                                            <label class="block text-slate-500 text-[0.625rem] mb-0.5">Tenor (x cicilan)</label>
                                             <input v-model.number="editForm.booking_fee_tenor" type="number" min="1"
                                                 class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs" />
                                         </div>
                                     </div>
                                     <div v-if="editForm.booking_fee_tipe === 'persen'">
-                                        <label class="block text-slate-500 text-[10px] mb-0.5">Dasar Hitung %</label>
+                                        <label class="block text-slate-500 text-[0.625rem] mb-0.5">Dasar Hitung %</label>
                                         <select v-model="editForm.booking_fee_basis" class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-300 text-xs">
                                             <option v-for="(label, key) in basisOptions" :key="key" :value="key">{{ label }}</option>
                                         </select>
                                     </div>
-                                    <label class="flex items-center gap-2 text-slate-400 text-[11px] pt-1">
+                                    <label class="flex items-center gap-2 text-slate-400 text-[0.6875rem] pt-1">
                                         <input type="checkbox" v-model="editForm.booking_fee_masuk_harga_jual" class="accent-violet-500" />
                                         Masuk hitungan harga jual (mengurangi sisa yang harus dilunasi)
                                     </label>
@@ -212,30 +212,30 @@ const nilaiLabel = (tipe, nilai, basis) => tipe === 'persen'
                                 <template v-if="editForm.dp_aktif">
                                     <div class="grid grid-cols-3 gap-2">
                                         <div>
-                                            <label class="block text-slate-500 text-[10px] mb-0.5">Tipe</label>
+                                            <label class="block text-slate-500 text-[0.625rem] mb-0.5">Tipe</label>
                                             <select v-model="editForm.dp_tipe" class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-300 text-xs">
                                                 <option value="nominal">Nominal (Rp)</option>
                                                 <option value="persen">% dari harga jual</option>
                                             </select>
                                         </div>
                                         <div>
-                                            <label class="block text-slate-500 text-[10px] mb-0.5">Nilai</label>
+                                            <label class="block text-slate-500 text-[0.625rem] mb-0.5">Nilai</label>
                                             <MoneyInput :plain="editForm.dp_tipe === 'persen'" v-model.number="editForm.dp_nilai" :placeholder="editForm.dp_tipe === 'persen' ? '%' : 'Rp'"
                                                 class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs" />
                                         </div>
                                         <div>
-                                            <label class="block text-slate-500 text-[10px] mb-0.5">Tenor (x cicilan)</label>
+                                            <label class="block text-slate-500 text-[0.625rem] mb-0.5">Tenor (x cicilan)</label>
                                             <input v-model.number="editForm.dp_tenor" type="number" min="1"
                                                 class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs" />
                                         </div>
                                     </div>
                                     <div v-if="editForm.dp_tipe === 'persen'">
-                                        <label class="block text-slate-500 text-[10px] mb-0.5">Dasar Hitung %</label>
+                                        <label class="block text-slate-500 text-[0.625rem] mb-0.5">Dasar Hitung %</label>
                                         <select v-model="editForm.dp_basis" class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-300 text-xs">
                                             <option v-for="(label, key) in basisOptions" :key="key" :value="key">{{ label }}</option>
                                         </select>
                                     </div>
-                                    <label class="flex items-center gap-2 text-slate-400 text-[11px] pt-1">
+                                    <label class="flex items-center gap-2 text-slate-400 text-[0.6875rem] pt-1">
                                         <input type="checkbox" v-model="editForm.dp_masuk_harga_jual" class="accent-violet-500" />
                                         Masuk hitungan harga jual (mengurangi sisa yang harus dilunasi)
                                     </label>
@@ -279,30 +279,30 @@ const nilaiLabel = (tipe, nilai, basis) => tipe === 'persen'
                         <template v-if="addForm.booking_fee_aktif">
                             <div class="grid grid-cols-3 gap-2">
                                 <div>
-                                    <label class="block text-slate-500 text-[10px] mb-0.5">Tipe</label>
+                                    <label class="block text-slate-500 text-[0.625rem] mb-0.5">Tipe</label>
                                     <select v-model="addForm.booking_fee_tipe" class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-300 text-xs">
                                         <option value="nominal">Nominal (Rp)</option>
                                         <option value="persen">% dari harga unit</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="block text-slate-500 text-[10px] mb-0.5">Nilai</label>
+                                    <label class="block text-slate-500 text-[0.625rem] mb-0.5">Nilai</label>
                                     <MoneyInput :plain="addForm.booking_fee_tipe === 'persen'" v-model.number="addForm.booking_fee_nilai" :placeholder="addForm.booking_fee_tipe === 'persen' ? '%' : 'Rp'"
                                         class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs" />
                                 </div>
                                 <div>
-                                    <label class="block text-slate-500 text-[10px] mb-0.5">Tenor (x cicilan)</label>
+                                    <label class="block text-slate-500 text-[0.625rem] mb-0.5">Tenor (x cicilan)</label>
                                     <input v-model.number="addForm.booking_fee_tenor" type="number" min="1"
                                         class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs" />
                                 </div>
                             </div>
                             <div v-if="addForm.booking_fee_tipe === 'persen'">
-                                <label class="block text-slate-500 text-[10px] mb-0.5">Dasar Hitung %</label>
+                                <label class="block text-slate-500 text-[0.625rem] mb-0.5">Dasar Hitung %</label>
                                 <select v-model="addForm.booking_fee_basis" class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-300 text-xs">
                                     <option v-for="(label, key) in basisOptions" :key="key" :value="key">{{ label }}</option>
                                 </select>
                             </div>
-                            <label class="flex items-center gap-2 text-slate-400 text-[11px] pt-1">
+                            <label class="flex items-center gap-2 text-slate-400 text-[0.6875rem] pt-1">
                                 <input type="checkbox" v-model="addForm.booking_fee_masuk_harga_jual" class="accent-violet-500" />
                                 Masuk hitungan harga jual (mengurangi sisa yang harus dilunasi)
                             </label>
@@ -315,30 +315,30 @@ const nilaiLabel = (tipe, nilai, basis) => tipe === 'persen'
                         <template v-if="addForm.dp_aktif">
                             <div class="grid grid-cols-3 gap-2">
                                 <div>
-                                    <label class="block text-slate-500 text-[10px] mb-0.5">Tipe</label>
+                                    <label class="block text-slate-500 text-[0.625rem] mb-0.5">Tipe</label>
                                     <select v-model="addForm.dp_tipe" class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-300 text-xs">
                                         <option value="nominal">Nominal (Rp)</option>
                                         <option value="persen">% dari harga jual</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="block text-slate-500 text-[10px] mb-0.5">Nilai</label>
+                                    <label class="block text-slate-500 text-[0.625rem] mb-0.5">Nilai</label>
                                     <MoneyInput :plain="addForm.dp_tipe === 'persen'" v-model.number="addForm.dp_nilai" :placeholder="addForm.dp_tipe === 'persen' ? '%' : 'Rp'"
                                         class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs" />
                                 </div>
                                 <div>
-                                    <label class="block text-slate-500 text-[10px] mb-0.5">Tenor (x cicilan)</label>
+                                    <label class="block text-slate-500 text-[0.625rem] mb-0.5">Tenor (x cicilan)</label>
                                     <input v-model.number="addForm.dp_tenor" type="number" min="1"
                                         class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs" />
                                 </div>
                             </div>
                             <div v-if="addForm.dp_tipe === 'persen'">
-                                <label class="block text-slate-500 text-[10px] mb-0.5">Dasar Hitung %</label>
+                                <label class="block text-slate-500 text-[0.625rem] mb-0.5">Dasar Hitung %</label>
                                 <select v-model="addForm.dp_basis" class="w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-300 text-xs">
                                     <option v-for="(label, key) in basisOptions" :key="key" :value="key">{{ label }}</option>
                                 </select>
                             </div>
-                            <label class="flex items-center gap-2 text-slate-400 text-[11px] pt-1">
+                            <label class="flex items-center gap-2 text-slate-400 text-[0.6875rem] pt-1">
                                 <input type="checkbox" v-model="addForm.dp_masuk_harga_jual" class="accent-violet-500" />
                                 Masuk hitungan harga jual (mengurangi sisa yang harus dilunasi)
                             </label>

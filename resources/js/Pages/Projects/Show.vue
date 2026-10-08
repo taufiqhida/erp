@@ -654,11 +654,11 @@ const submitUploadSiteplan = () => {
                                         <div class="text-white text-xs font-semibold">{{ k.nomor_lengkap }}</div>
                                         <div class="flex items-center gap-1 mt-0.5">
                                             <span :style="statusConfig[k.status_jual]?.dotStyle" class="w-1.5 h-1.5 rounded-full inline-block"></span>
-                                            <span class="text-slate-300 text-[11px]">{{ statusConfig[k.status_jual]?.label }}</span>
+                                            <span class="text-slate-300 text-[0.6875rem]">{{ statusConfig[k.status_jual]?.label }}</span>
                                         </div>
                                         <div class="flex items-center gap-1 mt-0.5">
                                             <span class="w-1.5 h-1.5 rounded-full inline-block" :style="`background:${statusBangunColorHex[k.status_bangun_stage_id]}`"></span>
-                                            <span class="text-slate-400 text-[11px]">{{ k.status_bangun_label }}</span>
+                                            <span class="text-slate-400 text-[0.6875rem]">{{ k.status_bangun_label }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -704,7 +704,7 @@ const submitUploadSiteplan = () => {
                                 <td class="px-4 py-3.5 text-slate-200 font-medium">{{ k.nomor_lengkap }}</td>
                                 <td class="px-4 py-3.5 text-slate-400 text-xs">
                                     {{ k.tipe_unit_nama ?? '-' }}
-                                    <span v-if="k.perlu_biaya_tambahan" title="Perlu biaya tambahan" class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30">+Biaya</span>
+                                    <span v-if="k.perlu_biaya_tambahan" title="Perlu biaya tambahan" class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[0.625rem] font-medium bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30">+Biaya</span>
                                 </td>
                                 <td class="px-4 py-3.5 text-slate-400 text-xs">
                                     <div v-if="k.luas_tanah">T: {{ k.luas_tanah }} m²</div>
@@ -736,7 +736,7 @@ const submitUploadSiteplan = () => {
                                             <div class="w-12 h-1 bg-slate-800 rounded-full overflow-hidden flex-shrink-0">
                                                 <div class="h-full bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full" :style="{ width: k.progress_bangun + '%' }"/>
                                             </div>
-                                            <span class="text-slate-500 text-[11px] tabular-nums flex-shrink-0">{{ k.progress_bangun }}%</span>
+                                            <span class="text-slate-500 text-[0.6875rem] tabular-nums flex-shrink-0">{{ k.progress_bangun }}%</span>
                                         </div>
                                     </div>
                                 </td>
@@ -745,14 +745,14 @@ const submitUploadSiteplan = () => {
                                     <input v-if="canEditKavlings" :value="k.id_rumah"
                                         @change="updateIdRumah(k, $event.target.value)"
                                         placeholder="Isi ID Rumah..."
-                                        class="w-44 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-600 placeholder:font-sans" />
+                                        class="w-44 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-500 placeholder:font-sans" />
                                     <span v-else class="text-slate-400 text-xs font-mono">{{ k.id_rumah ?? '-' }}</span>
                                 </td>
                                 <td class="px-4 py-3.5">
                                     <input v-if="canEditKavlings" :value="k.hgb_no"
                                         @change="updateHgbNo(k, $event.target.value)"
                                         placeholder="Isi No. HGB..."
-                                        class="w-36 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-600 placeholder:font-sans" />
+                                        class="w-36 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-500 placeholder:font-sans" />
                                     <span v-else class="text-slate-400 text-xs font-mono">{{ k.hgb_no ?? '-' }}</span>
                                 </td>
                                 <td class="px-5 py-3.5 text-right">
@@ -780,7 +780,7 @@ const submitUploadSiteplan = () => {
 
         <!-- ═══ MODAL: DETAIL KAVLING ════════════════════════════════════════ -->
         <Teleport to="body">
-            <div v-if="showDetailModal && selectedKavling" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div v-if="showDetailModal && selectedKavling" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" @click="closeDetail" />
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
 
@@ -805,7 +805,7 @@ const submitUploadSiteplan = () => {
                                 <div class="text-slate-400 text-sm mt-0.5">{{ project.nama }} · {{ project.kode }}</div>
                             </div>
                         </div>
-                        <button @click="closeDetail" class="text-slate-500 hover:text-slate-300 transition-colors p-1 flex-shrink-0">
+                        <button @click="closeDetail" class="text-slate-500 hover:text-slate-300 transition-colors p-1 flex-shrink-0" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-6 h-6"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
                         </button>
                     </div>
@@ -931,14 +931,14 @@ const submitUploadSiteplan = () => {
                             <div class="grid grid-cols-2 gap-3">
                                 <div class="rounded-xl overflow-hidden bg-slate-800 aspect-video">
                                     <img v-if="selectedKavling.foto_rumah" :src="selectedKavling.foto_rumah" class="w-full h-full object-cover" alt="Foto Rumah" />
-                                    <div v-else class="w-full h-full flex flex-col items-center justify-center text-slate-600 gap-1">
+                                    <div v-else class="w-full h-full flex flex-col items-center justify-center text-slate-500 gap-1">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
                                         <span class="text-xs">Belum ada foto</span>
                                     </div>
                                 </div>
                                 <div class="rounded-xl overflow-hidden bg-slate-800 aspect-video">
                                     <img v-if="selectedKavling.denah_rumah" :src="selectedKavling.denah_rumah" class="w-full h-full object-contain bg-white" alt="Denah Rumah" />
-                                    <div v-else class="w-full h-full flex flex-col items-center justify-center text-slate-600 gap-1">
+                                    <div v-else class="w-full h-full flex flex-col items-center justify-center text-slate-500 gap-1">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" /></svg>
                                         <span class="text-xs">Belum ada denah</span>
                                     </div>
@@ -979,7 +979,7 @@ const submitUploadSiteplan = () => {
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5"><path fill-rule="evenodd" d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z" clip-rule="evenodd"/></svg>
                             </Link>
                         </div>
-                        <div v-else class="text-center py-3 text-slate-600 text-xs bg-slate-800/30 rounded-xl">
+                        <div v-else class="text-center py-3 text-slate-500 text-xs bg-slate-800/30 rounded-xl">
                             Kavling ini tidak tersedia untuk booking
                         </div>
 
@@ -990,12 +990,12 @@ const submitUploadSiteplan = () => {
 
         <!-- ═══ MODAL: TAMBAH KAVLING ════════════════════════════════════════ -->
         <Teleport to="body">
-            <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div v-if="showAddModal" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showAddModal = false"/>
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
                     <div class="flex items-center justify-between p-5 border-b border-slate-800">
                         <h3 class="text-white font-semibold">Tambah Kavling Baru</h3>
-                        <button @click="showAddModal = false" class="text-slate-500 hover:text-slate-300">
+                        <button @click="showAddModal = false" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
                         </button>
                     </div>
@@ -1062,7 +1062,7 @@ const submitUploadSiteplan = () => {
 
         <!-- ═══ MODAL: EDIT KAVLING (info umum saja) ═══════════════════════════ -->
         <Teleport to="body">
-            <div v-if="showEditModal && selectedKavling" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div v-if="showEditModal && selectedKavling" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showEditModal = false"/>
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
                     <div class="flex items-center justify-between p-5 border-b border-slate-800">
@@ -1070,7 +1070,7 @@ const submitUploadSiteplan = () => {
                             <h3 class="text-white font-semibold">Edit Kavling {{ selectedKavling.nomor_lengkap }}</h3>
                             <p class="text-slate-500 text-xs mt-0.5">Status jual & konsumen tidak diubah dari sini</p>
                         </div>
-                        <button @click="showEditModal = false" class="text-slate-500 hover:text-slate-300">
+                        <button @click="showEditModal = false" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
                         </button>
                     </div>
@@ -1140,7 +1140,7 @@ const submitUploadSiteplan = () => {
 
         <!-- ── MODAL: Upload / Ganti Siteplan ────────────────────────────── -->
         <Teleport to="body">
-            <div v-if="showUploadSiteplan" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div v-if="showUploadSiteplan" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showUploadSiteplan = false" />
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
                     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
@@ -1148,7 +1148,7 @@ const submitUploadSiteplan = () => {
                             <h3 class="text-white font-semibold">{{ project.siteplan_image ? 'Ganti Siteplan' : 'Upload Siteplan' }}</h3>
                             <p class="text-slate-400 text-xs mt-0.5">Format PNG/JPG (klik posisi manual) atau SVG (ID per-unit sudah disiapkan)</p>
                         </div>
-                        <button @click="showUploadSiteplan = false" class="text-slate-500 hover:text-slate-300">
+                        <button @click="showUploadSiteplan = false" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
                         </button>
                     </div>
@@ -1176,7 +1176,7 @@ const submitUploadSiteplan = () => {
 
         <!-- ── MODAL: Import Excel Kavling ───────────────────────────────── -->
         <Teleport to="body">
-            <div v-if="showImport" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div v-if="showImport" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showImport = false" />
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
                     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
@@ -1184,7 +1184,7 @@ const submitUploadSiteplan = () => {
                             <h3 class="text-white font-semibold">Import Data Kavling</h3>
                             <p class="text-slate-400 text-xs mt-0.5">Upload file Excel (.xlsx) sesuai format template</p>
                         </div>
-                        <button @click="showImport = false" class="text-slate-500 hover:text-slate-300">
+                        <button @click="showImport = false" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
                         </button>
                     </div>

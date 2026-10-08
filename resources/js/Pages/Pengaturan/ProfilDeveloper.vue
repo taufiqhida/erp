@@ -112,7 +112,7 @@ const save = () => {
                             <input v-model="form.jabatan_penandatangan" type="text" placeholder="mis. Manager Marketing"
                                 class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
                         </div>
-                        <p class="sm:col-span-2 text-slate-600 text-xs -mt-2">Dipakai otomatis di semua Cetak Dokumen — bisa ditimpa manual per surat kalau penandatangannya beda.</p>
+                        <p class="sm:col-span-2 text-slate-500 text-xs -mt-2">Dipakai otomatis di semua Cetak Dokumen — bisa ditimpa manual per surat kalau penandatangannya beda.</p>
                     </div>
 
                     <div class="flex justify-end pt-2">
@@ -135,7 +135,7 @@ const save = () => {
                             <div>
                                 <div class="flex items-center gap-2">
                                     <span class="text-slate-200 text-sm font-medium">{{ bank.nama_bank }}</span>
-                                    <span v-if="bank.is_primary" class="px-1.5 py-0.5 bg-violet-500/15 text-violet-300 text-[10px] font-medium rounded">UTAMA</span>
+                                    <span v-if="bank.is_primary" class="px-1.5 py-0.5 bg-violet-500/15 text-violet-300 text-[0.625rem] font-medium rounded">UTAMA</span>
                                 </div>
                                 <div class="text-slate-500 text-xs mt-0.5">{{ bank.nomor_rekening ?? '-' }} a.n. {{ bank.atas_nama_rekening ?? '-' }}</div>
                             </div>
@@ -151,7 +151,7 @@ const save = () => {
                             </div>
                         </div>
                     </div>
-                    <div v-else class="px-6 py-6 text-center text-slate-600 text-sm">
+                    <div v-else class="px-6 py-6 text-center text-slate-500 text-sm">
                         Belum ada rekening bank.
                     </div>
 
@@ -182,7 +182,7 @@ const save = () => {
                         <h3 class="text-slate-300 font-medium text-sm">Logo Perusahaan</h3>
                         <div class="flex items-center justify-center h-24 bg-slate-800 rounded-lg border border-dashed border-slate-700">
                             <img v-if="logoPreview" :src="logoPreview" class="max-h-20 max-w-full object-contain" alt="Logo" />
-                            <span v-else class="text-slate-600 text-sm">Belum ada logo</span>
+                            <span v-else class="text-slate-500 text-sm">Belum ada logo</span>
                         </div>
                         <label class="block">
                             <span class="block text-xs text-slate-500 mb-1.5">PNG/SVG, maks 2MB</span>
@@ -196,7 +196,7 @@ const save = () => {
                         <h3 class="text-slate-300 font-medium text-sm">Kop Surat</h3>
                         <div class="flex items-center justify-center h-24 bg-slate-800 rounded-lg border border-dashed border-slate-700">
                             <img v-if="kopSuratPreview" :src="kopSuratPreview" class="max-h-20 max-w-full object-contain" alt="Kop Surat" />
-                            <span v-else class="text-slate-600 text-sm">Belum ada kop surat</span>
+                            <span v-else class="text-slate-500 text-sm">Belum ada kop surat</span>
                         </div>
                         <label class="block">
                             <span class="block text-xs text-slate-500 mb-1.5">PNG/JPG, maks 5MB</span>

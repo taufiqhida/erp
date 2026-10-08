@@ -70,7 +70,7 @@ const destroy = async (k) => {
                             <div>
                                 <div class="text-slate-200 text-sm font-medium">{{ k.nama }}</div>
                                 <div class="text-slate-500 text-xs mt-0.5">{{ k.no_hp ?? '-' }}</div>
-                                <div class="text-slate-600 text-xs mt-0.5 whitespace-pre-line">{{ k.alamat || '-' }}</div>
+                                <div class="text-slate-500 text-xs mt-0.5 whitespace-pre-line">{{ k.alamat || '-' }}</div>
                             </div>
                             <div class="flex items-center gap-3">
                                 <button @click="openEdit(k)"
@@ -104,7 +104,7 @@ const destroy = async (k) => {
                         </div>
                     </div>
                 </div>
-                <div v-else class="px-5 py-8 text-center text-slate-600 text-sm">
+                <div v-else class="px-5 py-8 text-center text-slate-500 text-sm">
                     Belum ada kontraktor.
                 </div>
 

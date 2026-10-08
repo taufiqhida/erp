@@ -36,7 +36,7 @@ const del = async (id) => {
 
             <!-- Template List -->
             <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                <div v-if="!templates.length" class="px-5 py-12 text-center text-slate-600 text-sm">
+                <div v-if="!templates.length" class="px-5 py-12 text-center text-slate-500 text-sm">
                     Belum ada template surat. Buat template pertama Anda.
                 </div>
                 <div v-for="tmpl in templates" :key="tmpl.id"
@@ -78,7 +78,7 @@ const del = async (id) => {
                         <div v-for="(label, key) in placeholders" :key="key"
                             class="bg-slate-800 px-2.5 py-1.5 rounded-lg" :title="label">
                             <div class="text-xs text-violet-300 font-mono">{{ key }}</div>
-                            <div class="text-[11px] text-slate-500 truncate">{{ label }}</div>
+                            <div class="text-[0.6875rem] text-slate-500 truncate">{{ label }}</div>
                         </div>
                     </div>
                 </div>
@@ -90,7 +90,7 @@ const del = async (id) => {
                         <div v-for="(label, key) in jadwalPlaceholders" :key="key"
                             class="bg-slate-800 px-2.5 py-1.5 rounded-lg" :title="label">
                             <div class="text-xs text-violet-300 font-mono">{{ key }}</div>
-                            <div class="text-[11px] text-slate-500 truncate">{{ label }}</div>
+                            <div class="text-[0.6875rem] text-slate-500 truncate">{{ label }}</div>
                         </div>
                     </div>
                 </div>

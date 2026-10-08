@@ -60,7 +60,7 @@ const destroy = async (preset) => {
                         :class="{ 'opacity-50': !preset.is_active }">
                         <div>
                             <div class="text-slate-200 text-sm font-medium">{{ preset.nama }}
-                                <span v-if="preset.is_referral" class="ml-1.5 px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 text-[10px] font-medium">Minta keterangan referral</span>
+                                <span v-if="preset.is_referral" class="ml-1.5 px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 text-[0.625rem] font-medium">Minta keterangan referral</span>
                             </div>
                             <div class="text-slate-500 text-xs mt-0.5">{{ preset.keterangan ?? '-' }}</div>
                         </div>
@@ -82,7 +82,7 @@ const destroy = async (preset) => {
                         </div>
                     </div>
                 </div>
-                <div v-else class="px-5 py-8 text-center text-slate-600 text-sm">
+                <div v-else class="px-5 py-8 text-center text-slate-500 text-sm">
                     Belum ada sumber lead.
                 </div>
 

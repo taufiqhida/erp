@@ -81,7 +81,7 @@ const destroy = async (preset) => {
                                 <div class="text-slate-200 text-sm font-medium">{{ preset.nama }}</div>
                                 <div class="text-slate-500 text-xs mt-0.5">{{ preset.nama_pt || 'Nama PT belum diisi' }}<span v-if="preset.kantor_cabang"> — {{ preset.kantor_cabang }}</span></div>
                                 <div class="text-slate-500 text-xs mt-0.5">{{ preset.keterangan ?? '-' }}</div>
-                                <div class="text-slate-600 text-xs mt-0.5 whitespace-pre-line">{{ preset.alamat || 'Alamat belum diisi' }}</div>
+                                <div class="text-slate-500 text-xs mt-0.5 whitespace-pre-line">{{ preset.alamat || 'Alamat belum diisi' }}</div>
                             </div>
                             <div class="flex items-center gap-3">
                                 <UrutanButtons type="bank-rekanan" :id="preset.id" :first="idx === 0" :last="idx === presets.length - 1" />
@@ -122,7 +122,7 @@ const destroy = async (preset) => {
                         </div>
                     </div>
                 </div>
-                <div v-else class="px-5 py-8 text-center text-slate-600 text-sm">
+                <div v-else class="px-5 py-8 text-center text-slate-500 text-sm">
                     Belum ada bank rekanan.
                 </div>
 
