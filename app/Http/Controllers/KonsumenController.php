@@ -670,6 +670,34 @@ class KonsumenController extends Controller
             }
         }
 
+        // ── Sheet Batal (konsumen yang sudah batal — riwayat & audit) ──
+        $batalCols = KonsumenImportSpec::batalColumns();
+        $colCounts[KonsumenImportSpec::BATAL_SHEET] = count($batalCols);
+        $bs = $ss->createSheet();
+        $bs->setTitle(KonsumenImportSpec::BATAL_SHEET);
+        foreach ($batalCols as $i => [$key, $label, $req]) {
+            $bs->setCellValue([$i + 1, 1], $label . ($req === 'w' ? ' *' : ''));
+            $bs->getColumnDimensionByColumn($i + 1)->setWidth(22);
+        }
+        $lastBatalCol = Coordinate::stringFromColumnIndex(count($batalCols));
+        $bs->getStyle("A1:{$lastBatalCol}1")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $bs->getStyle("A1:{$lastBatalCol}1")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('BE123C');
+        $bs->getStyle("A1:{$lastBatalCol}1")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_CENTER);
+        $bs->getRowDimension(1)->setRowHeight(48);
+        $bs->freezePane('B2');
+        foreach ($batalCols as $i => [$key]) {
+            $listName = KonsumenImportSpec::batalDropdownListFor($key);
+            if (!$listName || empty($listRef[$listName])) continue;
+            $L = Coordinate::stringFromColumnIndex($i + 1);
+            for ($r = 2; $r <= 300; $r++) {
+                $v = $bs->getCell("{$L}{$r}")->getDataValidation();
+                $v->setType(DataValidation::TYPE_LIST)->setErrorStyle(DataValidation::STYLE_STOP);
+                $v->setAllowBlank(true)->setShowDropDown(true)->setShowErrorMessage(true);
+                $v->setErrorTitle('Pilihan tidak dikenal')->setError('Pilih salah satu dari daftar.');
+                $v->setFormula1($listRef[$listName]);
+            }
+        }
+
         // ── Sheet Kamus Kolom ──
         $k = $ss->createSheet();
         $k->setTitle('Kamus Kolom');
@@ -684,6 +712,13 @@ class KonsumenController extends Controller
             $k->setCellValue("C{$row}", $reqLabel[$req]);
             $k->setCellValue("D{$row}", $rule);
             if (str_starts_with($label, '★')) $k->getStyle("A{$row}:D{$row}")->getFont()->getColor()->setRGB($AMBER);
+            $row++;
+        }
+        foreach ($batalCols as [$bKey, $bLabel, $bReq, $bRule]) {
+            $k->setCellValue("A{$row}", $bLabel);
+            $k->setCellValue("B{$row}", KonsumenImportSpec::BATAL_SHEET . ' (sheet khusus)');
+            $k->setCellValue("C{$row}", $reqLabel[$bReq]);
+            $k->setCellValue("D{$row}", $bRule);
             $row++;
         }
         $k->getStyle("A2:D{$row}")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_TOP);
@@ -706,6 +741,7 @@ class KonsumenController extends Controller
             ['Harga Dasar & Harga Deal', 'Harga Dasar kosong = pakai Harga di Stok Kavling (wajib diisi manual kalau harga unit itu juga kosong). Harga Deal TIDAK diinput — dihitung otomatis dari Harga Dasar + Biaya Tanah + Biaya Tambahan Lain − Diskon.'],
             ['Aturan skip', 'Nilai dropdown tak dikenal, kolom wajib kosong, atau unit tidak tersedia → baris DILEWATI dengan pesan error (bukan ditebak). Baris lain tetap masuk. Ringkasan error muncul setelah upload.'],
             ['Kavling', 'Kluster+Blok+Nomor harus sudah ada di Stok Kavling & berstatus Tersedia. Setelah import, status unit otomatis: sebelum Akad → Dipesan, Akad/BAST → Terjual.'],
+            ['Sheet Batal', 'Untuk konsumen yang SUDAH BATAL (riwayat & audit, termasuk uang UTJ/DP yang hangus). Cukup 1 angka Total Dibayar + Dikembalikan; Hangus dihitung otomatis; rincian ditulis di kolom Rincian Pengembalian. Hasilnya sama dengan pembatalan yang disetujui di tab Pembatalan. Status kavling TIDAK dicek/diubah (boleh sudah terisi konsumen lain). Baris yang sama tidak akan dobel kalau diimpor ulang. Hanya untuk pengguna dengan izin review pembatalan.'],
             ['Selesai otomatis', 'Kalau semua piutang konsumen & bank pada baris itu sudah lunas (rekap Terbayar mencukupi), transaksi otomatis ditandai Selesai & terkunci — sama seperti tombol "Tandai Selesai" manual.'],
         ];
         $h->fromArray(['Bagian', 'Keterangan'], null, 'A3');
@@ -736,7 +772,7 @@ class KonsumenController extends Controller
         $h->getColumnDimension('A')->setWidth(34);
         $h->getColumnDimension('B')->setWidth(105);
 
-        $order = array_merge(['Petunjuk', 'Kamus Kolom'], array_values(KonsumenImportSpec::CARA_BAYAR_SHEETS), ['Daftar']);
+        $order = array_merge(['Petunjuk', 'Kamus Kolom'], array_values(KonsumenImportSpec::CARA_BAYAR_SHEETS), [KonsumenImportSpec::BATAL_SHEET, 'Daftar']);
         foreach ($order as $idx => $name) {
             $sheet = $ss->getSheetByName($name);
             $cur = $ss->getIndex($sheet);
@@ -766,6 +802,7 @@ class KonsumenController extends Controller
         $result = $import->result;
 
         $msg = "Import selesai: {$result->imported} konsumen berhasil ditambahkan";
+        if ($result->importedBatal > 0) $msg .= ", {$result->importedBatal} konsumen batal dicatat";
         if ($result->skipped > 0) $msg .= ", {$result->skipped} baris dilewati";
 
         if (!empty($result->errors)) {

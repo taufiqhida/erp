@@ -10,6 +10,8 @@ namespace App\Imports\Konsumen;
 class KonsumenImportResult
 {
     public int $imported = 0;
+    /** Konsumen batal (sheet "Batal") yang berhasil dicatat — dihitung terpisah dari $imported. */
+    public int $importedBatal = 0;
     public int $skipped = 0;
 
     /** @var string[] */

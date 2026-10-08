@@ -33,6 +33,9 @@ class KonsumenImportSpec
         'cash_bertahap' => 'Cash Bertahap',
     ];
 
+    /** Sheet khusus konsumen yang sudah batal (bukan cara bayar) — lihat batalColumns(). */
+    public const BATAL_SHEET = 'Batal';
+
     public static function isKpr(string $caraBayar): bool
     {
         return in_array($caraBayar, ['kpr_subsidi', 'kpr_komersil'], true);
@@ -130,6 +133,8 @@ class KonsumenImportSpec
             'Status Dokumen'      => array_keys(self::statusDokumenMap()),
             'Tahap (KPR)'         => self::tahapOptions('kpr_subsidi'),
             'Tahap (Cash)'        => self::tahapOptions('cash'),
+            'Cara Bayar'          => array_values(self::CARA_BAYAR_SHEETS),
+            'Skema (Semua)'       => SkemaDpPreset::orderBy('nama')->pluck('nama')->unique()->values()->all(),
         ];
     }
 
@@ -250,5 +255,40 @@ class KonsumenImportSpec
         $c[] = ['catatan', 'Catatan', 'o', ''];
 
         return $c;
+    }
+
+    /**
+     * Kolom sheet "Batal" (konsumen yang sudah batal, untuk riwayat & audit). Dibaca berdasar POSISI,
+     * sama seperti sheet cara bayar. Hanya 1 angka total (bukan rincian per komponen); rinciannya
+     * ditulis di kolom keterangan. Nominal hangus dihitung otomatis: Total Dibayar - Dikembalikan.
+     *
+     * @return array<int, array{0:string, 1:string, 2:string, 3:string}> [key, label, req, rule]
+     */
+    public static function batalColumns(): array
+    {
+        return [
+            ['nama', 'Nama Konsumen', 'w', 'Nama lengkap konsumen.'],
+            ['nik', 'NIK', 'o', 'Kalau cocok dengan konsumen yang sudah ada, konsumen itu dipakai ulang (tidak dobel). Kosong = dianggap konsumen baru.'],
+            ['hp', 'No. HP', 'o', 'Kosongkan kalau tidak ada.'],
+            ['kluster', 'Kluster', 'o', 'Kosongkan kalau unit tidak punya kluster. Kalau diisi harus sama persis dengan Stok Kavling.'],
+            ['blok', 'Blok', 'w', 'Blok unit (mis. A1), persis seperti di Stok Kavling.'],
+            ['unit', 'Nomor Kavling', 'w', 'Nomor di dalam bloknya, TANPA blok (mis. 1). Unit harus ada di Stok Kavling; STATUS-nya tidak dicek dan tidak diubah (boleh sudah terjual ke konsumen lain).'],
+            ['tgl_booking', 'Tanggal Booking', 'w', 'Format tanggal.'],
+            ['tgl_batal', 'Tanggal Batal', 'w', 'Tidak boleh lebih awal dari Tanggal Booking.'],
+            ['cara_bayar', 'Cara Bayar', 'o', 'Dropdown. Kosongkan kalau tidak diketahui.'],
+            ['skema', 'Skema Pembayaran', 'o', 'Dropdown. Kalau nama skema ada di lebih dari satu cara bayar, isi juga Cara Bayar.'],
+            ['harga_deal', 'Harga Deal', 'o', 'Kalau diketahui.'],
+            ['total_bayar', 'Total Dibayar', 'w', 'Total semua uang yang pernah diterima dari konsumen ini (UTJ, DP, dst.). Boleh 0 untuk batal tanpa pembayaran.'],
+            ['tgl_bayar', 'Tanggal Bayar Terakhir', 'o', 'Kosong = pakai Tanggal Booking. Tidak boleh melewati Tanggal Batal.'],
+            ['dikembalikan', 'Dikembalikan', 'o', 'Nominal yang dikembalikan ke konsumen. Kosong/0 = seluruhnya hangus. Tidak boleh melebihi Total Dibayar. Hangus = Total Dibayar - Dikembalikan (otomatis).'],
+            ['alasan', 'Alasan Batal', 'o', 'Mis. "mundur sendiri", "KPR ditolak". Kosong = "Import data lama".'],
+            ['rincian', 'Rincian Pengembalian / Catatan', 'o', 'Rincian apa yang dikembalikan/hangus, tanggal pengembalian, dsb.'],
+        ];
+    }
+
+    /** Nama list (sheet "Daftar") untuk dropdown kolom sheet Batal. */
+    public static function batalDropdownListFor(string $key): ?string
+    {
+        return ['cara_bayar' => 'Cara Bayar', 'skema' => 'Skema (Semua)'][$key] ?? null;
     }
 }

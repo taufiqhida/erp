@@ -475,7 +475,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                         </a>
                         <div class="bg-slate-800 rounded-xl p-4 text-xs space-y-1.5 text-slate-400">
                             <div class="text-slate-300 font-medium">Untuk konsumen proyek yang sudah berjalan</div>
-                            <p>Template berisi 4 sheet (KPR Subsidi/KPR Komersil/Cash/Cash Bertahap) — pilih sheet sesuai cara bayar tiap konsumen. Baca sheet "Petunjuk" &amp; "Kamus Kolom" di dalam file untuk aturan lengkap dan strategi migrasi bertahap.</p>
+                            <p>Template berisi 4 sheet (KPR Subsidi/KPR Komersil/Cash/Cash Bertahap) — pilih sheet sesuai cara bayar tiap konsumen — ditambah sheet <b>Batal</b> untuk konsumen yang sudah batal (riwayat &amp; uang hangus; khusus yang berhak mereview pembatalan). Baca sheet "Petunjuk" &amp; "Kamus Kolom" di dalam file untuk aturan lengkap dan strategi migrasi bertahap.</p>
                             <p class="pt-1 text-slate-500">Unit (Kluster+Blok+Nomor) harus sudah ada di Stok Kavling &amp; berstatus Tersedia. Baris dengan data tidak valid dilewati dengan pesan error yang jelas — baris lain tetap masuk.</p>
                         </div>
                         <div>
