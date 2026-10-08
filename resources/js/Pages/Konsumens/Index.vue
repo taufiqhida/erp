@@ -132,7 +132,7 @@ const STATUS_PENJUALAN_LABELS = {
 };
 const statusJualBadgeStyle = computed(() => {
     const colors = page.props.statusColors?.status_jual ?? {};
-    return Object.fromEntries(Object.keys(STATUS_JUAL_LABELS).map(k => [k, `background:${colors[k] ?? '#94a3b8'}26; color:${colors[k] ?? '#94a3b8'}`]));
+    return Object.fromEntries(Object.keys(STATUS_JUAL_LABELS).map(k => [k, `background:${colors[k] ?? '#94a3b8'}26; --w:${colors[k] ?? '#94a3b8'}; color:var(--w)`]));
 });
 const statusJualLegend = computed(() => {
     const colors = page.props.statusColors?.status_jual ?? {};
@@ -150,7 +150,7 @@ const statusPenjualanConfig = computed(() => {
     const colors = page.props.statusColors?.status_penjualan ?? {};
     return Object.fromEntries(Object.entries(STATUS_PENJUALAN_LABELS).map(([k, label]) => {
         const hex = colors[k] ?? '#94a3b8';
-        return [k, { label, style: `background:${hex}26; color:${hex}` }];
+        return [k, { label, style: `background:${hex}26; --w:${hex}; color:var(--w)` }];
     }));
 });
 
@@ -265,7 +265,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                         <span class="text-slate-500 font-medium w-28 flex-shrink-0">Status Bangun</span>
                         <span v-for="s in filterOptions.status_bangun" :key="s.id" class="flex items-center gap-1.5 text-slate-400">
-                            <span :style="`background:${s.warna}25; color:${s.warna}`" class="px-1.5 py-0.5 rounded-full text-[0.625rem] font-medium">{{ s.nama }}</span>
+                            <span :style="`background:${s.warna}25; --w:${s.warna}; color:var(--w)`" class="px-1.5 py-0.5 rounded-full text-[0.625rem] font-medium">{{ s.nama }}</span>
                         </span>
                     </div>
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5">
@@ -317,7 +317,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                     <div v-if="row.bank_rekanan_kpr" class="text-slate-500 text-xs">{{ row.bank_rekanan_kpr }}</div>
                                 </td>
                                 <td class="px-4 py-3">
-                                    <span :style="`background:${statusBangunColorHex[row.status_bangun_stage_id]}25; color:${statusBangunColorHex[row.status_bangun_stage_id]}`"
+                                    <span :style="`background:${statusBangunColorHex[row.status_bangun_stage_id]}25; --w:${statusBangunColorHex[row.status_bangun_stage_id]}; color:var(--w)`"
                                         class="px-2 py-0.5 text-xs rounded-full font-medium">
                                         {{ row.status_bangun_label }}
                                     </span>
@@ -423,7 +423,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                                 <span class="text-slate-500 ml-2">{{ unit.project_nama }} · {{ unit.cara_bayar_label }}<template v-if="unit.bank_rekanan_kpr"> ({{ unit.bank_rekanan_kpr }})</template></span>
                                             </div>
                                             <div class="flex items-center gap-2">
-                                                <span class="px-2 py-0.5 rounded-full text-[0.625rem] font-medium" :style="`background:${statusBangunColorHex[unit.status_bangun_stage_id]}25; color:${statusBangunColorHex[unit.status_bangun_stage_id]}`">{{ unit.status_bangun_label }} · {{ unit.progress_bangun }}%</span>
+                                                <span class="px-2 py-0.5 rounded-full text-[0.625rem] font-medium" :style="`background:${statusBangunColorHex[unit.status_bangun_stage_id]}25; --w:${statusBangunColorHex[unit.status_bangun_stage_id]}; color:var(--w)`">{{ unit.status_bangun_label }} · {{ unit.progress_bangun }}%</span>
                                                 <span class="px-2 py-0.5 rounded-full text-[0.625rem] font-medium" :style="statusJualBadgeStyle[unit.status_jual]">{{ unit.status_jual_label }}</span>
                                                 <span class="px-2 py-0.5 rounded-full text-[0.625rem] font-medium" :style="statusPenjualanConfig[unit.status_penjualan]?.style">
                                                     {{ statusPenjualanConfig[unit.status_penjualan]?.label ?? unit.status_penjualan_label }}

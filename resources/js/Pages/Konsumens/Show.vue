@@ -206,7 +206,7 @@ const statusPenjualanConfig = computed(() => {
     const colors = usePage().props.statusColors?.status_penjualan ?? {};
     return Object.fromEntries(Object.entries(STATUS_PENJUALAN_LABELS).map(([k, label]) => {
         const hex = colors[k] ?? '#94a3b8';
-        return [k, { label, style: `background:${hex}26; color:${hex}` }];
+        return [k, { label, style: `background:${hex}26; --w:${hex}; color:var(--w)` }];
     }));
 });
 
@@ -333,7 +333,7 @@ onMounted(() => {
                         </div>
                         <div>
                             <div class="text-slate-500 text-[0.6875rem] mb-1">Status Bangun</div>
-                            <span :style="`background:${statusBangunColorHex[trx.status_bangun_stage_id]}25; color:${statusBangunColorHex[trx.status_bangun_stage_id]}`"
+                            <span :style="`background:${statusBangunColorHex[trx.status_bangun_stage_id]}25; --w:${statusBangunColorHex[trx.status_bangun_stage_id]}; color:var(--w)`"
                                 class="px-2 py-0.5 text-xs rounded-full font-medium">
                                 {{ trx.status_bangun_label }}
                             </span>

@@ -56,7 +56,8 @@ def ramp(base600):
             500: mix(b, W, .14), 600: b, 700: mix(b, K, .18), 800: mix(b, K, .36), 900: mix(b, K, .52), 950: mix(b, K, .68)}
 
 
-AKSEN = {'ungu': VIOLET, 'biru': ramp('#0072BC'), 'merah': ramp('#D92B33'), 'teal': ramp('#0F766E')}  # teal: dasar lebih gelap agar teks putih di tombol lolos kontras
+AKSEN_BIRU = ramp('#0072BC')  # biru merek Sedaya Realty (teks putih di atasnya 5,2:1)
+AKSEN = {'biru': AKSEN_BIRU}
 
 for nama, r in AKSEN.items():  # teks aksen (300/400) harus terbaca di atas permukaan gelap
     assert cr(r[400], SLATE_GELAP[900]) >= 4.5, 'aksen 400 ' + nama
@@ -68,27 +69,18 @@ def blok(prefix, ramp_):
     return ''.join('    --%s-%d: %s;\n' % (prefix, k, trip(v)) for k, v in ramp_.items())
 
 
-css = ['/* DIBUAT OTOMATIS oleh scripts/buat-tema.py (jalankan: python scripts/buat-tema.py) — palet permukaan (--s-*) & aksen (--a-*) sebagai variabel CSS.\n'
-       '   Tailwind: `slate` = permukaan, `violet` = aksen (lihat tailwind.config.js). Atribut pada <html>:\n'
-       '   data-tema="terang" (bawaan gelap), data-latar="navy" (bawaan slate), data-aksen="biru|merah|teal" (bawaan ungu). */\n']
-
-css.append(':root {\n' + blok('s', SLATE_GELAP) + blok('a', VIOLET) + '}\n')
-css.append("html[data-latar='navy'] {\n" + blok('s', SLATE_NAVY) + '}\n')
-for n in ('biru', 'merah', 'teal'):
-    css.append("html[data-aksen='%s'] {\n" % n + blok('a', AKSEN[n]) + '}\n')
-
-css.append("html[data-tema='terang'] {\n    color-scheme: light;\n" + blok('s', SLATE_TERANG) + '}\n')
-css.append("html:not([data-tema='terang']) { color-scheme: dark; }\n")
-
-
-# Tema terang: teks aksen (100–400) dipakai sebagai TEKS di atas tint terang, jadi dibalik ke nuansa gelap.
 def aksen_terang(r):
+    """Tema terang: teks aksen (50–400) dipakai sebagai TEKS di atas tint terang, jadi dibalik ke nuansa gelap."""
     return {50: r[950], 100: r[950], 200: r[900], 300: r[800], 400: r[700]}
 
 
-css.append("html[data-tema='terang'] {\n" + ''.join('    --a-%d: %s;\n' % (k, trip(v)) for k, v in aksen_terang(VIOLET).items()) + '}\n')
-for n in ('biru', 'merah', 'teal'):
-    css.append("html[data-tema='terang'][data-aksen='%s'] {\n" % n + ''.join('    --a-%d: %s;\n' % (k, trip(v)) for k, v in aksen_terang(AKSEN[n]).items()) + '}\n')
+css = ['/* DIBUAT OTOMATIS oleh scripts/buat-tema.py (jalankan: python scripts/buat-tema.py) — palet permukaan (--s-*) & aksen (--a-*) sebagai variabel CSS.\n'
+       '   Tailwind: `slate` = permukaan, `violet` = aksen (nama kelas dipertahankan agar kode lama tetap jalan; nilainya BIRU merek).\n'
+       '   Bawaan = tema gelap (navy merek). Tema terang aktif lewat atribut <html data-tema="terang">. */\n']
+
+css.append(':root {\n    color-scheme: dark;\n' + blok('s', SLATE_NAVY) + blok('a', AKSEN_BIRU) + '}\n')
+css.append("html[data-tema='terang'] {\n    color-scheme: light;\n" + blok('s', SLATE_TERANG)
+           + ''.join('    --a-%d: %s;\n' % (k, trip(v)) for k, v in aksen_terang(AKSEN_BIRU).items()) + '}\n')
 
 # ── Teks putih & teks status di tema terang ───────────────────────────────
 SOLID_WARNA = ['violet', 'rose', 'emerald', 'blue', 'sky', 'amber', 'orange', 'indigo', 'teal', 'fuchsia', 'red', 'green', 'cyan', 'pink', 'purple', 'yellow']
@@ -102,6 +94,9 @@ T = "html[data-tema='terang']"
 css.append("%s .text-white,\n%s .hover\\:text-white:hover { color: rgb(var(--s-50)); }" % (T, T))
 css.append("%s :is(\n    %s\n).text-white,\n%s :is(\n    %s\n) .text-white { color: #fff; }\n" % (T, SOLID, T, SOLID))
 
+css.append("/* Lencana status berwarna dinamis (warna dari Pengaturan > Warna Status, dipasang inline lewat --w): teksnya digelapkan di tema terang. */\n"
+           "html[data-tema='terang'] [style*='--w'] { color: color-mix(in srgb, var(--w) 55%, #000) !important; }\n")
+
 HEX = {
     'emerald': ('047857', '065f46', '064e3b'), 'rose': ('be123c', '9f1239', '881337'), 'amber': ('b45309', '92400e', '78350f'),
     'sky': ('0369a1', '075985', '0c4a6e'), 'blue': ('1d4ed8', '1e40af', '1e3a8a'), 'teal': ('0f766e', '115e59', '134e4a'),
@@ -113,15 +108,17 @@ HEX = {
 pakai = set()
 for f in glob.glob('resources/js/**/*.vue', recursive=True):
     s = open(f, encoding='utf-8').read()
-    for m in re.finditer(r'(?<![\w:-])((?:hover:|group-hover:)?)text-(%s)-(200|300|400)\b' % '|'.join(HEX), s):
-        pakai.add((m.group(1), m.group(2), int(m.group(3))))
+    for m in re.finditer(r'(?<![\w:-])((?:hover:|group-hover:)?)text-(%s)-(200|300|400|500)(/\d+)?(?![\w/])' % '|'.join(HEX), s):
+        pakai.add((m.group(1), m.group(2), int(m.group(3)), (m.group(4) or '')[1:]))
         # varian tanpa prefiks tetap dibuat bila hanya hover yang dipakai
 pakai = sorted(pakai)
 rules = []
-for pref, warna, shade in pakai:
-    idx = {400: 0, 300: 1, 200: 2}[shade]
+for pref, warna, shade, alfa in pakai:
+    idx = {500: 0, 400: 0, 300: 1, 200: 2}[shade]
     nilai = '#' + HEX[warna][idx]
-    cls = 'text-%s-%d' % (warna, shade)
+    if alfa:
+        nilai += '%02X' % round(int(alfa) * 255 / 100)
+    cls = 'text-%s-%d' % (warna, shade) + ('\\/' + alfa if alfa else '')
     if pref == '':
         sel = '%s .%s' % (T, cls)
     elif pref == 'hover:':

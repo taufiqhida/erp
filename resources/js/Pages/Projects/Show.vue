@@ -132,7 +132,7 @@ const statusConfig = computed(() => {
         return [key, {
             label, hex,
             bgStyle:       `background:${hex}`,
-            badgeStyle:    `background:${hex}26; color:${hex}`,
+            badgeStyle:    `background:${hex}26; --w:${hex}; color:var(--w)`,
             dotStyle:      `background:${hex}`,
             siteplanStyle: `background:${hex}B3; border-color:${hex}`,
         }];
@@ -887,7 +887,7 @@ const submitUploadSiteplan = () => {
                             <div class="flex items-center justify-between">
                                 <div class="text-slate-300 font-semibold text-sm">Progress Pembangunan</div>
                                 <span
-                                    :style="`background:${statusBangunColorHex[selectedKavling.status_bangun_stage_id]}25; color:${statusBangunColorHex[selectedKavling.status_bangun_stage_id]}`"
+                                    :style="`background:${statusBangunColorHex[selectedKavling.status_bangun_stage_id]}25; --w:${statusBangunColorHex[selectedKavling.status_bangun_stage_id]}; color:var(--w)`"
                                     class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium">
                                     {{ selectedKavling.status_bangun_label }}
                                 </span>

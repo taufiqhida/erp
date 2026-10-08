@@ -58,7 +58,7 @@ const statusConfig = computed(() => {
         const hex = colors[key] ?? '#94a3b8';
         return [key, {
             label, hex,
-            badgeStyle:    `background:${hex}26; color:${hex}`,
+            badgeStyle:    `background:${hex}26; --w:${hex}; color:var(--w)`,
             dotStyle:      `background:${hex}`,
             siteplanStyle: `background:${hex}B3; border-color:${hex}`,
         }];

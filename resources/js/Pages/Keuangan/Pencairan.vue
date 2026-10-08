@@ -77,7 +77,7 @@ const pct = (paid, total) => total > 0 ? Math.max(0, Math.min(100, Math.round((N
 const statusPenjualanConfig = computed(() => {
     const colors = usePage().props.statusColors?.status_penjualan ?? {};
     return Object.fromEntries(['booking', 'pemberkasan', 'proses_bank', 'sp3k', 'rencana_akad', 'akad', 'bast', 'batal']
-        .map(k => [k, { style: `background:${colors[k] ?? '#94a3b8'}26; color:${colors[k] ?? '#94a3b8'}` }]));
+        .map(k => [k, { style: `background:${colors[k] ?? '#94a3b8'}26; --w:${colors[k] ?? '#94a3b8'}; color:var(--w)` }]));
 });
 </script>
 

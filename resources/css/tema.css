@@ -1,33 +1,9 @@
 /* DIBUAT OTOMATIS oleh scripts/buat-tema.py (jalankan: python scripts/buat-tema.py) — palet permukaan (--s-*) & aksen (--a-*) sebagai variabel CSS.
-   Tailwind: `slate` = permukaan, `violet` = aksen (lihat tailwind.config.js). Atribut pada <html>:
-   data-tema="terang" (bawaan gelap), data-latar="navy" (bawaan slate), data-aksen="biru|merah|teal" (bawaan ungu). */
+   Tailwind: `slate` = permukaan, `violet` = aksen (nama kelas dipertahankan agar kode lama tetap jalan; nilainya BIRU merek).
+   Bawaan = tema gelap (navy merek). Tema terang aktif lewat atribut <html data-tema="terang">. */
 
 :root {
-    --s-50: 248 250 252;
-    --s-100: 241 245 249;
-    --s-200: 226 232 240;
-    --s-300: 203 213 225;
-    --s-400: 148 163 184;
-    --s-500: 134 150 173;
-    --s-600: 71 85 105;
-    --s-700: 51 65 85;
-    --s-800: 30 41 59;
-    --s-900: 15 23 42;
-    --s-950: 2 6 23;
-    --a-50: 245 243 255;
-    --a-100: 237 233 254;
-    --a-200: 221 214 254;
-    --a-300: 196 181 253;
-    --a-400: 167 139 250;
-    --a-500: 139 92 246;
-    --a-600: 124 58 237;
-    --a-700: 109 40 217;
-    --a-800: 91 33 182;
-    --a-900: 76 29 149;
-    --a-950: 46 16 101;
-}
-
-html[data-latar='navy'] {
+    color-scheme: dark;
     --s-50: 246 249 252;
     --s-100: 236 241 247;
     --s-200: 221 230 240;
@@ -39,9 +15,6 @@ html[data-latar='navy'] {
     --s-800: 19 40 63;
     --s-900: 10 26 46;
     --s-950: 4 15 28;
-}
-
-html[data-aksen='biru'] {
     --a-50: 240 247 251;
     --a-100: 219 235 246;
     --a-200: 184 216 236;
@@ -53,34 +26,6 @@ html[data-aksen='biru'] {
     --a-800: 0 73 120;
     --a-900: 0 55 90;
     --a-950: 0 36 60;
-}
-
-html[data-aksen='merah'] {
-    --a-50: 253 242 243;
-    --a-100: 250 225 226;
-    --a-200: 244 196 198;
-    --a-300: 238 160 163;
-    --a-400: 231 124 129;
-    --a-500: 222 73 80;
-    --a-600: 217 43 51;
-    --a-700: 178 35 42;
-    --a-800: 139 28 33;
-    --a-900: 104 21 24;
-    --a-950: 69 14 16;
-}
-
-html[data-aksen='teal'] {
-    --a-50: 241 247 246;
-    --a-100: 221 236 235;
-    --a-200: 188 217 214;
-    --a-300: 147 193 190;
-    --a-400: 106 170 165;
-    --a-500: 49 137 130;
-    --a-600: 15 118 110;
-    --a-700: 12 97 90;
-    --a-800: 10 76 70;
-    --a-900: 7 57 53;
-    --a-950: 5 38 35;
 }
 
 html[data-tema='terang'] {
@@ -96,40 +41,11 @@ html[data-tema='terang'] {
     --s-800: 226 232 240;
     --s-900: 255 255 255;
     --s-950: 248 250 252;
-}
-
-html:not([data-tema='terang']) { color-scheme: dark; }
-
-html[data-tema='terang'] {
-    --a-50: 46 16 101;
-    --a-100: 46 16 101;
-    --a-200: 76 29 149;
-    --a-300: 91 33 182;
-    --a-400: 109 40 217;
-}
-
-html[data-tema='terang'][data-aksen='biru'] {
     --a-50: 0 36 60;
     --a-100: 0 36 60;
     --a-200: 0 55 90;
     --a-300: 0 73 120;
     --a-400: 0 93 154;
-}
-
-html[data-tema='terang'][data-aksen='merah'] {
-    --a-50: 69 14 16;
-    --a-100: 69 14 16;
-    --a-200: 104 21 24;
-    --a-300: 139 28 33;
-    --a-400: 178 35 42;
-}
-
-html[data-tema='terang'][data-aksen='teal'] {
-    --a-50: 5 38 35;
-    --a-100: 5 38 35;
-    --a-200: 7 57 53;
-    --a-300: 10 76 70;
-    --a-400: 12 97 90;
 }
 
 html[data-tema='terang'] .text-white,
@@ -271,13 +187,20 @@ html[data-tema='terang'] :is(
     [class*="from-"]
 ) .text-white { color: #fff; }
 
-/* Teks status (200–400) dibuat lebih gelap di tema terang — 23 aturan sesuai pemakaian di kode. */
+/* Lencana status berwarna dinamis (warna dari Pengaturan > Warna Status, dipasang inline lewat --w): teksnya digelapkan di tema terang. */
+html[data-tema='terang'] [style*='--w'] { color: color-mix(in srgb, var(--w) 55%, #000) !important; }
+
+/* Teks status (200–400) dibuat lebih gelap di tema terang — 28 aturan sesuai pemakaian di kode. */
 html[data-tema='terang'] .text-amber-300 { color: #92400e; }
+html[data-tema='terang'] .text-amber-300\/90 { color: #92400eE6; }
 html[data-tema='terang'] .text-amber-400 { color: #b45309; }
+html[data-tema='terang'] .text-amber-400\/80 { color: #b45309CC; }
 html[data-tema='terang'] .text-blue-300 { color: #1e40af; }
 html[data-tema='terang'] .text-blue-400 { color: #1d4ed8; }
 html[data-tema='terang'] .text-emerald-300 { color: #065f46; }
 html[data-tema='terang'] .text-emerald-400 { color: #047857; }
+html[data-tema='terang'] .text-emerald-400\/80 { color: #047857CC; }
+html[data-tema='terang'] .text-emerald-500\/80 { color: #047857CC; }
 html[data-tema='terang'] .text-fuchsia-300 { color: #86198f; }
 html[data-tema='terang'] .text-indigo-300 { color: #3730a3; }
 html[data-tema='terang'] .text-indigo-400 { color: #4338ca; }
@@ -286,6 +209,7 @@ html[data-tema='terang'] .text-orange-400 { color: #c2410c; }
 html[data-tema='terang'] .text-purple-400 { color: #7e22ce; }
 html[data-tema='terang'] .text-rose-300 { color: #9f1239; }
 html[data-tema='terang'] .text-rose-400 { color: #be123c; }
+html[data-tema='terang'] .text-rose-400\/80 { color: #be123cCC; }
 html[data-tema='terang'] .text-sky-300 { color: #075985; }
 html[data-tema='terang'] .text-sky-400 { color: #0369a1; }
 html[data-tema='terang'] .text-teal-300 { color: #115e59; }

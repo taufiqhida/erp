@@ -101,4 +101,67 @@ class PreferensiTampilanTest extends TestCase
 
         $this->assertSame([], $pelanggar, 'Tombol ikon harus punya aria-label.');
     }
+
+    // ── Tema (gelap / terang / sistem) ───────────────────────────────────
+
+    private function atribut(string $html, string $nama): ?string
+    {
+        preg_match('/<html[^>]*' . preg_quote($nama, '/') . '="([^"]*)"/s', $html, $m);
+
+        return $m[1] ?? null;
+    }
+
+    public function test_tema_bawaan_gelap_untuk_tamu_dan_pengguna_baru(): void
+    {
+        $html = $this->get('/login')->getContent();
+        $this->assertSame('gelap', $this->atribut($html, 'data-tema'));
+        $this->assertSame('gelap', $this->atribut($html, 'data-pilihan-tema'));
+        $this->assertSame('gelap', $this->user->temaPilihan());
+    }
+
+    public function test_tema_terang_dirender_server_dan_tersimpan_di_akun(): void
+    {
+        $this->actingAs($this->user)->patch(route('preferensi.update'), ['tema' => 'terang'])->assertSessionDoesntHaveErrors();
+
+        $html = $this->actingAs($this->user)->get(route('beranda'))->getContent();
+        $this->assertSame('terang', $this->atribut($html, 'data-tema'));
+        $this->assertSame('terang', $this->atribut($html, 'data-pilihan-tema'));
+    }
+
+    public function test_tema_sistem_dirender_gelap_dulu_lalu_diputuskan_skrip_di_browser(): void
+    {
+        $this->actingAs($this->user)->patch(route('preferensi.update'), ['tema' => 'sistem']);
+
+        $html = $this->actingAs($this->user)->get(route('beranda'))->getContent();
+        $this->assertSame('gelap', $this->atribut($html, 'data-tema'));
+        $this->assertSame('sistem', $this->atribut($html, 'data-pilihan-tema'));
+        $this->assertStringContainsString("matchMedia('(prefers-color-scheme: light)')", $html);
+    }
+
+    public function test_tema_dan_ukuran_teks_tidak_saling_menimpa(): void
+    {
+        $this->actingAs($this->user)->patch(route('preferensi.update'), ['ukuran_font' => 'besar']);
+        $this->actingAs($this->user)->patch(route('preferensi.update'), ['tema' => 'terang']);
+
+        $u = $this->user->fresh();
+        $this->assertSame('besar', $u->ukuranFont());
+        $this->assertSame('terang', $u->temaPilihan());
+    }
+
+    public function test_tema_tidak_dikenal_ditolak(): void
+    {
+        $this->actingAs($this->user)->patch(route('preferensi.update'), ['tema' => 'pelangi'])->assertSessionHasErrors('tema');
+        $this->assertSame('gelap', $this->user->fresh()->temaPilihan());
+    }
+
+    public function test_pilihan_tema_dikirim_ke_halaman_lewat_props(): void
+    {
+        $this->actingAs($this->user)->patch(route('preferensi.update'), ['tema' => 'terang']);
+
+        $html = $this->actingAs($this->user)->get(route('beranda'))->getContent();
+        preg_match('/data-page="([^"]+)"/', $html, $m);
+        $props = json_decode(html_entity_decode($m[1], ENT_QUOTES), true)['props'];
+        $this->assertSame('terang', $props['auth']['user']['tema']);
+    }
 }
+

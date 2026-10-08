@@ -40,6 +40,7 @@ class HandleInertiaRequests extends Middleware
                     'name'        => $request->user()->name,
                     'email'       => $request->user()->email,
                     'ukuran_font' => $request->user()->ukuranFont(),
+                    'tema'        => $request->user()->temaPilihan(),
                     'roles'       => $request->user()->getRoleNames(),
                     'permissions' => $request->user()->getAllPermissions()->pluck('name'),
                     'projects'    => $request->user()->can('view all projects')
@@ -59,8 +60,6 @@ class HandleInertiaRequests extends Middleware
             // dibuka lewat URL langsung langsung muncul di menu samping, bukan di muatan berikutnya.
             // Logo/nama developer + status email — lihat App\Support\Branding.
             'branding'       => fn () => \App\Support\Branding::data(),
-            // Panel pratinjau tema (sementara, hanya di lingkungan lokal) — dihapus setelah warna final diputuskan.
-            'pratinjauTema'  => app()->environment('local'),
             'currentProject' => fn () => $this->resolveCurrentProject($request),
             'statusColors'   => $request->user() ? StatusColor::allMapped() : null,
         ];

@@ -2,7 +2,7 @@
 import BrandMark from '@/Components/BrandMark.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import UkuranTeks from '@/Components/UkuranTeks.vue';
-import PratinjauTema from '@/Components/PratinjauTema.vue';
+import PilihTema from '@/Components/PilihTema.vue';
 import { ref, computed } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { useToasts } from '@/Composables/useToasts';
@@ -269,9 +269,15 @@ const toggleDropdown = (item) => {
             <div class="px-3 py-4 border-t border-slate-800">
                 <!-- User Menu Popup (renders above) -->
                 <div v-if="showUserMenu" class="mb-2 bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-2xl">
-                    <div class="px-4 py-3 border-b border-slate-700">
-                        <div class="text-slate-400 text-xs mb-2">Ukuran teks</div>
-                        <UkuranTeks />
+                    <div class="px-4 py-3 border-b border-slate-700 space-y-3">
+                        <div>
+                            <div class="text-slate-400 text-xs mb-2">Tema</div>
+                            <PilihTema />
+                        </div>
+                        <div>
+                            <div class="text-slate-400 text-xs mb-2">Ukuran teks</div>
+                            <UkuranTeks />
+                        </div>
                     </div>
                     <Link
                         :href="route('profile.edit')"
@@ -386,7 +392,6 @@ const toggleDropdown = (item) => {
         </Teleport>
     </div>
     <ConfirmDialog />
-    <PratinjauTema v-if="$page.props.pratinjauTema" />
 </template>
 
 <style scoped>

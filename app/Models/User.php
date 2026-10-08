@@ -18,6 +18,9 @@ class User extends Authenticatable
     /** Pilihan ukuran teks (diterapkan lewat atribut data-ukuran pada <html>, lihat resources/css/app.css). */
     public const UKURAN_FONT = ['normal', 'besar', 'lebih-besar'];
 
+    /** Pilihan tema tampilan: gelap (bawaan), terang, atau mengikuti pengaturan perangkat. */
+    public const TEMA = ['gelap', 'terang', 'sistem'];
+
     protected $fillable = [
         'name',
         'email',
@@ -45,6 +48,14 @@ class User extends Authenticatable
             'password_changed_at'  => 'datetime',
             'preferences'          => 'array',
         ];
+    }
+
+    /** Tema pilihan pengguna, selalu salah satu nilai TEMA (bawaan gelap). */
+    public function temaPilihan(): string
+    {
+        $v = $this->preferences['tema'] ?? 'gelap';
+
+        return in_array($v, self::TEMA, true) ? $v : 'gelap';
     }
 
     /** Ukuran teks pilihan pengguna, selalu salah satu nilai UKURAN_FONT. */

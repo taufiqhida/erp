@@ -2,7 +2,7 @@
 import BrandMark from '@/Components/BrandMark.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import UkuranTeks from '@/Components/UkuranTeks.vue';
-import PratinjauTema from '@/Components/PratinjauTema.vue';
+import PilihTema from '@/Components/PilihTema.vue';
 import { computed } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { useToasts } from '@/Composables/useToasts';
@@ -54,6 +54,7 @@ const logout = () => router.post(route('logout'));
             </div>
 
             <div class="flex items-center gap-2 flex-shrink-0">
+                <PilihTema class="hidden sm:flex" />
                 <UkuranTeks class="hidden sm:flex" />
                 <Link :href="route('profile.edit')" class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors">
                     <div class="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
@@ -103,7 +104,6 @@ const logout = () => router.post(route('logout'));
         </Teleport>
     </div>
     <ConfirmDialog />
-    <PratinjauTema v-if="$page.props.pratinjauTema" />
 </template>
 
 <style scoped>
