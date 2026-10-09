@@ -154,5 +154,14 @@ class AksesPerRoleTest extends TestCase
         $this->assertStringNotContainsString('Budi Pembeli', $baca($this->user('pelaksana_lapangan')));
         $this->assertStringContainsString('Budi Pembeli', $baca($this->user('admin_sales')));
     }
-}
 
+    public function test_admin_keuangan_bisa_membuka_konsumen_dan_rencana_akad_hanya_lihat(): void
+    {
+        $u = $this->user('admin_keuangan');
+
+        $this->actingAs($u)->get(route('konsumens.index'))->assertOk();
+        $this->actingAs($u)->get(route('rencana-akad.index'))->assertOk();
+        // Hanya-lihat: tidak bisa mengimpor konsumen (butuh izin booking).
+        $this->actingAs($u)->post(route('konsumens.import', $this->tugas), [])->assertStatus(403);
+    }
+}
