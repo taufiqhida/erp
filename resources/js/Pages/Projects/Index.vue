@@ -18,6 +18,10 @@ const canDelete = computed(() => permissions.value.includes('delete projects'));
 const roles = computed(() => page.props.auth?.user?.roles ?? []);
 const canManageRoles = computed(() => roles.value.includes('superadmin'));
 const canViewAuditTrail = computed(() => permissions.value.includes('view audit trail'));
+// Tanpa izin melihat proyek (Pelaksana Lapangan), kartu proyek membuka Proses Bangun, bukan detail proyek/Stok Kavling.
+// Mode "Semua Proyek" = Dashboard gabungan (angka penjualan & keuangan): hanya untuk yang boleh melihatnya.
+const bisaLihatDataBisnis = computed(() => permissions.value.includes('view konsumens') || permissions.value.includes('view keuangan'));
+const bukaProyek = (id) => permissions.value.includes('view projects') ? route('projects.show', id) : route('proses-bangun.index', id);
 // "Bisa lihat menu Pengaturan?" = punya salah satu permission master data
 // granular (lihat RolesAndPermissionsSeeder) — bukan lagi role hardcode.
 // [permission, route pengaturan pertama yang boleh diakses pemegangnya] —
@@ -129,7 +133,7 @@ const deleteProject = async (project) => {
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 <!-- Semua Proyek: keluar dari context 1 proyek, lihat data gabungan
                      lintas-proyek di menu Konsumen/Keuangan/Pembatalan -->
-                <Link :href="route('projects.clear-active')"
+                <Link v-if="bisaLihatDataBisnis" :href="route('projects.clear-active')"
                     class="group bg-slate-900 border border-dashed border-slate-700 rounded-xl overflow-hidden hover:border-violet-500/50 transition-all duration-200 flex flex-col items-center justify-center text-center p-6 min-h-[220px]">
                     <div class="w-14 h-14 rounded-full bg-violet-600/10 flex items-center justify-center mb-3 group-hover:bg-violet-600/20 transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-7 h-7 text-violet-400">
@@ -145,7 +149,7 @@ const deleteProject = async (project) => {
                     :key="project.id"
                     class="group bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-violet-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-violet-500/10"
                 >
-                    <Link :href="route('projects.show', project.id)" class="block">
+                    <Link :href="bukaProyek(project.id)" class="block">
                         <!-- Foto sampul (fallback ke siteplan kalau belum diupload) or placeholder -->
                         <div class="relative h-36 bg-slate-800 overflow-hidden">
                             <img
@@ -213,7 +217,7 @@ const deleteProject = async (project) => {
                     <!-- Aksi -->
                     <div class="p-4 flex items-center gap-2">
                         <Link
-                            :href="route('projects.show', project.id)"
+                            :href="bukaProyek(project.id)"
                             class="flex-1 flex items-center justify-center gap-2 py-2 bg-violet-600/10 hover:bg-violet-600/20 border border-violet-500/20 rounded-lg text-violet-400 text-sm font-medium transition-colors group-hover:border-violet-500/40"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">

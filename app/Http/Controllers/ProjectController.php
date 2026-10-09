@@ -584,6 +584,6 @@ class ProjectController extends Controller
     {
         session()->forget('current_project_id');
 
-        return redirect()->route('dashboard');
+        return redirect()->route(Auth::user()->can('view konsumens') || Auth::user()->can('view keuangan') ? 'dashboard' : 'beranda');
     }
 }

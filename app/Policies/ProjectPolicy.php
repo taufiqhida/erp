@@ -25,7 +25,9 @@ class ProjectPolicy
 
     public function viewAny(User $user): bool
     {
-        return $user->can('view projects');
+        // 'update status bangun' = pelaksana lapangan: boleh membuka Beranda (pilih proyek yang DITUGASKAN) untuk
+        // masuk ke Proses Bangun, walau tidak punya izin melihat detail proyek / Stok Kavling.
+        return $user->can('view projects') || $user->can('update status bangun');
     }
 
     public function view(User $user, Project $project): bool

@@ -26,3 +26,6 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 /backups
+
+# Data master khas perusahaan (nama staf/rekanan): jangan di-commit
+/master-perusahaan*.json

@@ -13,6 +13,7 @@ use App\Models\PembayaranKonsumen;
 use App\Models\PencairanKprTahap;
 use App\Models\StatusBangunStage;
 use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -28,9 +29,16 @@ class DashboardController extends Controller
     private const PIPELINE_STAGES = ['booking', 'pemberkasan', 'proses_bank', 'sp3k', 'rencana_akad', 'akad', 'bast'];
     private const CARA_BAYAR_KEYS = ['cash', 'cash_bertahap', 'kpr_subsidi', 'kpr_komersil'];
 
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         $user = Auth::user();
+
+        // Dashboard memuat angka penjualan & keuangan: hanya untuk peran yang memang melihat data konsumen/keuangan.
+        // Pelaksana Lapangan dan Admin Proyek (hanya unit & progres bangun) diarahkan ke Beranda.
+        if (!$user->can('view konsumens') && !$user->can('view keuangan')) {
+            return redirect()->route('beranda');
+        }
+
         $isGlobal = $user->can('view all projects');
         // Proyek aktif (Halaman Utama Pilih Proyek) — kosong berarti mode
         // "Semua Proyek". RBAC (project.users) tetap ditegakkan terlepas

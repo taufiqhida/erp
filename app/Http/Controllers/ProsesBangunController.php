@@ -30,6 +30,10 @@ class ProsesBangunController extends Controller
         $this->authorizeProjectAccess($project);
         abort_unless(Auth::user()->can('view kavlings'), 403);
 
+        // Membuka Proses Bangun juga mengaktifkan proyek ini sebagai konteks (seperti membuka detail proyek), supaya
+        // pengguna yang tidak punya akses ke Stok Kavling (mis. Pelaksana Lapangan) tetap punya proyek aktif di menu.
+        session(['current_project_id' => $project->id]);
+
         // Urutan & paginasi di SERVER (bukan browser): 'progress' dan 'deadline' dihitung di SQL dari
         // tabel tahap & SPK, jadi tetap benar lintas halaman. Aturan 'deadline': yang paling mendekati
         // (termasuk yang sudah lewat) di atas; unit tanpa SPK dan unit yang sudah selesai dibangun
