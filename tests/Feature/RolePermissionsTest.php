@@ -61,7 +61,7 @@ class RolePermissionsTest extends TestCase
             'manage status bangun master', 'manage kontraktor',
         ],
         'pelaksana_lapangan' => [
-            'view kavlings', 'update status bangun',
+            'view projects', 'view kavlings', 'update status bangun',
         ],
         'admin_keuangan' => [
             'view projects', 'view kavlings', 'view konsumens',

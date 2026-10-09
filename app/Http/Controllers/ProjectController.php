@@ -189,8 +189,11 @@ class ProjectController extends Controller
 
         $statusBangunStages = StatusBangunStage::ordered()->get(['id', 'nama', 'bobot', 'urutan', 'warna']);
 
-        $konsumens = Konsumen::orderBy('nama')
-            ->get(['id', 'nama', 'no_hp']);
+        // Daftar seluruh konsumen (nama & no. HP) hanya untuk yang boleh melihat data konsumen; peran lain
+        // (mis. Pelaksana Lapangan yang membuka Stok Kavling hanya-lihat) tidak menerimanya sama sekali.
+        $konsumens = $this->bolehLihatKonsumen()
+            ? Konsumen::orderBy('nama')->get(['id', 'nama', 'no_hp'])
+            : collect();
 
         return Inertia::render('Projects/Show', [
             'project'   => [
@@ -227,6 +230,12 @@ class ProjectController extends Controller
      * Spek fisik (luas, kamar, material, foto fasad/denah) sepenuhnya
      * berasal dari tipeUnitPreset — Kavling sendiri tidak punya kolom spek.
      */
+    /** Nama pembeli di Stok Kavling hanya untuk peran yang memang melihat data konsumen (izin dicache Spatie, murah). */
+    private function bolehLihatKonsumen(): bool
+    {
+        return (bool) Auth::user()?->can('view konsumens');
+    }
+
     private function formatKavlingRow(Kavling $k): array
     {
         $tipe = $k->tipeUnitPreset;
@@ -254,7 +263,7 @@ class ProjectController extends Controller
             'perlu_biaya_tambahan' => $k->perlu_biaya_tambahan,
             'koordinat_x'       => $k->koordinat_x,
             'koordinat_y'       => $k->koordinat_y,
-            'konsumen_nama'     => $k->activeTransaction?->konsumen?->nama,
+            'konsumen_nama'     => $this->bolehLihatKonsumen() ? $k->activeTransaction?->konsumen?->nama : null,
             'foto_rumah'        => $tipe?->foto_rumah ? route('media.show', ['path' => $tipe->foto_rumah]) : null,
             'denah_rumah'       => $tipe?->denah_rumah ? route('media.show', ['path' => $tipe->denah_rumah]) : null,
             'kamar_tidur'       => $tipe?->kamar_tidur,
@@ -424,7 +433,7 @@ class ProjectController extends Controller
             $k->status_jual->label(),
             $k->statusBangunStage?->nama,
             $k->progress_bangun,
-            $k->activeTransaction?->konsumen?->nama,
+            $this->bolehLihatKonsumen() ? $k->activeTransaction?->konsumen?->nama : null,
             $k->id_rumah,
             $k->hgb_no,
         ]);

@@ -156,8 +156,9 @@ class RolesAndPermissionsSeeder extends Seeder
 
             // Cuma update progres fisik per-kavling — paling sempit dari
             // semua role operasional.
+            // 'view projects' = boleh membuka Beranda & Stok Kavling HANYA-LIHAT (tanpa nama konsumen).
             'pelaksana_lapangan' => [
-                'view kavlings', 'update status bangun',
+                'view projects', 'view kavlings', 'update status bangun',
             ],
 
             // Verifikasi pembayaran, rekonsiliasi, pencairan KPR/SBUM/Dajam.
