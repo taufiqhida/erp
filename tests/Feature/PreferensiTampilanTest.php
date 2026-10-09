@@ -196,5 +196,37 @@ class PreferensiTampilanTest extends TestCase
 
         $this->assertSame('terbuka', $this->user->fresh()->sidebarPilihan());
     }
+
+    // ── Sinkron tampilan setelah login/logout ────────────────────────────
+
+    public function test_halaman_ditandai_masuk_hanya_untuk_pengguna_login(): void
+    {
+        $this->assertStringNotContainsString('data-masuk', $this->get('/login')->getContent());
+
+        $html = $this->actingAs($this->user)->get(route('beranda'))->getContent();
+        $this->assertMatchesRegularExpression('/<html[^>]*data-masuk="1"/s', $html);
+    }
+
+    public function test_halaman_masuk_untuk_tamu_membaca_pilihan_terakhir_perangkat_sebelum_tampil(): void
+    {
+        $html = $this->get('/login')->getContent();
+
+        $this->assertStringContainsString("localStorage.getItem('ssid-tema-perangkat')", $html);
+        // Pengguna login memakai pilihan akun dari server, jadi skrip perangkat tidak menimpanya.
+        $this->assertStringContainsString("if(!d.dataset.masuk)", $html);
+    }
+
+    public function test_tema_dan_ukuran_akun_ikut_dikirim_di_setiap_halaman_agar_bisa_disinkronkan(): void
+    {
+        $this->actingAs($this->user)->patch(route('preferensi.update'), ['tema' => 'terang']);
+        $this->actingAs($this->user)->patch(route('preferensi.update'), ['ukuran_font' => 'besar']);
+
+        $html = $this->actingAs($this->user)->get(route('dashboard'))->getContent();
+        preg_match('/data-page="([^"]+)"/', $html, $m);
+        $user = json_decode(html_entity_decode($m[1], ENT_QUOTES), true)['props']['auth']['user'];
+
+        $this->assertSame('terang', $user['tema']);
+        $this->assertSame('besar', $user['ukuran_font']);
+    }
 }
 

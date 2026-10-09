@@ -6,6 +6,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createApp, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import MoneyInput from './Components/MoneyInput.vue';
+import { sinkronTampilan } from './Composables/useTema';
 
 // Nama singkat sistem diambil dari <title> yang dirender server (Branding), bukan dari env build,
 // supaya judul tab selalu "SSID - Dashboard", "SSID - Masuk", dst.  Tidak bergantung VITE_APP_NAME.
@@ -44,6 +45,10 @@ document.addEventListener('keydown', (e) => {
     (atas.querySelector(':scope > .absolute.inset-0') ?? atas).click();
 });
 
+// Tema & ukuran teks harus selalu sama dengan data akun yang sedang login, termasuk setelah login/logout lewat
+// navigasi (tanpa muat ulang). Server merender nilainya saat halaman dimuat; ini menyamakannya tiap pindah halaman.
+router.on('navigate', (event) => sinkronTampilan(event.detail.page.props));
+
 createInertiaApp({
     title: (title) => (title ? `${appName} - ${title}` : appName),
     resolve: (name) =>
@@ -52,6 +57,7 @@ createInertiaApp({
             import.meta.glob('./Pages/**/*.vue'),
         ),
     setup({ el, App, props, plugin }) {
+        sinkronTampilan(props.initialPage?.props);
         return createApp({ render: () => h(App, props) })
             .use(plugin)
             .use(ZiggyVue)
