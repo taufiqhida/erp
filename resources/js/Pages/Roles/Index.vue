@@ -56,6 +56,21 @@ const salinPassword = async () => {
     } catch { /* browser tanpa izin clipboard: user menyalin manual */ }
 };
 
+// ── Ubah Data akun (nama & email) — hanya superadmin; Profil Saya tidak bisa mengubahnya ──────────
+const editingData = ref(null);
+const formData = useForm({ name: '', email: '' });
+const openEditData = (user) => {
+    editingData.value = user;
+    formData.defaults({ name: user.name, email: user.email }).reset();
+    formData.clearErrors();
+};
+const submitEditData = () => {
+    formData.patch(route('users.update', editingData.value.id), {
+        preserveScroll: true,
+        onSuccess: () => { editingData.value = null; },
+    });
+};
+
 // ── Edit Role Modal ──────────────────────────────────────────────────────────
 const editingUser = ref(null);
 const form = useForm({ roles: [] });
@@ -260,6 +275,11 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
                                             </svg>
                                             Edit Role
                                         </button>
+                                        <button @click="openEditData(user)"
+                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors"
+                                            title="Ubah nama atau email akun ini">
+                                            Ubah Data
+                                        </button>
                                         <button v-if="user.id !== $page.props.auth.user.id" @click="resetPassword(user)"
                                             class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 text-xs font-medium rounded-lg transition-colors"
                                             title="Buat password sementara baru untuk pengguna ini">
@@ -320,6 +340,37 @@ const getRoleColor = (name) => roleColors[name] ?? 'bg-slate-700 text-slate-300 
 
 
         <Teleport to="body">
+            <div v-if="editingData" role="dialog" aria-modal="true" aria-label="Ubah data akun" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="editingData = null" />
+                <form @submit.prevent="submitEditData" class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+                    <div class="px-6 py-4 border-b border-slate-800">
+                        <h3 class="text-white font-semibold">Ubah Data Akun</h3>
+                        <p class="text-slate-400 text-xs mt-0.5">Email adalah nama login. Perubahan tercatat di Audit Trail.</p>
+                    </div>
+                    <div class="px-6 py-5 space-y-4">
+                        <div>
+                            <label for="edit-nama" class="block text-slate-400 text-xs mb-1">Nama</label>
+                            <input id="edit-nama" v-model="formData.name" type="text" required maxlength="255"
+                                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100" />
+                            <p v-if="formData.errors.name" class="text-rose-400 text-xs mt-1">{{ formData.errors.name }}</p>
+                        </div>
+                        <div>
+                            <label for="edit-email" class="block text-slate-400 text-xs mb-1">Email (nama login)</label>
+                            <input id="edit-email" v-model="formData.email" type="email" required maxlength="255"
+                                class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100" />
+                            <p v-if="formData.errors.email" class="text-rose-400 text-xs mt-1">{{ formData.errors.email }}</p>
+                        </div>
+                    </div>
+                    <div class="px-6 pb-5 flex justify-end gap-2">
+                        <button type="button" @click="editingData = null" class="px-4 py-2 text-slate-400 text-sm">Batal</button>
+                        <button type="submit" :disabled="formData.processing"
+                            class="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg">
+                            {{ formData.processing ? 'Menyimpan…' : 'Simpan' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+
             <div v-if="editingUser" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
                 <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="editingUser = null" />
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm shadow-2xl">

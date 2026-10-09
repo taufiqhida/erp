@@ -85,6 +85,34 @@ class RoleController extends Controller
      * wajib ganti pada login berikutnya, dan keluarkan sesi yang sedang aktif. Password lama tidak
      * pernah bisa dilihat (hanya tersimpan sebagai hash).
      */
+    /**
+     * Ubah nama & email akun (hanya superadmin). Pemilik akun sendiri TIDAK bisa mengubahnya di Profil: email adalah
+     * nama login dan nama tampil di Audit Trail, jadi perubahannya harus tercatat dan dilakukan orang yang berwenang.
+     */
+    public function updateUser(Request $request, User $user): RedirectResponse
+    {
+        $request->merge(['email' => mb_strtolower(trim((string) $request->input('email')))]);
+        $validated = $request->validate([
+            'name'  => 'required|string|max:255',
+            'email' => ['required', 'email', 'max:255', \Illuminate\Validation\Rule::unique('users', 'email')->ignore($user->id)],
+        ]);
+
+        $lama = ['name' => $user->name, 'email' => $user->email];
+        if ($lama === $validated) {
+            return back()->with('success', "Tidak ada perubahan untuk {$user->name}.");
+        }
+
+        $user->forceFill($validated)->save();
+
+        activity('akun')
+            ->performedOn($user)
+            ->causedBy($request->user())
+            ->withProperties(['lama' => $lama, 'baru' => $validated])
+            ->log("Ubah data akun {$lama['email']}");
+
+        return back()->with('success', "Data akun {$validated['name']} diperbarui.");
+    }
+
     public function resetPassword(Request $request, User $user): RedirectResponse
     {
         abort_if($user->id === $request->user()->id, 422, 'Untuk akun sendiri, ganti password lewat menu Profil.');

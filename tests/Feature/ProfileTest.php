@@ -10,55 +10,25 @@ class ProfileTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_profile_page_is_displayed(): void
+    public function test_halaman_profil_tampil_dan_hanya_menampilkan_data_akun(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['name' => 'Budi Santoso', 'email' => 'budi@sedayarealty.com']);
 
-        $response = $this
-            ->actingAs($user)
-            ->get('/profile');
-
-        $response->assertOk();
+        $this->actingAs($user)->get('/profile')->assertOk()
+            ->assertInertia(fn ($page) => $page->component('Profile/Edit')
+                ->where('auth.user.name', 'Budi Santoso')
+                ->where('auth.user.email', 'budi@sedayarealty.com'));
     }
 
-    public function test_profile_information_can_be_updated(): void
+    public function test_pengguna_tidak_bisa_mengubah_nama_atau_email_sendiri(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['name' => 'Budi Santoso', 'email' => 'budi@sedayarealty.com']);
 
-        $response = $this
-            ->actingAs($user)
-            ->patch('/profile', [
-                'name' => 'Test User',
-                'email' => 'test@example.com',
-            ]);
-
-        $response
-            ->assertSessionHasNoErrors()
-            ->assertRedirect('/profile');
+        $this->actingAs($user)->patch('/profile', ['name' => 'Pak Direktur', 'email' => 'direktur@sedayarealty.com'])->assertForbidden();
 
         $user->refresh();
-
-        $this->assertSame('Test User', $user->name);
-        $this->assertSame('test@example.com', $user->email);
-        $this->assertNull($user->email_verified_at);
-    }
-
-    public function test_email_verification_status_is_unchanged_when_the_email_address_is_unchanged(): void
-    {
-        $user = User::factory()->create();
-
-        $response = $this
-            ->actingAs($user)
-            ->patch('/profile', [
-                'name' => 'Test User',
-                'email' => $user->email,
-            ]);
-
-        $response
-            ->assertSessionHasNoErrors()
-            ->assertRedirect('/profile');
-
-        $this->assertNotNull($user->refresh()->email_verified_at);
+        $this->assertSame('Budi Santoso', $user->name);
+        $this->assertSame('budi@sedayarealty.com', $user->email);
     }
 
     public function test_pengguna_tidak_bisa_menghapus_akunnya_sendiri(): void

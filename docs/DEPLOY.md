@@ -137,9 +137,14 @@ Dikerjakan SEKALI di server production yang baru. Perintah `docker compose ...` 
    ```bash
    docker compose exec app php artisan users:buat-superadmin email@perusahaan.com --nama="Nama Lengkap"
    ```
+3b. (Opsional) Isi master baku (Sumber Lead dan Template Pemberkasan). Aman diulang; yang sudah ada tidak ditimpa:
+   ```bash
+   docker compose exec app php artisan db:seed --class=MasterAwalSeeder --force
+   ```
+   Datanya di `database/data/master-awal.json` (format yang sama dengan Pindah Master Data, jadi bisa juga diimpor lewat halamannya dengan pratinjau).
 4. Login, lalu **Pengaturan → Pindah Master Data**: impor file master dari staging (Periksa dulu → Terapkan).
 5. Unggah ulang file yang tidak ikut impor: logo dan kop surat (Profil Developer), template Word (Template Surat).
-6. Buat akun staf lewat **Manajemen Role** (password sementara, wajib ganti).
+6. Buat akun staf lewat **Manajemen Role** (password sementara, wajib ganti). Nama dan email akun hanya bisa diubah superadmin (tombol **Ubah Data**); pengguna tidak bisa mengubahnya sendiri di Profil.
 7. Baru **Import Kavling**, lalu **Import Konsumen**.
 
 > JANGAN menjalankan `db:seed` tanpa `--class` (berisi data demo) dan jangan `RealUsersSeeder` (12 akun berpassword bawaan).

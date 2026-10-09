@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\ProfileUpdateRequest;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,19 +24,12 @@ class ProfileController extends Controller
     }
 
     /**
-     * Update the user's profile information.
+     * Nama dan email tidak bisa diubah sendiri: email adalah nama login dan nama tampil di Audit Trail. Perubahan dilakukan
+     * superadmin di Manajemen Role (tercatat di Audit Trail).
      */
-    public function update(ProfileUpdateRequest $request): RedirectResponse
+    public function update(Request $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
-
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
-        }
-
-        $request->user()->save();
-
-        return Redirect::route('profile.edit');
+        abort(403, 'Nama dan email hanya bisa diubah oleh superadmin.');
     }
 
     /**

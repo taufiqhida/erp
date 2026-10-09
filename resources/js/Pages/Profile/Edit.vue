@@ -28,8 +28,6 @@ defineProps({
                     class="bg-slate-900 border border-slate-800 p-4 shadow sm:rounded-lg sm:p-8"
                 >
                     <UpdateProfileInformationForm
-                        :must-verify-email="mustVerifyEmail"
-                        :status="status"
                         class="max-w-xl"
                     />
                 </div>

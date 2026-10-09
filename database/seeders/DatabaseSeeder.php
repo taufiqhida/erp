@@ -20,6 +20,9 @@ class DatabaseSeeder extends Seeder
         // 1. Roles & Permissions
         $this->call(RolesAndPermissionsSeeder::class);
 
+        // 1b. Master baku (Sumber Lead, Template Pemberkasan) — lihat MasterAwalSeeder
+        $this->call(MasterAwalSeeder::class);
+
         // 2. Users sungguhan (menggantikan 6 dummy lama — lihat RealUsersSeeder)
         $this->call(RealUsersSeeder::class);
 

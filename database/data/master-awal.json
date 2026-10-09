@@ -1,0 +1,383 @@
+{
+  "format": "ssid-master",
+  "versi": 1,
+  "dibuat": "2026-10-09T00:00:00+07:00",
+  "sumber": "master-awal (template baku perusahaan)",
+  "data": {
+    "sumber_lead": [
+      {
+        "nama": "Instagram",
+        "keterangan": null,
+        "is_referral": false,
+        "is_active": true
+      },
+      {
+        "nama": "Facebook",
+        "keterangan": null,
+        "is_referral": false,
+        "is_active": true
+      },
+      {
+        "nama": "Thread",
+        "keterangan": null,
+        "is_referral": false,
+        "is_active": true
+      },
+      {
+        "nama": "Tiktok",
+        "keterangan": null,
+        "is_referral": false,
+        "is_active": true
+      },
+      {
+        "nama": "Banner",
+        "keterangan": null,
+        "is_referral": false,
+        "is_active": true
+      },
+      {
+        "nama": "Pameran",
+        "keterangan": null,
+        "is_referral": false,
+        "is_active": true
+      },
+      {
+        "nama": "Freelance",
+        "keterangan": null,
+        "is_referral": false,
+        "is_active": true
+      },
+      {
+        "nama": "Agen",
+        "keterangan": null,
+        "is_referral": false,
+        "is_active": true
+      },
+      {
+        "nama": "Allowance",
+        "keterangan": null,
+        "is_referral": false,
+        "is_active": true
+      },
+      {
+        "nama": "Walk In",
+        "keterangan": null,
+        "is_referral": false,
+        "is_active": true
+      },
+      {
+        "nama": "Referral",
+        "keterangan": null,
+        "is_referral": true,
+        "is_active": true
+      }
+    ],
+    "dokumen_template": [
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "KTP Pemohon",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "KTP Pasangan",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "KK",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Buku Nikah/Akta Cerai/Akta Kematian",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "NPWP",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "BPJS Kesehatan",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "SPT Tahunan",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Suket Belum Menikah dari Kel/Desa",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Suket Domisili dari Kel/Desa",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Suket Belum Memiliki Rumah dari Kel/Desa",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Suket Kerja Berstempel dari Perusahaan",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Slip Gaji 3 Bulan Terakhir",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Rekening Koran 3 Bulan Terakhir",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Rekening Koran 6 Bulan Terakhir (Wirausaha)",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Laporan Keuangan Wirausaha (6 Bulan)",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Suket Wirausaha",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Denah Kantor Usaha & Google Maps",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Foto Berwarna",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Form Aplikasi Kredit",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "Sertipikat",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "PBG",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "SPR Bank",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "PBB",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_subsidi",
+        "nama_dokumen": "SiKasep/Tapera",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "KTP Pemohon",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "KTP Pasangan",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "KK",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "Buku Nikah/Akta Cerai/Akta Kematian",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "NPWP",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "SPT Tahunan",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "Suket Kerja Berstempel dari Perusahaan",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "Slip Gaji 3 Bulan Terakhir",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "Rekening Koran 3 Bulan Terakhir",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "Rekening Koran 6 Bulan Terakhir (Wirausaha)",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "Laporan Keuangan Wirausaha (6 Bulan)",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "Suket Wirausaha",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "Denah Kantor Usaha & Google Maps",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "Foto Berwarna",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "Form Aplikasi Kredit",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "Sertipikat",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "PBG",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "SPR Bank",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "kpr_komersil",
+        "nama_dokumen": "PBB",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "cash",
+        "nama_dokumen": "KTP Pemohon",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "cash",
+        "nama_dokumen": "KTP Pasangan",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "cash",
+        "nama_dokumen": "KK",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "cash",
+        "nama_dokumen": "Buku Nikah/Akta Cerai/Akta Kematian",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "cash",
+        "nama_dokumen": "NPWP",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "cash",
+        "nama_dokumen": "SPT Tahunan",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "cash",
+        "nama_dokumen": "Sertipikat",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "cash",
+        "nama_dokumen": "PBG",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "cash",
+        "nama_dokumen": "PBB",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "cash_bertahap",
+        "nama_dokumen": "KTP Pemohon",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "cash_bertahap",
+        "nama_dokumen": "KTP Pasangan",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "cash_bertahap",
+        "nama_dokumen": "KK",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "cash_bertahap",
+        "nama_dokumen": "Buku Nikah/Akta Cerai/Akta Kematian",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "cash_bertahap",
+        "nama_dokumen": "NPWP",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "cash_bertahap",
+        "nama_dokumen": "SPT Tahunan",
+        "sifat": "kondisional"
+      },
+      {
+        "cara_bayar": "cash_bertahap",
+        "nama_dokumen": "Sertipikat",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "cash_bertahap",
+        "nama_dokumen": "PBG",
+        "sifat": "wajib"
+      },
+      {
+        "cara_bayar": "cash_bertahap",
+        "nama_dokumen": "PBB",
+        "sifat": "wajib"
+      }
+    ]
+  }
+}

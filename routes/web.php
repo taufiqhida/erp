@@ -488,6 +488,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
         Route::patch('roles/{user}/assign', [RoleController::class, 'assign'])->name('roles.assign');
         Route::post('users', [RoleController::class, 'storeUser'])->name('users.store');
+        Route::patch('users/{user}', [RoleController::class, 'updateUser'])->name('users.update');
         Route::post('users/{user}/reset-password', [RoleController::class, 'resetPassword'])->name('users.reset-password');
         Route::patch('users/{user}/aktif', [RoleController::class, 'toggleAktif'])->name('users.toggle-aktif');
         Route::delete('users/{user}', [RoleController::class, 'destroyUser'])->name('users.destroy');
