@@ -124,6 +124,7 @@ class PindahMasterController extends Controller
             'perbarui' => $perbarui,
             'baris' => collect($r['hasil'])->map(fn ($h, $k) => ['key' => $k, 'label' => $label($k)] + $h)->values()->all(),
             'masalah' => $r['masalah'],
+            'tidak_ada' => $r['tidak_ada'] ?? [],
             'bisa_diterapkan' => !$r['masalah'],
         ];
     }

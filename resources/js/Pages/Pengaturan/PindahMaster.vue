@@ -166,6 +166,10 @@ const waktu = (iso) => iso ? new Date(iso).toLocaleString('id-ID') : '-';
                 <b>Baru</b> = belum ada, akan ditambahkan · <b>Sama</b> = sudah ada dan identik · <b>Beda</b> = ada dengan nama yang sama tetapi nilainya berbeda.
             </p>
 
+            <p v-if="preview.tidak_ada?.length" class="mt-3 text-slate-400 text-xs">
+                Dicentang tetapi tidak ada di file (dilewati, tidak jadi masalah): {{ preview.tidak_ada.join(', ') }}.
+            </p>
+
             <div v-if="preview.masalah.length" class="mt-4 bg-rose-500/10 border border-rose-500/30 rounded-lg px-4 py-3">
                 <div class="text-rose-300 text-sm font-medium">Ada masalah — impor tidak bisa diterapkan</div>
                 <ul class="mt-1.5 list-disc pl-5 text-rose-300/90 text-xs space-y-0.5">

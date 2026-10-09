@@ -382,4 +382,21 @@ class PindahMasterTest extends TestCase
     {
         $this->assertSame(1, Artisan::call('users:buat-superadmin', ['email' => 'bukan-email']));
     }
+
+    public function test_master_yang_dicentang_tetapi_tidak_ada_di_file_dilewati_dan_tidak_memblokir_impor(): void
+    {
+        $payload = ['format' => 'ssid-master', 'versi' => 1, 'data' => ['promo' => [['nama' => 'Promo Satu', 'is_active' => true]]]];
+
+        // Semua master dicentang (bawaan halaman), padahal file hanya berisi Promo.
+        $this->periksa($payload, ['master' => $this->semuaKey()]);
+        $preview = session('pindah_master.preview');
+
+        $this->assertTrue($preview['bisa_diterapkan']);
+        $this->assertSame([], $preview['masalah']);
+        $this->assertContains('Notaris', $preview['tidak_ada']);
+        $this->assertNotContains('Promo', $preview['tidak_ada']);
+
+        $this->terapkan()->assertSessionHas('success');
+        $this->assertSame(1, PromoPreset::where('nama', 'Promo Satu')->count());
+    }
 }

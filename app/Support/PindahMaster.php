@@ -199,19 +199,21 @@ class PindahMaster
     }
 
     /**
-     * Jalankan (atau simulasikan) impor. Mengembalikan ['hasil' => [key => hitung], 'masalah' => [string], 'diterapkan' => bool].
+     * Jalankan (atau simulasikan) impor. Mengembalikan ['hasil' => [key => hitung], 'masalah' => [string], 'tidak_ada' => [label master dicentang tapi tak ada di file], 'diterapkan' => bool].
      * Simulasi = proses yang sama lalu rollback, jadi angkanya persis sama dengan penerapan sungguhan.
      */
     public static function proses(array $payload, array $keys, bool $perbarui, bool $terapkan): array
     {
         $hasil = [];
         $masalah = [];
+        $tidakAda = [];
 
         DB::beginTransaction();
         try {
             foreach (self::kunciValid($keys) as $key) {
+                // Master yang dicentang tetapi tidak ada di file: dilewati saja (bukan masalah), dilaporkan terpisah.
                 if (!array_key_exists($key, $payload['data'])) {
-                    $masalah[] = '[' . self::definisi()[$key]['label'] . '] Tidak ada di file ini.';
+                    $tidakAda[] = self::definisi()[$key]['label'];
                     continue;
                 }
                 $d = self::definisi()[$key];
@@ -224,18 +226,18 @@ class PindahMaster
         } catch (\Throwable $e) {
             DB::rollBack();
 
-            return ['hasil' => $hasil, 'masalah' => [...$masalah, 'Terjadi galat saat memproses: ' . $e->getMessage()], 'diterapkan' => false];
+            return ['hasil' => $hasil, 'masalah' => [...$masalah, 'Terjadi galat saat memproses: ' . $e->getMessage()], 'tidak_ada' => $tidakAda, 'diterapkan' => false];
         }
 
         if ($terapkan && !$masalah) {
             DB::commit();
 
-            return ['hasil' => $hasil, 'masalah' => [], 'diterapkan' => true];
+            return ['hasil' => $hasil, 'masalah' => [], 'tidak_ada' => $tidakAda, 'diterapkan' => true];
         }
 
         DB::rollBack();
 
-        return ['hasil' => $hasil, 'masalah' => $masalah, 'diterapkan' => false];
+        return ['hasil' => $hasil, 'masalah' => $masalah, 'tidak_ada' => $tidakAda, 'diterapkan' => false];
     }
 
     // ── Master tabel biasa ────────────────────────────────────────────────
