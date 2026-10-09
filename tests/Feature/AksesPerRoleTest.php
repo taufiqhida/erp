@@ -118,7 +118,7 @@ class AksesPerRoleTest extends TestCase
 
     public function test_dashboard_terbuka_untuk_peran_bisnis_dan_ditutup_untuk_peran_proyek(): void
     {
-        foreach (['superadmin', 'manager', 'spv', 'leader', 'admin_sales', 'admin_pemberkasan', 'admin_keuangan'] as $role) {
+        foreach (['superadmin', 'manager', 'direktur', 'spv', 'leader', 'admin_sales', 'admin_pemberkasan', 'admin_keuangan'] as $role) {
             $this->actingAs($this->user($role))->get(route('dashboard'))->assertOk();
         }
         foreach (['pelaksana_lapangan', 'admin_proyek'] as $role) {
@@ -163,5 +163,23 @@ class AksesPerRoleTest extends TestCase
         $this->actingAs($u)->get(route('rencana-akad.index'))->assertOk();
         // Hanya-lihat: tidak bisa mengimpor konsumen (butuh izin booking).
         $this->actingAs($u)->post(route('konsumens.import', $this->tugas), [])->assertStatus(403);
+    }
+
+    public function test_direktur_melihat_semua_proyek_dan_audit_trail_tetapi_tidak_mengubah_apa_pun(): void
+    {
+        $d = $this->user('direktur', false); // tidak ditugaskan ke proyek mana pun: tetap lintas-proyek
+
+        $this->actingAs($d)->get(route('beranda'))->assertOk()
+            ->assertInertia(fn ($page) => $page->has('projects.data', 2));
+        $this->actingAs($d)->get(route('dashboard'))->assertOk();
+        $this->actingAs($d)->get(route('proses-bangun.index', $this->lain))->assertOk();
+        $this->actingAs($d)->get(route('audit-trail.index'))->assertOk();
+
+        // Hanya-lihat: tidak bisa mengubah proyek, mengelola akun/pengaturan, atau menyetujui pembatalan.
+        $this->actingAs($d)->get(route('projects.edit', $this->tugas))->assertForbidden();
+        $this->actingAs($d)->get(route('roles.index'))->assertRedirect(route('dashboard')); // ditolak (tanpa izin kelola role)
+        $this->actingAs($d)->post(route('proses-bangun.massal', $this->tugas), [])->assertStatus(403);
+        $this->assertFalse($d->can('review cancellation'));
+        $this->assertFalse($d->can('override transaction lock'));
     }
 }

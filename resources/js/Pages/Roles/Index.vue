@@ -165,6 +165,7 @@ const submitAddUser = () => {
 const roleColors = {
     superadmin:          'bg-violet-500/20 text-violet-300 ring-1 ring-violet-500/30',
     manager:             'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30',
+    direktur:            'bg-yellow-500/20 text-yellow-300 ring-1 ring-yellow-500/30',
     spv:                 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/30',
     leader:              'bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-500/30',
     admin_sales:         'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30',

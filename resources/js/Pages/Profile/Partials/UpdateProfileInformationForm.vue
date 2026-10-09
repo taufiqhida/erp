@@ -7,7 +7,7 @@ import { computed } from 'vue';
 const user = computed(() => usePage().props.auth.user);
 
 const NAMA_ROLE = {
-    superadmin: 'Superadmin', manager: 'Manager', spv: 'SPV', leader: 'Leader', admin_sales: 'Admin Sales',
+    superadmin: 'Superadmin', manager: 'Manager', direktur: 'Direktur', spv: 'SPV', leader: 'Leader', admin_sales: 'Admin Sales',
     admin_pemberkasan: 'Admin Pemberkasan', admin_proyek: 'Admin Proyek', pelaksana_lapangan: 'Pelaksana Lapangan',
     admin_keuangan: 'Admin Keuangan',
 };

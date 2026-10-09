@@ -16,6 +16,7 @@ const roleLabel = computed(() => {
     const roleMap = {
         superadmin:          { label: 'Superadmin',         color: 'bg-violet-500/20 text-violet-300' },
         manager:             { label: 'Manager',            color: 'bg-blue-500/20 text-blue-300' },
+        direktur:            { label: 'Direktur',           color: 'bg-yellow-500/20 text-yellow-300' },
         spv:                 { label: 'SPV',                color: 'bg-sky-500/20 text-sky-300' },
         leader:              { label: 'Leader',              color: 'bg-indigo-500/20 text-indigo-300' },
         admin_sales:         { label: 'Admin Sales',         color: 'bg-emerald-500/20 text-emerald-300' },

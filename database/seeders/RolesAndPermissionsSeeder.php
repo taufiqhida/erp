@@ -105,6 +105,12 @@ class RolesAndPermissionsSeeder extends Seeder
                 'view all projects', 'view projects', 'view kavlings', 'view konsumens', 'view keuangan',
             ],
 
+            // Direktur (pemilik): lihat semua lintas-proyek + Audit Trail untuk pengawasan. TIDAK mengisi data harian,
+            // tidak mengelola akun/pengaturan, dan tidak menyetujui pembatalan (itu tugas SPV & Leader).
+            'direktur' => [
+                'view all projects', 'view projects', 'view kavlings', 'view konsumens', 'view keuangan', 'view audit trail',
+            ],
+
             // Supervisi operasional harian + approve transaksi kritis, scoped
             // ke proyek yang di-assign (bukan lintas-proyek).
             'spv' => [

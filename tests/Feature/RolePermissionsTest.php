@@ -25,6 +25,9 @@ class RolePermissionsTest extends TestCase
         'manager' => [
             'view all projects', 'view projects', 'view kavlings', 'view konsumens', 'view keuangan',
         ],
+        'direktur' => [
+            'view all projects', 'view projects', 'view kavlings', 'view konsumens', 'view keuangan', 'view audit trail',
+        ],
         'spv' => [
             'view projects', 'view kavlings',
             'view konsumens', 'create konsumens', 'edit konsumens',
