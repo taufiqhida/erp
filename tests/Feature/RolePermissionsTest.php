@@ -50,6 +50,7 @@ class RolePermissionsTest extends TestCase
             'kelola pipeline sales', 'isi bank rekanan kpr',
             'view keuangan', 'manage pembayaran', 'manage rincian biaya akad',
             'book kavling', 'swap kavling', 'request cancellation',
+            'manage sales agent',
         ],
         'admin_pemberkasan' => [
             'view projects', 'view kavlings',

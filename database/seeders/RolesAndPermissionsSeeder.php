@@ -142,6 +142,7 @@ class RolesAndPermissionsSeeder extends Seeder
                 'kelola pipeline sales', 'isi bank rekanan kpr',
                 'view keuangan', 'manage pembayaran', 'manage rincian biaya akad',
                 'book kavling', 'swap kavling', 'request cancellation',
+                'manage sales agent', // tambah/ubah Sales & Agent sendiri (halaman Pengaturan > Sales / Agent)
             ],
 
             // Pemberkasan → Proses Bank → SP3K. Verifikasi dokumen KPR.

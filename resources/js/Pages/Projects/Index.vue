@@ -1,6 +1,7 @@
 <script setup>
 import EmptyState from '@/Components/EmptyState.vue';
 import { konfirmasi } from '@/Composables/useConfirm';
+import { rutePengaturanPertama } from '@/Composables/usePengaturan';
 import BerandaLayout from '@/Layouts/BerandaLayout.vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
@@ -22,23 +23,9 @@ const canViewAuditTrail = computed(() => permissions.value.includes('view audit 
 // Mode "Semua Proyek" = Dashboard gabungan (angka penjualan & keuangan): hanya untuk yang boleh melihatnya.
 const bisaLihatDataBisnis = computed(() => permissions.value.includes('view konsumens') || permissions.value.includes('view keuangan'));
 const bukaProyek = (id) => permissions.value.includes('view projects') ? route('projects.show', id) : route('proses-bangun.index', id);
-// "Bisa lihat menu Pengaturan?" = punya salah satu permission master data
-// granular (lihat RolesAndPermissionsSeeder) — bukan lagi role hardcode.
-// [permission, route pengaturan pertama yang boleh diakses pemegangnya] —
-// urutan menentukan halaman yang dituju tombol "Pengaturan" di bawah.
-const PENGATURAN_ROUTES = [
-    ['manage system settings', 'pengaturan.profil-developer'],
-    ['manage bank rekanan', 'pengaturan.bank-rekanan'],
-    ['manage notaris', 'pengaturan.notaris'],
-    ['manage dajam sbum preset', 'pengaturan.dajam-sbum'],
-    ['manage status bangun master', 'pengaturan.status-bangun'],
-    ['manage kontraktor', 'pengaturan.kontraktor'],
-    ['manage sales agent', 'pengaturan.sales-agents'],
-    ['manage program all in', 'pengaturan.program-all-in'],
-];
-const firstPengaturanRoute = computed(() =>
-    PENGATURAN_ROUTES.find(([perm]) => permissions.value.includes(perm))?.[1] ?? null
-);
+// "Bisa lihat menu Pengaturan?" = punya salah satu izin master data granular (bukan role hardcode); daftar halaman
+// tujuan ada di Composables/usePengaturan.js (dipakai juga oleh menu samping).
+const firstPengaturanRoute = computed(() => rutePengaturanPertama(permissions.value));
 const canManagePengaturan = computed(() => firstPengaturanRoute.value !== null);
 
 const search = ref(props.filters?.search ?? '');

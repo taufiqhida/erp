@@ -23,7 +23,7 @@ class PengaturanDidelegasikanTest extends TestCase
         'leader'          => ['pengaturan.sales-agents', 'pengaturan.program-all-in'],
         'admin_proyek'    => ['pengaturan.status-bangun', 'pengaturan.kontraktor'],
         'admin_keuangan'  => ['pengaturan.bank-rekanan', 'pengaturan.notaris', 'pengaturan.dajam-sbum'],
-        'admin_sales'     => [],
+        'admin_sales'     => ['pengaturan.sales-agents'],
         'pelaksana_lapangan' => [],
         'direktur'        => [],
     ];
@@ -74,6 +74,7 @@ class PengaturanDidelegasikanTest extends TestCase
         $this->assertContains('manage sales agent', $izin('leader'));
         $this->assertContains('manage status bangun master', $izin('admin_proyek'));
         $this->assertContains('manage bank rekanan', $izin('admin_keuangan'));
-        $this->assertNotContains('manage sales agent', $izin('admin_sales'));
+        $this->assertContains('manage sales agent', $izin('admin_sales'));
+        $this->assertNotContains('manage bank rekanan', $izin('admin_sales'));
     }
 }
