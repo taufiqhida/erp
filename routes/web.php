@@ -122,8 +122,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Tipe Unit (master data preset, scoped per proyek)
     Route::get('proyek/{project}/tipe-unit', [TipeUnitPresetController::class, 'index'])
         ->name('projects.tipe-unit.index');
+    // parameters(): nama parameter rute harus sama dengan variabel di controller ($tipeUnitPreset); tanpa ini
+    // binding gagal (parameter jadi {tipe_unit}) dan edit/hapus tipe unit selalu error 500.
     Route::resource('projects.tipe-unit', TipeUnitPresetController::class)
         ->only(['store', 'update', 'destroy'])
+        ->parameters(['tipe-unit' => 'tipeUnitPreset'])
         ->shallow();
     Route::post('tipe-unit/{tipeUnitPreset}/upload-gambar', [TipeUnitPresetController::class, 'uploadGambar'])
         ->name('tipe-unit.upload-gambar')->middleware('throttle:heavy');
