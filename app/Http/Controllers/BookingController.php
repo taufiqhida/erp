@@ -481,6 +481,10 @@ class BookingController extends Controller
             'status_penjualan'       => 'required|in:booking,pemberkasan,proses_bank,rencana_akad,akad,batal',
             'catatan'                => 'nullable|string',
             'tanggal_pengajuan_bank' => 'nullable|date',
+            // Tanggal akad sebenarnya (hanya dipakai saat menuju 'akad'); tidak boleh di masa depan.
+            'tanggal_akad'           => 'nullable|date|before_or_equal:today',
+        ], [
+            'tanggal_akad.before_or_equal' => 'Tanggal Akad tidak boleh di masa depan. Akad yang belum terlaksana tetap di tahap Rencana Akad.',
         ]);
 
         // Wewenang dipecah per tahap tujuan — pemberkasan→proses_bank ranah Admin
@@ -506,6 +510,8 @@ class BookingController extends Controller
         // & dipakai eksplisit di cabang 'proses_bank' di bawah.
         $tanggalPengajuanInput = $validated['tanggal_pengajuan_bank'] ?? null;
         unset($validated['tanggal_pengajuan_bank']);
+        $tanggalAkadInput = $validated['tanggal_akad'] ?? null;
+        unset($validated['tanggal_akad']);
 
         $isBankFlow = in_array($kk->cara_bayar, ['kpr_subsidi', 'kpr_komersil']);
 
@@ -551,25 +557,24 @@ class BookingController extends Controller
             );
         }
 
+        // Tanggal Akad = pilihan staff saat konfirmasi (mis. konsumen lama yang akadnya sudah lewat); bila tidak dipilih,
+        // memakai Tanggal Rencana Akad. Salah satunya harus ada.
+        $tanggalAkad = null;
         if ($validated['status_penjualan'] === 'akad') {
-            abort_unless(
-                $kk->tanggal_rencana_akad,
-                422,
-                'Isi Tanggal Rencana Akad terlebih dahulu sebelum konfirmasi Akad.'
-            );
+            $tanggalAkad = $tanggalAkadInput ?? $kk->tanggal_rencana_akad?->format('Y-m-d');
+            abort_unless($tanggalAkad, 422, 'Pilih Tanggal Akad terlebih dahulu.');
         }
 
         $kk->update($validated);
 
-        // Jika akad, ini hanya konfirmasi bahwa akad terlaksana sesuai Tanggal
-        // Rencana Akad yang sudah diisi sebelumnya — bukan tanggal hari ini.
+        // Jika akad, ini konfirmasi bahwa akad terlaksana pada tanggal yang dipilih staff (default: Tanggal Rencana Akad).
         // Status transaksi TIDAK otomatis jadi 'completed' di sini — pencairan
         // bank/dajam bisa masih proses setelah akad, jadi transaksi harus tetap
         // aktif & bisa dicatat pembayarannya sampai admin menekan "Tandai
         // Selesai" di Keuangan (lihat KeuanganController::markComplete()).
         if ($validated['status_penjualan'] === 'akad') {
             $kk->kavling->update(['status_jual' => StatusJual::Sold]);
-            $kk->update(['tanggal_akad' => $kk->tanggal_rencana_akad]);
+            $kk->update(['tanggal_akad' => $tanggalAkad]);
         }
 
         // Jika batal, update status kavling kembali ke available

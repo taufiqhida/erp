@@ -135,12 +135,10 @@ const dokumenIncomplete = computed(() =>
 
 // Menuju proses_bank digerbangi Bank Rekanan KPR terisi; menuju rencana_akad
 // (cash) digerbangi seluruh Kartu Piutang lunas; menuju akad digerbangi
-// Tanggal Rencana Akad sudah diisi (lihat kartu Rencana Akad) — "Lanjutkan
-// ke Akad" cuma konfirmasi bahwa akad terlaksana di tanggal itu.
+// (menuju akad tidak digerbangi lagi: tanggal akad dipilih di modal, default Tanggal Rencana Akad bila sudah ada)
 const advanceBlockedReason = computed(() => {
     if (nextStage.value?.key === 'proses_bank' && !props.transaksi.bank_rekanan_preset_id) return 'Isi Bank Rekanan KPR dulu';
     if (nextStage.value?.key === 'rencana_akad' && !isBankFlow.value && !props.transaksi.piutang_lunas) return 'Seluruh Kartu Piutang harus lunas dulu';
-    if (nextStage.value?.key === 'akad' && !props.transaksi.tanggal_rencana_akad) return 'Isi Tanggal Rencana Akad dulu';
     return '';
 });
 const advanceBlocked = computed(() => advanceBlockedReason.value !== '');
@@ -190,6 +188,7 @@ const advanceForm = useForm({
     status_penjualan: '',
     catatan: '',
     tanggal_pengajuan_bank: '',
+    tanggal_akad: '',
 });
 
 const openAdvance = () => {
@@ -202,6 +201,12 @@ const openAdvance = () => {
         // ke tanggal pengajuan yang lama, bukan hari ini — supaya histori
         // submit asli ke bank ga ketimpa cuma gara-gara direview ulang.
         advanceForm.tanggal_pengajuan_bank = props.transaksi.tanggal_pengajuan_bank || todayDateStr();
+    }
+    if (nextStage.value.key === 'akad') {
+        // Default: tanggal rencana akad bila sudah lewat/hari ini; kalau masih di masa depan (atau kosong) → hari ini.
+        const hariIni = todayDateStr();
+        const rencana = props.transaksi.tanggal_rencana_akad;
+        advanceForm.tanggal_akad = rencana && rencana <= hariIni ? rencana : hariIni;
     }
     showAdvanceModal.value = true;
 };
@@ -506,7 +511,7 @@ const submitBast = () => {
                         {{ rencanaAkadForm.processing ? 'Menyimpan...' : 'Simpan' }}
                     </button>
                 </div>
-                <p class="text-slate-500 text-xs mt-3">Saat "Lanjutkan ke Akad" ditekan, ini hanya konfirmasi bahwa akad terlaksana sesuai tanggal di atas.</p>
+                <p class="text-slate-500 text-xs mt-3">Saat "Lanjutkan ke Akad" ditekan, kamu bisa memilih tanggal akad yang sebenarnya (default: tanggal rencana di atas, bila sudah lewat).</p>
             </div>
 
             <!-- Keputusan Proses Bank / SLIK -->
@@ -776,14 +781,15 @@ const submitBast = () => {
                             ⚠ Dokumen wajib belum lengkap. Tetap bisa lanjut, tapi wajib isi catatan alasannya di bawah.
                         </p>
                         <div v-if="advanceForm.status_penjualan === 'akad'" class="bg-violet-500/10 border border-violet-500/20 rounded-xl px-3 py-3">
-                            <p class="text-violet-300 text-sm font-medium">
-                                ✓ Akad akan dikonfirmasi terlaksana pada <span class="font-bold">{{ formatTanggalPendek(transaksi.tanggal_rencana_akad) }}</span>.
+                            <label class="block text-violet-300 text-sm font-medium mb-1.5">Tanggal Akad terlaksana</label>
+                            <input v-model="advanceForm.tanggal_akad" type="date" :max="todayDateStr()"
+                                class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                            <p class="text-slate-400 text-xs mt-1.5">
+                                {{ transaksi.tanggal_rencana_akad ? `Tanggal rencana akad: ${formatTanggalPendek(transaksi.tanggal_rencana_akad)}. ` : 'Tanggal rencana akad belum diisi. ' }}
+                                Ubah ke tanggal akad yang sebenarnya, misalnya untuk konsumen lama yang akadnya sudah lewat.
                             </p>
                             <p class="text-slate-400 text-xs mt-1">Setelah dikonfirmasi, status transaksi berubah menjadi Akad dan lanjut ke pengisian kesiapan BAST di bawah.</p>
-                            <p v-if="transaksi.tanggal_rencana_akad && transaksi.tanggal_rencana_akad > new Date().toISOString().slice(0, 10)"
-                                class="text-amber-400 text-xs mt-2">
-                                ⚠ Tanggal rencana akad masih di masa depan. Pastikan akad memang sudah terlaksana — kalau belum, ubah dulu Tanggal Rencana Akad.
-                            </p>
+                            <p v-if="advanceForm.errors.tanggal_akad" class="text-rose-400 text-xs mt-1">{{ advanceForm.errors.tanggal_akad }}</p>
                         </div>
                         <div v-if="advanceForm.status_penjualan === 'proses_bank'">
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Pengajuan ke Bank</label>
@@ -802,7 +808,7 @@ const submitBast = () => {
                     </div>
                     <div class="flex justify-end gap-3 p-5 border-t border-slate-800">
                         <button @click="showAdvanceModal = false" class="px-4 py-2.5 text-slate-400 hover:text-slate-200 text-sm">Batal</button>
-                        <button @click="submitAdvance" :disabled="advanceForm.processing || (dokumenIncomplete && !advanceForm.catatan.trim())"
+                        <button @click="submitAdvance" :disabled="advanceForm.processing || (dokumenIncomplete && !advanceForm.catatan.trim()) || (advanceForm.status_penjualan === 'akad' && !advanceForm.tanggal_akad)"
                             class="px-5 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-violet-500/20">
                             {{ advanceForm.processing ? 'Menyimpan...' : (advanceForm.status_penjualan === 'akad' ? 'Konfirmasi Akad' : 'Konfirmasi') }}
                         </button>
