@@ -470,7 +470,7 @@ class ProjectController extends Controller
             ->orderByUnit()
             ->get();
 
-        $headers = ['Kluster', 'Kavling', 'Tipe', 'Luas Tanah (m2)', 'Luas Bangunan (m2)', 'Harga', 'Status Jual', 'Status Bangun', 'Progress (%)', 'Konsumen', 'ID Rumah', 'No. HGB'];
+        $headers = ['Kluster', 'Kavling', 'Tipe', 'Luas Tanah (m2)', 'Luas Bangunan (m2)', 'Harga', 'Status Jual', 'Status Bangun', 'Progress (%)', 'Konsumen', 'ID Rumah', 'NIB'];
         $rows = $kavlings->map(fn($k) => [
             $k->kluster,
             $k->nomor_lengkap,
@@ -512,14 +512,14 @@ class ProjectController extends Controller
         // Urutan kolom (kiri → kanan): identitas unit (kluster, blok, nomor) → spek (tipe, harga) → status
         // → progres bangun (status_bangun diikuti persen_tahap) → data tambahan → keterangan. KavlingImport
         // membaca kolom lewat NAMA header, jadi urutan ini bebas diatur tanpa mengubah importer.
-        $headers = ['kluster', 'blok', 'nomor_kavling', 'tipe_unit', 'harga', 'status', 'status_bangun', 'persen_tahap', 'id_rumah', 'hgb_no', 'keterangan'];
+        $headers = ['kluster', 'blok', 'nomor_kavling', 'tipe_unit', 'harga', 'status', 'status_bangun', 'persen_tahap', 'id_rumah', 'nib', 'keterangan'];
         $sheet->fromArray($headers, null, 'A1');
         $sheet->getStyle('A1:K1')->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
         $sheet->getStyle('A1:K1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setRGB('7C3AED');
         $sheet->freezePane('A2');
 
         $defaultStageName = StatusBangunStage::defaultStage()?->nama ?? 'Belum Mulai';
-        $example = ['', 'A1', '1', '36/72', 250000000, 'available', $defaultStageName, 0, 'DMK0120062025T002A309', 'HGB-00123', 'Contoh baris — boleh dihapus'];
+        $example = ['', 'A1', '1', '36/72', 250000000, 'available', $defaultStageName, 0, 'DMK0120062025T002A309', '1234567890123', 'Contoh baris — boleh dihapus'];
         $sheet->fromArray($example, null, 'A2');
         $sheet->getStyle('A2:K2')->getFont()->setItalic(true)->getColor()->setRGB('999999');
 
@@ -574,7 +574,7 @@ class ProjectController extends Controller
             ['status_bangun', "Tidak (default: {$defaultStageName})", StatusBangunStage::ordered()->pluck('nama')->implode(' / '), 'Isi kalau proyek sudah berjalan & sebagian unit progressnya bukan dari nol — harus persis sama dengan nama tahap di menu "Kelola Status Bangun". Kosongkan untuk unit yang belum mulai dibangun.'],
             ['persen_tahap', 'Tidak (default: 0)', '0 – 100', 'Persen penyelesaian di dalam tahap yang diisi pada kolom status_bangun (bukan persen total). Contoh: tahap Struktur 50 → unit sudah separuh jalan di tahap Struktur. Kosong = 0. Progress total dihitung otomatis dari bobot tahap.'],
             ['id_rumah', 'Tidak', 'DMK0120062025T002A309', 'ID Rumah Tapera/SIKUMBANG — harus unik, kosongkan kalau belum ada.'],
-            ['hgb_no', 'Tidak', 'HGB-00123', 'Nomor HGB/sertifikat unit (dipakai di dokumen surat) — harus unik, kosongkan kalau belum ada.'],
+            ['nib', 'Tidak', '1234567890123', 'NIB (Nomor Induk Bidang) unit, dipakai di dokumen surat — harus unik, kosongkan kalau belum ada. (File lama dengan kolom hgb_no tetap bisa diimpor.)'],
             ['keterangan', 'Tidak', 'teks bebas', ''],
         ];
         $help->fromArray($helpRows, null, 'A2');

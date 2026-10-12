@@ -734,7 +734,8 @@ class KavlingKonsumen extends Model
             'tipe_unit'        => $this->kavling->tipeUnitPreset?->nama ?? '',
             'luas_tanah'       => $this->kavling->tipeUnitPreset?->luas_tanah ?? '',
             'luas_bangunan'    => $this->kavling->tipeUnitPreset?->luas_bangunan ?? '',
-            'hgb_no'           => $this->kavling->hgb_no ?? '',
+            'nib'              => $this->kavling->hgb_no ?? '',
+            'hgb_no'           => $this->kavling->hgb_no ?? '',   // nama lama: template surat yang sudah ada tetap jalan
             'id_lokasi_rumah'  => $this->kavling->id_rumah ?? '',
             'harga_deal'       => $rupiah($this->harga_deal),
             'harga_dasar'      => $rupiah($this->harga_dasar),

@@ -34,7 +34,7 @@ class KavlingImport implements Import, WithMultipleSheets
      *  ketahuan, bukan cuma duplikat terhadap data yang sudah ada di database. */
     private array $seenInBatch = [];
 
-    /** No. HGB yang sudah dipakai baris lain di batch ini (hgb_no harus unik). */
+    /** NIB yang sudah dipakai baris lain di batch ini (kolom hgb_no harus unik). */
     private array $seenHgb = [];
 
     public function __construct(Project $project)
@@ -173,15 +173,16 @@ class KavlingImport implements Import, WithMultipleSheets
                 continue;
             }
 
-            $hgbNo = trim((string) ($row['hgb_no'] ?? ''));
+            // Kolom bernama `nib`; `hgb_no` (nama lama) tetap diterima agar file lama masih bisa diimpor.
+            $hgbNo = trim((string) (($row['nib'] ?? '') !== '' ? $row['nib'] : ($row['hgb_no'] ?? '')));
             if ($hgbNo !== '') {
                 if (isset($this->seenHgb[$hgbNo])) {
-                    $this->errors[] = "Baris {$rowNum}: No. HGB '{$hgbNo}' duplikat dengan baris {$this->seenHgb[$hgbNo]} di file yang sama, dilewati.";
+                    $this->errors[] = "Baris {$rowNum}: NIB '{$hgbNo}' duplikat dengan baris {$this->seenHgb[$hgbNo]} di file yang sama, dilewati.";
                     $this->skipped++;
                     continue;
                 }
                 if (Kavling::where('hgb_no', $hgbNo)->exists()) {
-                    $this->errors[] = "Baris {$rowNum}: No. HGB '{$hgbNo}' sudah dipakai kavling lain, dilewati.";
+                    $this->errors[] = "Baris {$rowNum}: NIB '{$hgbNo}' sudah dipakai kavling lain, dilewati.";
                     $this->skipped++;
                     continue;
                 }

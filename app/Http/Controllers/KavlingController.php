@@ -244,7 +244,7 @@ class KavlingController extends Controller
     public function updateIdRumah(Request $request, Kavling $kavling): RedirectResponse
     {
         $this->authorizeProjectAccess($kavling->project);
-        abort_unless(Auth::user()->can('edit kavlings'), 403);
+        abort_unless(Auth::user()->can('edit kavlings') || Auth::user()->can('isi id rumah'), 403);
 
         $validated = $request->validate([
             'id_rumah' => [
@@ -259,7 +259,7 @@ class KavlingController extends Controller
     }
 
     /**
-     * Simpan Nomor HGB — sama polanya dengan updateIdRumah(), diedit
+     * Simpan NIB (Nomor Induk Bidang; kolom `hgb_no`) — sama polanya dengan updateIdRumah(), diedit
      * langsung dari kolom tabel list Kavling.
      */
     public function updateHgbNo(Request $request, Kavling $kavling): RedirectResponse
@@ -276,7 +276,7 @@ class KavlingController extends Controller
 
         $kavling->update(['hgb_no' => $validated['hgb_no'] ?: null]);
 
-        return back()->with('success', 'Nomor HGB berhasil disimpan.');
+        return back()->with('success', 'NIB berhasil disimpan.');
     }
 
     /**

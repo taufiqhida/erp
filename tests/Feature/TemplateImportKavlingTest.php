@@ -22,7 +22,7 @@ class TemplateImportKavlingTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const URUTAN = ['kluster', 'blok', 'nomor_kavling', 'tipe_unit', 'harga', 'status', 'status_bangun', 'persen_tahap', 'id_rumah', 'hgb_no', 'keterangan'];
+    private const URUTAN = ['kluster', 'blok', 'nomor_kavling', 'tipe_unit', 'harga', 'status', 'status_bangun', 'persen_tahap', 'id_rumah', 'nib', 'keterangan'];
 
     public function test_template_berurutan_intuitif_dan_bisa_diimpor(): void
     {

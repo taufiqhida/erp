@@ -103,6 +103,10 @@ const canUpdateStatusBangun = computed(() => false);
 const canEditKavlings = computed(() =>
     page.props.auth?.user?.permissions?.includes('edit kavlings')
 );
+// ID Rumah boleh diisi juga oleh yang hanya punya izin khusus (mis. Admin Sales), tanpa hak mengubah data unit lainnya.
+const canIsiIdRumah = computed(() =>
+    canEditKavlings.value || page.props.auth?.user?.permissions?.includes('isi id rumah')
+);
 
 // ── Update ID Rumah (Tapera/SIKUMBANG) langsung dari tabel ───────────────
 const updateIdRumah = (k, value) => {
@@ -110,7 +114,7 @@ const updateIdRumah = (k, value) => {
     useForm({ id_rumah: value || null }).patch(route('kavlings.id-rumah', k.id), { preserveScroll: true });
 };
 
-// ── Update Nomor HGB langsung dari tabel — sama polanya dengan ID Rumah ──
+// ── Update NIB (kolom hgb_no) langsung dari tabel — sama polanya dengan ID Rumah ──
 const updateHgbNo = (k, value) => {
     if ((value || '') === (k.hgb_no || '')) return;
     useForm({ hgb_no: value || null }).patch(route('kavlings.hgb-no', k.id), { preserveScroll: true });
@@ -749,7 +753,7 @@ const submitUploadSiteplan = () => {
                                 <th class="px-4 py-3 text-left font-medium">Pembangunan</th>
                                 <th class="px-4 py-3 text-left font-medium">Konsumen</th>
                                 <th class="px-4 py-3 text-left font-medium">ID Rumah</th>
-                                <th class="px-4 py-3 text-left font-medium">No. HGB</th>
+                                <th class="px-4 py-3 text-left font-medium">NIB</th>
                                 <th class="px-4 py-3 text-right font-medium">Aksi</th>
                             </tr>
                         </thead>
@@ -804,7 +808,7 @@ const submitUploadSiteplan = () => {
                                 </td>
                                 <td class="px-4 py-3.5 text-slate-400 text-xs">{{ k.konsumen_nama ?? '-' }}</td>
                                 <td class="px-4 py-3.5">
-                                    <input v-if="canEditKavlings" :value="k.id_rumah"
+                                    <input v-if="canIsiIdRumah" :value="k.id_rumah"
                                         @change="updateIdRumah(k, $event.target.value)"
                                         placeholder="Isi ID Rumah..."
                                         class="w-44 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-500 placeholder:font-sans" />
@@ -813,7 +817,7 @@ const submitUploadSiteplan = () => {
                                 <td class="px-4 py-3.5">
                                     <input v-if="canEditKavlings" :value="k.hgb_no"
                                         @change="updateHgbNo(k, $event.target.value)"
-                                        placeholder="Isi No. HGB..."
+                                        placeholder="Isi NIB..."
                                         class="w-36 px-2 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 placeholder:text-slate-500 placeholder:font-sans" />
                                     <span v-else class="text-slate-400 text-xs font-mono">{{ k.hgb_no ?? '-' }}</span>
                                 </td>
@@ -927,9 +931,9 @@ const submitUploadSiteplan = () => {
                             <div class="text-slate-200 text-sm font-mono">{{ selectedKavling.id_rumah }}</div>
                         </div>
 
-                        <!-- Nomor HGB, jika ada -->
+                        <!-- NIB, jika ada -->
                         <div v-if="selectedKavling.hgb_no" class="bg-slate-800/50 rounded-xl p-3">
-                            <div class="text-slate-500 text-xs mb-0.5">Nomor HGB</div>
+                            <div class="text-slate-500 text-xs mb-0.5">NIB</div>
                             <div class="text-slate-200 text-sm font-mono">{{ selectedKavling.hgb_no }}</div>
                         </div>
 
@@ -1106,7 +1110,7 @@ const submitUploadSiteplan = () => {
                                 <p v-if="kavlingForm.errors.id_rumah" class="text-rose-400 text-xs mt-1">{{ kavlingForm.errors.id_rumah }}</p>
                             </div>
                             <div class="col-span-2">
-                                <label class="block text-slate-400 text-xs mb-1.5">Nomor HGB</label>
+                                <label class="block text-slate-400 text-xs mb-1.5">NIB</label>
                                 <input v-model="kavlingForm.hgb_no" type="text" placeholder="cth. 00709" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': kavlingForm.errors.hgb_no }"/>
                                 <p v-if="kavlingForm.errors.hgb_no" class="text-rose-400 text-xs mt-1">{{ kavlingForm.errors.hgb_no }}</p>
                             </div>
@@ -1180,7 +1184,7 @@ const submitUploadSiteplan = () => {
                                 <p v-if="kavlingEditForm.errors.id_rumah" class="text-rose-400 text-xs mt-1">{{ kavlingEditForm.errors.id_rumah }}</p>
                             </div>
                             <div class="col-span-2">
-                                <label class="block text-slate-400 text-xs mb-1.5">Nomor HGB</label>
+                                <label class="block text-slate-400 text-xs mb-1.5">NIB</label>
                                 <input v-model="kavlingEditForm.hgb_no" type="text" placeholder="cth. 00709" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': kavlingEditForm.errors.hgb_no }"/>
                                 <p v-if="kavlingEditForm.errors.hgb_no" class="text-rose-400 text-xs mt-1">{{ kavlingEditForm.errors.hgb_no }}</p>
                             </div>

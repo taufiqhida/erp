@@ -37,6 +37,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'create kavlings',
             'edit kavlings',
             'delete kavlings',
+            'isi id rumah',         // hanya mengisi/mengubah ID Rumah (Tapera/SIKUMBANG) — tanpa hak mengubah data unit lainnya
             'update status bangun', // update persen/tahap per-kavling (Proses Bangun)
             'terbitkan spk',        // terbitkan SPK baru (beda dari update progress)
             'book kavling',
@@ -143,6 +144,7 @@ class RolesAndPermissionsSeeder extends Seeder
                 'view keuangan', 'manage pembayaran', 'manage rincian biaya akad',
                 'book kavling', 'swap kavling', 'request cancellation',
                 'manage sales agent', // tambah/ubah Sales & Agent sendiri (halaman Pengaturan > Sales / Agent)
+                'isi id rumah',       // mengisi ID Rumah unit dari Stok Kavling
             ],
 
             // Pemberkasan → Proses Bank → SP3K. Verifikasi dokumen KPR.
