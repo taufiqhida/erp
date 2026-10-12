@@ -5,6 +5,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InlineSiteplanSvg from '@/Components/InlineSiteplanSvg.vue';
 import SiteplanLapis from '@/Components/SiteplanLapis.vue';
 import SiteplanTagging from '@/Components/SiteplanTagging.vue';
+import EditMassalModal from '@/Components/EditMassalModal.vue';
 import KavlingSearchSelect from '@/Components/KavlingSearchSelect.vue';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
@@ -122,6 +123,28 @@ const punyaBentuk = (k) => Array.isArray(k.bentuk) && k.bentuk.length >= 3;
 const kavlingsWithKoordinat = computed(() =>
     (props.kavlings ?? []).filter(k => !punyaBentuk(k) && k.koordinat_x != null && k.koordinat_y != null)
 );
+
+// ── Edit massal (ganti harga / tipe) dari Tabel ─────────────────────────────
+const terpilih = ref([]);            // id unit yang dicentang (bertahan lintas halaman)
+const semuaFilter = ref(false);      // true = seluruh hasil filter (semua halaman) terpilih
+const massalAksi = ref(null);        // 'harga' | 'tipe' | null (modal tertutup)
+const idHalaman = computed(() => (props.kavlingsPage?.data ?? []).map(k => k.id));
+const semuaHalamanTerpilih = computed(() => idHalaman.value.length > 0 && idHalaman.value.every(id => terpilih.value.includes(id)));
+const jumlahTerpilih = computed(() => (semuaFilter.value ? props.kavlingsPage?.total ?? 0 : terpilih.value.length));
+const toggleHalaman = () => {
+    semuaFilter.value = false;
+    terpilih.value = semuaHalamanTerpilih.value
+        ? terpilih.value.filter(id => !idHalaman.value.includes(id))
+        : [...new Set([...terpilih.value, ...idHalaman.value])];
+};
+const toggleUnit = (id) => {
+    semuaFilter.value = false;
+    terpilih.value = terpilih.value.includes(id) ? terpilih.value.filter(x => x !== id) : [...terpilih.value, id];
+};
+const batalPilih = () => { terpilih.value = []; semuaFilter.value = false; };
+const massalSelesai = () => { massalAksi.value = null; batalPilih(); };
+// Filter berubah = "semua hasil filter" yang dulu dipilih sudah tidak berlaku.
+watch(filters, () => { semuaFilter.value = false; }, { deep: true });
 
 // ── Penandaan kotak kavling di siteplan (editor paint-bucket) ───────────────
 const showTagging = ref(false);
@@ -697,10 +720,26 @@ const submitUploadSiteplan = () => {
                  TABLE VIEW
             ════════════════════════════════════════════════════════════════ -->
             <div v-else class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                <!-- Bilah edit massal: muncul saat ada unit dicentang -->
+                <div v-if="canEditKavlings && jumlahTerpilih > 0" class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 bg-violet-500/10 border-b border-violet-500/20">
+                    <span class="text-violet-200 text-sm font-medium">{{ jumlahTerpilih }} unit dipilih{{ semuaFilter ? ' (semua hasil filter)' : '' }}</span>
+                    <button v-if="semuaHalamanTerpilih && !semuaFilter && kavlingsPage.total > idHalaman.length" @click="semuaFilter = true" class="text-xs text-violet-300 underline hover:text-violet-200">
+                        Pilih semua {{ kavlingsPage.total }} unit hasil filter
+                    </button>
+                    <div class="ml-auto flex items-center gap-2">
+                        <button @click="massalAksi = 'harga'" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-lg font-medium">Ganti Harga</button>
+                        <button @click="massalAksi = 'tipe'" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-lg font-medium">Ganti Tipe</button>
+                        <button @click="batalPilih" class="px-3 py-1.5 text-slate-300 hover:bg-slate-800 text-xs rounded-lg">Batal pilih</button>
+                    </div>
+                </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead class="border-b border-slate-800 text-xs text-slate-500 uppercase tracking-wide">
                             <tr>
+                                <th v-if="canEditKavlings" class="pl-4 pr-1 py-3 w-8">
+                                    <input type="checkbox" :checked="semuaHalamanTerpilih" @change="toggleHalaman" aria-label="Pilih semua unit di halaman ini"
+                                        class="rounded border-slate-600 bg-slate-800 text-violet-500 focus:ring-violet-500" />
+                                </th>
                                 <th class="px-4 py-3 text-left font-medium">Kluster</th>
                                 <th class="px-4 py-3 text-left font-medium">Kavling</th>
                                 <th class="px-4 py-3 text-left font-medium">Tipe</th>
@@ -716,9 +755,13 @@ const submitUploadSiteplan = () => {
                         </thead>
                         <tbody class="divide-y divide-slate-800/60">
                             <tr v-if="!kavlingsPage.data.length">
-                                <td colspan="10" class="text-center py-12 text-slate-500">Tidak ada kavling yang cocok dengan filter.</td>
+                                <td colspan="12" class="text-center py-12 text-slate-500">Tidak ada kavling yang cocok dengan filter.</td>
                             </tr>
-                            <tr v-for="k in kavlingsPage.data" :key="k.id" class="hover:bg-slate-800/20 transition-colors">
+                            <tr v-for="k in kavlingsPage.data" :key="k.id" class="hover:bg-slate-800/20 transition-colors" :class="semuaFilter || terpilih.includes(k.id) ? 'bg-violet-500/5' : ''">
+                                <td v-if="canEditKavlings" class="pl-4 pr-1 py-3.5">
+                                    <input type="checkbox" :checked="semuaFilter || terpilih.includes(k.id)" :disabled="semuaFilter" @change="toggleUnit(k.id)" :aria-label="`Pilih ${k.nomor_lengkap}`"
+                                        class="rounded border-slate-600 bg-slate-800 text-violet-500 focus:ring-violet-500" />
+                                </td>
                                 <td class="px-5 py-3.5 text-slate-400 text-xs">{{ k.kluster ?? '-' }}</td>
                                 <td class="px-4 py-3.5 text-slate-200 font-medium">{{ k.nomor_lengkap }}</td>
                                 <td class="px-4 py-3.5 text-slate-400 text-xs">
@@ -1156,6 +1199,11 @@ const submitUploadSiteplan = () => {
                 </div>
             </div>
         </Teleport>
+
+        <!-- ── Edit massal (harga / tipe) ─────────────────────────────────── -->
+        <EditMassalModal v-if="massalAksi" :aksi="massalAksi" :project-id="project.id" :tipe-units="tipeUnits"
+            :kavling-ids="terpilih" :semua-filter="semuaFilter" :filter="filters" :jumlah="jumlahTerpilih"
+            @tutup="massalAksi = null" @selesai="massalSelesai" />
 
         <!-- ── Editor: Tandai Kotak Kavling ──────────────────────────────── -->
         <SiteplanTagging v-if="showTagging && project.siteplan_image && !isSvgSiteplan" :gambar="project.siteplan_image" :kavlings="kavlings"
