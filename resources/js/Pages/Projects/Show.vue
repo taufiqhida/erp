@@ -3,6 +3,8 @@ import Pagination from '@/Components/Pagination.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InlineSiteplanSvg from '@/Components/InlineSiteplanSvg.vue';
+import SiteplanLapis from '@/Components/SiteplanLapis.vue';
+import SiteplanTagging from '@/Components/SiteplanTagging.vue';
 import KavlingSearchSelect from '@/Components/KavlingSearchSelect.vue';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
@@ -115,9 +117,18 @@ const updateHgbNo = (k, value) => {
 
 // Siteplan selalu tampilkan semua unit (tidak ikut filter Table view, karena
 // filter bar memang tidak ditampilkan di mode Siteplan).
+// Unit yang sudah punya kotak (bentuk) digambar sebagai kotak; titik koordinat hanya untuk unit yang belum.
+const punyaBentuk = (k) => Array.isArray(k.bentuk) && k.bentuk.length >= 3;
 const kavlingsWithKoordinat = computed(() =>
-    (props.kavlings ?? []).filter(k => k.koordinat_x != null && k.koordinat_y != null)
+    (props.kavlings ?? []).filter(k => !punyaBentuk(k) && k.koordinat_x != null && k.koordinat_y != null)
 );
+
+// ── Penandaan kotak kavling di siteplan (editor paint-bucket) ───────────────
+const showTagging = ref(false);
+const onBentukTersimpan = (id, bentuk) => {
+    const k = props.kavlings.find(k => k.id === id);
+    if (k) k.bentuk = bentuk;
+};
 
 // ── Status config — nama status tetap system-driven, warnanya dinamis dari
 // master "Warna Status" (Pengaturan), sumber: page.props.statusColors ──────
@@ -491,6 +502,12 @@ const submitUploadSiteplan = () => {
                         </svg>
                         {{ project.siteplan_image ? 'Ganti Siteplan' : 'Upload Siteplan' }}
                     </button>
+                    <!-- Tandai kotak kavling (admin only) -->
+                    <button v-if="canEditKavlings && viewMode === 'siteplan' && project.siteplan_image && !isSvgSiteplan && !editingKoordinat" @click="showTagging = true"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-violet-300 text-xs rounded-lg transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 4.5h6v6h-6zM13.5 4.5h6v6h-6zM4.5 13.5h6v6h-6zM16.5 13.5v6m-3-3h6" /></svg>
+                        Tandai Kotak Kavling
+                    </button>
                     <!-- Edit koordinat mode (admin only) -->
                     <template v-if="canEditKavlings && viewMode === 'siteplan' && project.siteplan_image && !isSvgSiteplan">
                         <div v-if="editingKoordinat" class="flex items-center gap-2">
@@ -631,6 +648,8 @@ const submitUploadSiteplan = () => {
                         @click="onSiteplanClick"
                     >
                         <img :src="project.siteplan_image" class="w-full object-contain pointer-events-none" alt="Siteplan" />
+                        <SiteplanLapis :kavlings="kavlings" :status-config="statusConfig" :status-bangun-color-hex="statusBangunColorHex"
+                                       :selected-id="selectedKavling?.id ?? null" :aktif="!editingKoordinat" @select="selectKavling" />
                         <template v-for="k in kavlingsWithKoordinat" :key="k.id">
                             <div
                                 @click.stop="onMarkerClick(k)"
@@ -1137,6 +1156,11 @@ const submitUploadSiteplan = () => {
                 </div>
             </div>
         </Teleport>
+
+        <!-- ── Editor: Tandai Kotak Kavling ──────────────────────────────── -->
+        <SiteplanTagging v-if="showTagging && project.siteplan_image && !isSvgSiteplan" :gambar="project.siteplan_image" :kavlings="kavlings"
+            :status-config="statusConfig" :status-bangun-color-hex="statusBangunColorHex"
+            @tersimpan="onBentukTersimpan" @tutup="showTagging = false" />
 
         <!-- ── MODAL: Upload / Ganti Siteplan ────────────────────────────── -->
         <Teleport to="body">

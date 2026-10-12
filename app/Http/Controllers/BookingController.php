@@ -935,6 +935,7 @@ class BookingController extends Controller
                 'catatan'             => $k->catatan,
                 'koordinat_x'         => $k->koordinat_x,
                 'koordinat_y'         => $k->koordinat_y,
+                'bentuk'              => $k->bentuk,
                 'foto_rumah'          => $k->tipeUnitPreset?->foto_rumah ? route('media.show', ['path' => $k->tipeUnitPreset->foto_rumah]) : null,
                 'denah_rumah'         => $k->tipeUnitPreset?->denah_rumah ? route('media.show', ['path' => $k->tipeUnitPreset->denah_rumah]) : null,
                 'kamar_tidur'         => $k->tipeUnitPreset?->kamar_tidur,

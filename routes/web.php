@@ -142,6 +142,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('kavlings.id-rumah');
     Route::patch('kavlings/{kavling}/hgb-no', [KavlingController::class, 'updateHgbNo'])
         ->name('kavlings.hgb-no');
+    Route::patch('kavlings/{kavling}/bentuk', [ProjectController::class, 'updateKavlingBentuk'])
+        ->name('kavlings.bentuk');
     Route::patch('kavlings/{kavling}/catatan', [KavlingController::class, 'updateCatatan'])
         ->name('kavlings.catatan');
 

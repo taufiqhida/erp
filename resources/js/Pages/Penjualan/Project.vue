@@ -1,6 +1,7 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InlineSiteplanSvg from '@/Components/InlineSiteplanSvg.vue';
+import SiteplanLapis from '@/Components/SiteplanLapis.vue';
 import SearchSelect from '@/Components/SearchSelect.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
@@ -134,9 +135,12 @@ const resetFilters = () => {
 
 const activeFilterCount = computed(() => Object.values(filters.value).filter(Boolean).length);
 
+// Unit yang sudah punya kotak (bentuk) digambar sebagai kotak; titik koordinat hanya untuk unit yang belum.
+const punyaBentuk = (k) => Array.isArray(k.bentuk) && k.bentuk.length >= 3;
 const kavlingsWithKoordinat = computed(() =>
-    filteredKavlings.value.filter(k => k.koordinat_x != null && k.koordinat_y != null)
+    filteredKavlings.value.filter(k => !punyaBentuk(k) && k.koordinat_x != null && k.koordinat_y != null)
 );
+const adaTerpetakan = computed(() => kavlingsWithKoordinat.value.length > 0 || filteredKavlings.value.some(punyaBentuk));
 
 // ── Selected kavling ──────────────────────────────────────────────────
 const selectedKavling = ref(null);
@@ -439,6 +443,8 @@ const isBookable = (k) => k.status_jual === 'available';
                 <!-- Siteplan gambar raster (fallback: marker koordinat persen) -->
                 <div v-else class="relative select-none" style="min-height: 400px;">
                     <img :src="project.siteplan_image" class="w-full object-contain" alt="Siteplan" />
+                    <SiteplanLapis :kavlings="filteredKavlings" :status-config="statusConfig" :status-bangun-color-hex="statusBangunColorHex"
+                                   :selected-id="selectedKavling?.id ?? null" @select="selectKavling" />
                     <!-- Unit markers -->
                     <template v-for="kavling in kavlingsWithKoordinat" :key="kavling.id">
                         <div
@@ -470,7 +476,7 @@ const isBookable = (k) => k.status_jual === 'available';
                             </div>
                         </div>
                     </template>
-                    <div v-if="kavlingsWithKoordinat.length === 0" class="absolute inset-0 flex items-center justify-center">
+                    <div v-if="!adaTerpetakan" class="absolute inset-0 flex items-center justify-center">
                         <span class="bg-slate-900/80 text-slate-400 text-sm px-4 py-2 rounded-lg">
                             Posisi unit belum ditentukan oleh admin
                         </span>

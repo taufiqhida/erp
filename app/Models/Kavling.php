@@ -42,6 +42,7 @@ class Kavling extends Model
         'status_bangun_persen'  => 'decimal:2',
         'koordinat_x'           => 'decimal:3',
         'koordinat_y'           => 'decimal:3',
+        'bentuk'                => 'array',
         'status_jual'           => StatusJual::class,
         'perlu_biaya_tambahan'  => 'boolean',
     ];

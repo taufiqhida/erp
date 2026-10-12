@@ -263,6 +263,7 @@ class ProjectController extends Controller
             'perlu_biaya_tambahan' => $k->perlu_biaya_tambahan,
             'koordinat_x'       => $k->koordinat_x,
             'koordinat_y'       => $k->koordinat_y,
+            'bentuk'            => $k->bentuk,
             'konsumen_nama'     => $this->bolehLihatKonsumen() ? $k->activeTransaction?->konsumen?->nama : null,
             'foto_rumah'        => $tipe?->foto_rumah ? route('media.show', ['path' => $tipe->foto_rumah]) : null,
             'denah_rumah'       => $tipe?->denah_rumah ? route('media.show', ['path' => $tipe->denah_rumah]) : null,
@@ -383,6 +384,53 @@ class ProjectController extends Controller
         }
 
         return back()->with('success', 'Posisi siteplan berhasil disimpan.');
+    }
+
+    /**
+     * Simpan / hapus BENTUK (poligon) satu unit di siteplan — hasil editor tagging "klik kotak lalu isi area".
+     * Titik dalam persen (0–100) dari lebar/tinggi gambar, jadi tetap pas pada ukuran layar berapa pun.
+     * Tanpa `bentuk` (atau null) = hapus bentuk. Sengaja lewat query builder (bukan model->update) supaya
+     * menandai ratusan unit tidak membanjiri Audit Trail dengan data poligon.
+     */
+    public function updateKavlingBentuk(Request $request, Kavling $kavling): \Illuminate\Http\JsonResponse|RedirectResponse
+    {
+        $this->authorizeProjectAccess($kavling->project);
+        abort_unless(Auth::user()->can('edit kavlings'), 403);
+
+        // Aplikasi ini hanya merender galat validasi sebagai JSON untuk rute api/* (lihat bootstrap/app.php), jadi
+        // permintaan JSON dari editor tagging ditangani manual supaya mendapat 422 + pesan, bukan pengalihan halaman.
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'bentuk'     => 'nullable|array|min:3|max:400',
+            'bentuk.*'   => 'array|size:2',
+            'bentuk.*.*' => 'numeric|between:0,100',
+        ]);
+        $gagal = fn (array $errors) => $request->wantsJson()
+            ? response()->json(['message' => collect($errors)->flatten()->first(), 'errors' => $errors], 422)
+            : throw \Illuminate\Validation\ValidationException::withMessages($errors);
+        if ($validator->fails()) return $gagal($validator->errors()->toArray());
+        $validated = $validator->validated();
+
+        $bentuk = null;
+        if (!empty($validated['bentuk'])) {
+            $bentuk = array_map(fn ($t) => [round((float) $t[0], 2), round((float) $t[1], 2)], array_values($validated['bentuk']));
+
+            // Poligon harus punya luas (bukan garis/titik): rumus tali sepatu, dalam persen kuadrat.
+            $luas = 0.0;
+            for ($i = 0, $n = count($bentuk); $i < $n; $i++) {
+                [$x1, $y1] = $bentuk[$i];
+                [$x2, $y2] = $bentuk[($i + 1) % $n];
+                $luas += $x1 * $y2 - $x2 * $y1;
+            }
+            if (abs($luas) / 2 < 0.0005) {
+                return $gagal(['bentuk' => ['Bentuk terlalu kecil atau tidak berupa area.']]);
+            }
+        }
+
+        Kavling::whereKey($kavling->id)->update(['bentuk' => $bentuk === null ? null : json_encode($bentuk)]);
+
+        return $request->wantsJson()
+            ? response()->json(['ok' => true, 'id' => $kavling->id, 'bentuk' => $bentuk])
+            : back();
     }
 
     /**
