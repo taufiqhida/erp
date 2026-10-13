@@ -285,7 +285,7 @@ class KonsumenController extends Controller
 
         $transaksis = $konsumen->kavlingKonsumens()
             ->with([
-                'kavling.project:id,nama', 'kavling.tipeUnitPreset', 'kavling.statusBangunStage', 'dokumens', 'pembayarans', 'biayaTambahans.pembayarans',
+                'kavling.project:id,nama', 'kavling.tipeUnitPreset', 'kavling.statusBangunStage', 'dokumens', 'bastRecord', 'pembayarans', 'biayaTambahans.pembayarans',
                 'promoPreset:id,nama', 'programAllInPreset:id,nama', 'skemaDpPreset', 'bankRekananPreset:id,nama',
                 'jadwalTagihans' => fn($q) => $q->orderBy('jenis')->orderBy('nomor_cicilan'),
                 'jadwalTagihans.pembayaran',
@@ -389,6 +389,17 @@ class KonsumenController extends Controller
                     'status_penjualan' => $trx->status_penjualan,
                     'is_locked'        => $trx->is_locked,
                     'progress_berkas'  => $trx->progress_berkas,
+                    // Semua catatan transaksi di satu tempat (dropdown "Catatan" di bawah Detail Unit).
+                    'catatan_transaksi' => [
+                        'booking'        => $trx->catatan,
+                        'revisi_dokumen' => $trx->dokumens->filter(fn ($d) => filled($d->catatan_revisi))->map(fn ($d) => [
+                            'nama' => $d->nama_dokumen, 'status_label' => $d->status_label, 'catatan' => $d->catatan_revisi,
+                        ])->values(),
+                        'pemberkasan'    => $trx->catatan_pemberkasan,
+                        'proses_bank'    => $trx->catatan_bank,
+                        'sp3k'           => $trx->catatan_sp3k,
+                        'bast'           => $trx->bastRecord?->catatan,
+                    ],
                     'id_rumah'         => $trx->kavling->id_rumah,
                     'dokumens'         => $trx->dokumens->map(fn($d) => [
                         'id'           => $d->id,

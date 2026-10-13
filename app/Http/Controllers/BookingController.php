@@ -500,6 +500,12 @@ class BookingController extends Controller
             403
         );
 
+        // Catatan di modal "Lanjutkan" TIDAK boleh menimpa `catatan` (catatan booking): ditambahkan sebagai riwayat ke
+        // `catatan_pemberkasan` setelah transisi berhasil (lihat bawah).
+        $catatanLanjut = trim((string) ($validated['catatan'] ?? ''));
+        unset($validated['catatan']);
+        $statusAsalLabel = $kk->status_penjualan_label;
+
         // Jangan biarkan field ini numpang ke $kk->update() di transisi lain
         // (advanceForm selalu mengirim key ini walau kosong) — cuma relevan
         // & dipakai eksplisit di cabang 'proses_bank' di bawah.
@@ -561,6 +567,12 @@ class BookingController extends Controller
         }
 
         $kk->update($validated);
+
+        if ($catatanLanjut !== '') {
+            $kk->refresh();
+            $entri = '[' . now()->format('d M Y H:i') . ' · ' . Auth::user()->name . ' · ' . $statusAsalLabel . ' → ' . $kk->status_penjualan_label . "]\n" . $catatanLanjut;
+            $kk->update(['catatan_pemberkasan' => trim(($kk->catatan_pemberkasan ? $kk->catatan_pemberkasan . "\n\n" : '') . $entri)]);
+        }
 
         // Jika akad, ini konfirmasi bahwa akad terlaksana pada tanggal yang dipilih staff (default: Tanggal Rencana Akad).
         // Status transaksi TIDAK otomatis jadi 'completed' di sini — pencairan

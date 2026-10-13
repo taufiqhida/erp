@@ -55,6 +55,7 @@ class KavlingKonsumen extends Model
         'tanggal_expired_sp3k',
         'status_sp3k',
         'catatan_sp3k',
+        'catatan_pemberkasan',
         'tanggal_bast',
         'catatan',
         'created_by',
