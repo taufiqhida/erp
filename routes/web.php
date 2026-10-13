@@ -5,6 +5,7 @@ use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CancellationRequestController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DokumenKonsumenController;
+use App\Http\Controllers\AlihPembeliController;
 use App\Http\Controllers\CatatanTransaksiController;
 use App\Http\Controllers\KavlingController;
 use App\Http\Controllers\KeuanganController;
@@ -175,6 +176,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('kavling-konsumen/{kk}/tanggal-pengajuan', [BookingController::class, 'updateTanggalPengajuan'])
         ->name('bookings.tanggal-pengajuan');
     Route::post('pemasaran/transaksi/{kk}/catatan', [CatatanTransaksiController::class, 'store'])->name('catatan.store');
+    Route::get('pemasaran/transaksi/{kk}/alih-pembeli/cari', [AlihPembeliController::class, 'cari'])->name('alih-pembeli.cari');
+    Route::post('pemasaran/transaksi/{kk}/alih-pembeli', [AlihPembeliController::class, 'store'])->name('alih-pembeli.store')->middleware('throttle:heavy');
     Route::patch('catatan-transaksi/{catatan}', [CatatanTransaksiController::class, 'update'])->name('catatan.update');
     Route::patch('catatan-transaksi/{catatan}/selesai', [CatatanTransaksiController::class, 'selesai'])->name('catatan.selesai');
     Route::delete('catatan-transaksi/{catatan}', [CatatanTransaksiController::class, 'destroy'])->name('catatan.destroy');

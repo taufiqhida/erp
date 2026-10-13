@@ -110,7 +110,7 @@ const statusBadgeClass = {
                                 class="hover:bg-slate-800/20 transition-colors"
                             >
                                 <td class="px-4 py-4">
-                                    <span :class="req.type === 'unit_swap' ? 'bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/25' : 'bg-slate-700/50 text-slate-300 ring-1 ring-slate-600'"
+                                    <span :class="req.type === 'unit_swap' ? 'bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/25' : req.type === 'buyer_transfer' ? 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/25' : 'bg-slate-700/50 text-slate-300 ring-1 ring-slate-600'"
                                         class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium">
                                         {{ req.type_label }}
                                     </span>
@@ -121,7 +121,8 @@ const statusBadgeClass = {
                                     <div class="text-slate-500 text-xs mt-0.5">{{ req.created_at }}</div>
                                 </td>
                                 <td class="px-4 py-4">
-                                    <div class="text-slate-300 text-sm">{{ req.konsumen }}</div>
+                                    <div class="text-slate-300 text-sm">{{ req.konsumen }}<span v-if="req.konsumen_baru" class="text-sky-300"> → {{ req.konsumen_baru }}</span></div>
+                                    <div v-if="req.hubungan" class="text-slate-500 text-xs">{{ req.hubungan }}</div>
                                 </td>
                                 <td class="px-4 py-4 max-w-xs">
                                     <p class="text-slate-400 text-xs line-clamp-2">{{ req.alasan }}</p>
@@ -186,11 +187,17 @@ const statusBadgeClass = {
                         <!-- Info -->
                         <div class="bg-slate-800/50 rounded-lg p-3 text-xs space-y-1">
                             <div class="text-slate-300"><span class="text-slate-500">Kavling:</span> {{ selectedRequest.kavling }}<span v-if="selectedRequest.kavling_baru"> → {{ selectedRequest.kavling_baru }}</span></div>
-                            <div class="text-slate-300"><span class="text-slate-500">Konsumen:</span> {{ selectedRequest.konsumen }}</div>
+                            <div class="text-slate-300"><span class="text-slate-500">Konsumen:</span> {{ selectedRequest.konsumen }}<span v-if="selectedRequest.konsumen_baru" class="text-sky-300"> → {{ selectedRequest.konsumen_baru }} ({{ selectedRequest.hubungan }})</span></div>
                             <div class="text-slate-400"><span class="text-slate-500">Alasan:</span> {{ selectedRequest.alasan }}</div>
                         </div>
 
-                        <template v-if="selectedRequest.type === 'unit_swap'">
+                        <template v-if="selectedRequest.type === 'buyer_transfer'">
+                            <div v-if="reviewType === 'approve'" class="text-yellow-400 text-xs bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 space-y-1">
+                                <p>⚠️ Pembeli akan diganti dari <b>{{ selectedRequest.konsumen }}</b> ke <b>{{ selectedRequest.konsumen_baru }}</b>.</p>
+                                <p>UTJ dan pembayaran tetap pada transaksi ini. Berkas pembeli lama diarsipkan, hasil Proses Bank/SLIK dan SP3K dikosongkan, dan transaksi kembali ke Pemberkasan. Tindakan ini tidak bisa diurungkan (peralihan baru harus diajukan lagi).</p>
+                            </div>
+                        </template>
+                        <template v-else-if="selectedRequest.type === 'unit_swap'">
                             <div v-if="reviewType === 'approve'" class="text-yellow-400 text-xs bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
                                 ⚠️ Unit akan langsung ditukar: {{ selectedRequest.kavling }} → {{ selectedRequest.kavling_baru }}.
                             </div>

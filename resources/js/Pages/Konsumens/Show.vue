@@ -11,6 +11,7 @@ import { ref, reactive, computed, onMounted, nextTick } from 'vue';
 const props = defineProps({
     konsumen: Object,
     transaksis: Array,
+    peralihan: { type: Array, default: () => [] },
     openTransaksiId: Number,
     dajamSbumPresets: Array,
     statusBangunStages: Array,
@@ -286,6 +287,20 @@ onMounted(() => {
                 </div>
             </div>
 
+            <!-- Riwayat peralihan pembeli (sebagai pembeli lama maupun baru) -->
+            <div v-if="peralihan.length" class="bg-sky-500/10 border border-sky-500/20 rounded-xl px-4 py-3 space-y-2">
+                <h3 class="text-sky-200 text-sm font-semibold">👥 Riwayat Peralihan Pembeli</h3>
+                <div v-for="p in peralihan" :key="p.id" class="text-sm text-slate-300">
+                    <template v-if="p.dari_id === konsumen.id">
+                        Unit <b>{{ p.unit }}</b> ({{ p.proyek }}) <b class="text-sky-300">dialihkan ke {{ p.ke }}</b> ({{ p.hubungan }}) pada {{ p.tanggal }}.
+                    </template>
+                    <template v-else>
+                        Unit <b>{{ p.unit }}</b> ({{ p.proyek }}) <b class="text-sky-300">peralihan dari {{ p.dari }}</b> ({{ p.hubungan }}) pada {{ p.tanggal }}.
+                    </template>
+                    <div class="text-slate-500 text-xs">Alasan: {{ p.alasan }} · diajukan {{ p.diajukan_oleh ?? '-' }}, disetujui {{ p.disetujui_oleh ?? '-' }}</div>
+                </div>
+            </div>
+
             <!-- Riwayat Transaksi -->
             <div v-for="(trx, idx) in transaksis" :key="trx.id" :id="`transaksi-${trx.id}`" class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 <!-- Header Transaksi -->
@@ -361,7 +376,7 @@ onMounted(() => {
                     <!-- Aksi transaksi: Batal / Tukar Unit — keduanya muara ke menu Pembatalan -->
                     <div v-if="trx.status === 'active'" class="flex items-center gap-2">
                         <span v-if="trx.has_pending_request" class="px-2.5 py-1 bg-amber-500/10 text-amber-400 text-xs rounded-lg border border-amber-500/20">
-                            ⏳ Menunggu review {{ trx.pending_request_type === 'unit_swap' ? 'tukar unit' : 'pembatalan' }}
+                            ⏳ Menunggu review {{ { unit_swap: 'tukar unit', buyer_transfer: 'alih pembeli' }[trx.pending_request_type] ?? 'pembatalan' }}
                         </span>
                         <template v-else>
                             <button v-if="canRequestCancellation" @click="openPengajuan(trx, 'cancellation')"
@@ -373,6 +388,12 @@ onMounted(() => {
                                 🔄 Ajukan Tukar Unit
                             </button>
                         </template>
+                    </div>
+
+                    <!-- Riwayat peralihan pembeli pada transaksi ini -->
+                    <div v-for="p in trx.peralihan" :key="p.id" class="text-xs bg-sky-500/10 border border-sky-500/20 rounded-lg px-3 py-2 text-sky-200">
+                        👥 Pembeli dialihkan dari <b>{{ p.dari }}</b> ke <b>{{ p.ke }}</b> ({{ p.hubungan }}) pada {{ p.tanggal }}.
+                        <span class="text-sky-300/80">Pembayaran sebelum tanggal tersebut (termasuk UTJ) dilakukan atas nama {{ p.dari }}. Alasan: {{ p.alasan }}</span>
                     </div>
 
                     <!-- ═══ Catatan transaksi: booking, pemberkasan (bisa diedit/diselesaikan), revisi dokumen, bank, SP3K, BAST ═══ -->

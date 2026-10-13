@@ -4,6 +4,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PengajuanKonsumenModal from '@/Components/PengajuanKonsumenModal.vue';
 import SinkronBerkasModal from '@/Components/SinkronBerkasModal.vue';
 import CatatanTransaksi from '@/Components/CatatanTransaksi.vue';
+import AlihPembeliModal from '@/Components/AlihPembeliModal.vue';
 import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 
@@ -302,6 +303,7 @@ const revertToPreviousStage = async (confirmMessage) => {
 
 // Pembatalan sekarang selalu lewat pengajuan formal (direview manajer di
 // menu Pembatalan) — tidak ada lagi batal instan dari sini.
+const showAlihPembeli = ref(false);
 const showPengajuanBatal = ref(false);
 const openPengajuanBatal = () => { showPengajuanBatal.value = true; };
 const onPengajuanBatalSuccess = () => { showPengajuanBatal.value = false; router.reload(); };
@@ -464,12 +466,22 @@ const submitBast = () => {
                 </div>
 
                 <p v-if="transaksi.has_pending_request" class="mt-4 text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                    ⏳ Menunggu review {{ transaksi.pending_request_type === 'unit_swap' ? 'tukar unit' : 'pembatalan' }} di menu Pembatalan — transaksi tidak bisa diproses lebih lanjut sampai pengajuan diputuskan.
+                    ⏳ Menunggu review {{ { unit_swap: 'tukar unit', buyer_transfer: 'alih pembeli' }[transaksi.pending_request_type] ?? 'pembatalan' }} di menu Pembatalan — transaksi tidak bisa diproses lebih lanjut sampai pengajuan diputuskan.
                 </p>
+
+                <!-- Riwayat peralihan pembeli: uang yang masuk sebelum tanggal peralihan dibayar atas nama pembeli lama -->
+                <div v-for="p in transaksi.peralihan" :key="p.id" class="mt-4 text-xs bg-sky-500/10 border border-sky-500/20 rounded-lg px-3 py-2 text-sky-200">
+                    👥 Pembeli dialihkan dari <b>{{ p.dari }}</b> ke <b>{{ p.ke }}</b> ({{ p.hubungan }}) pada {{ p.tanggal }}.
+                    <span class="text-sky-300/80">Pembayaran sebelum tanggal tersebut (termasuk UTJ) dilakukan atas nama {{ p.dari }}. Alasan: {{ p.alasan }}</span>
+                </div>
 
                 <div v-if="!isBatal" class="mt-4 pt-4 border-t border-slate-800 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-slate-500">
                     <span v-if="transaksi.tanggal_expired_sp3k">Expired SP3K: {{ transaksi.tanggal_expired_sp3k }}</span>
                     <div v-if="isEditable && !transaksi.has_pending_request" class="ml-auto flex flex-wrap items-center gap-2">
+                        <button v-if="transaksi.can_alih_pembeli" @click="showAlihPembeli = true"
+                            class="px-3 py-1.5 bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 text-xs font-medium rounded-lg transition-colors">
+                            👥 Alihkan Pembeli
+                        </button>
                         <button v-if="canRevert && previousStage && transaksi.status_penjualan !== 'akad'"
                             @click="revertToPreviousStage(`Kembalikan transaksi ke tahap ${previousStage.label}?`)"
                             class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-lg transition-colors">
@@ -851,6 +863,9 @@ const submitBast = () => {
         </Teleport>
 
         <SinkronBerkasModal v-if="showSinkron" :url="route('dokumen.sinkron', transaksi.id)" @tutup="showSinkron = false" @selesai="showSinkron = false" />
+
+        <AlihPembeliModal v-if="showAlihPembeli" :kk-id="transaksi.id" :pembeli-lama="konsumen.nama" :unit="kavling.nomor_lengkap"
+            @tutup="showAlihPembeli = false" @selesai="showAlihPembeli = false" />
 
         <PengajuanKonsumenModal
             :show="showPengajuanBatal"

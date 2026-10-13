@@ -9,6 +9,8 @@ use App\Http\Controllers\Concerns\AuthorizesProjectAccess;
 use App\Models\CancellationRequest;
 use App\Models\Kavling;
 use App\Models\UnitSwapHistory;
+use App\Models\AlihPembeliRiwayat;
+use App\Support\AlihPembeli;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -23,12 +25,13 @@ class CancellationRequestController extends Controller
     public function index(Request $request): Response
     {
         $user = Auth::user();
-        abort_unless($user->can('request cancellation') || $user->can('review cancellation') || $user->can('swap kavling'), 403);
+        abort_unless($user->can('request cancellation') || $user->can('review cancellation') || $user->can('swap kavling') || $user->can('ajukan alih pembeli'), 403);
         $isGlobal = $user->can('view all projects');
 
         $requests = CancellationRequest::with([
             'kavling.project',
             'kavlingBaru',
+            'konsumenBaru',
             'kavlingKonsumen.konsumen',
             'requester:id,name',
             'reviewer:id,name',
@@ -59,6 +62,8 @@ class CancellationRequestController extends Controller
             'created_at'            => $r->created_at->format('d M Y H:i'),
             'kavling'               => $r->kavling->nomor_lengkap,
             'kavling_baru'          => $r->kavlingBaru?->nomor_lengkap,
+            'konsumen_baru'         => $r->konsumenBaru?->nama,
+            'hubungan'              => AlihPembeliRiwayat::hubunganLabel()[$r->hubungan] ?? $r->hubungan,
             'project'               => $r->kavling->project->nama,
             'konsumen'              => $r->kavlingKonsumen->konsumen->nama,
             'requester'             => $r->requester->name,
@@ -159,6 +164,17 @@ class CancellationRequestController extends Controller
         abort_unless(Auth::user()->can('review cancellation'), 403);
         abort_if(!$cancellationRequest->isPending(), 422, 'Request ini sudah diproses.');
 
+        if ($cancellationRequest->isBuyerTransfer()) {
+            $validated = $request->validate(['catatan_reviewer' => 'nullable|string']);
+
+            DB::transaction(function () use ($cancellationRequest, $validated) {
+                AlihPembeli::laksanakan($cancellationRequest, Auth::user());
+                $cancellationRequest->update(['catatan_reviewer' => $validated['catatan_reviewer'] ?? null]);
+            });
+
+            return back()->with('success', 'Alih pembeli disetujui. Pembeli diganti, berkas pembeli lama diarsipkan, dan transaksi kembali ke Pemberkasan.');
+        }
+
         if ($cancellationRequest->isUnitSwap()) {
             $validated = $request->validate([
                 'catatan_reviewer' => 'nullable|string',
@@ -253,12 +269,17 @@ class CancellationRequestController extends Controller
                 'catatan_reviewer' => $validated['catatan_reviewer'],
             ]);
 
-            $statusSebelum = StatusJual::from($cancellationRequest->kavling_status_before ?? StatusJual::Sold->value);
-            $cancellationRequest->kavling->update(['status_jual' => $statusSebelum]);
+            // Alih pembeli tidak pernah mengubah status unit, jadi tidak ada yang perlu dipulihkan.
+            if (!$cancellationRequest->isBuyerTransfer()) {
+                $statusSebelum = StatusJual::from($cancellationRequest->kavling_status_before ?? StatusJual::Sold->value);
+                $cancellationRequest->kavling->update(['status_jual' => $statusSebelum]);
+            }
         });
 
-        return back()->with('success', $cancellationRequest->isUnitSwap()
-            ? 'Pengajuan tukar unit ditolak.'
-            : 'Pengajuan pembatalan ditolak.');
+        return back()->with('success', match (true) {
+            $cancellationRequest->isUnitSwap()      => 'Pengajuan tukar unit ditolak.',
+            $cancellationRequest->isBuyerTransfer() => 'Pengajuan alih pembeli ditolak.',
+            default                                 => 'Pengajuan pembatalan ditolak.',
+        });
     }
 }

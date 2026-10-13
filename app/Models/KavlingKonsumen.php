@@ -140,9 +140,15 @@ class KavlingKonsumen extends Model
         return $this->hasOne(CancellationRequest::class)->latest();
     }
 
+    /** Berkas pembeli yang SEDANG berlaku (berkas pembeli lama yang diarsipkan karena Alih Pembeli tidak ikut). */
     public function dokumens(): HasMany
     {
-        return $this->hasMany(DokumenKonsumen::class);
+        return $this->hasMany(DokumenKonsumen::class)->whereNull('diarsipkan_at');
+    }
+
+    public function dokumensArsip(): HasMany
+    {
+        return $this->hasMany(DokumenKonsumen::class)->whereNotNull('diarsipkan_at');
     }
 
     /** Catatan transaksi (booking/pemberkasan), urut waktu tulis. */

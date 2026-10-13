@@ -13,6 +13,8 @@ class DokumenKonsumen extends Model
         'nama_dokumen',
         'sifat',
         'berlaku',
+        'diarsipkan_at',
+        'diarsipkan_untuk_konsumen_id',
         'status',
         'catatan',
         'catatan_revisi',
@@ -23,6 +25,7 @@ class DokumenKonsumen extends Model
 
     protected $casts = [
         'tanggal_verifikasi' => 'datetime',
+        'diarsipkan_at'      => 'datetime',
         'berlaku'            => 'boolean',
     ];
 

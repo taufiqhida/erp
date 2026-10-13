@@ -389,6 +389,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                 </td>
                                 <td class="px-4 py-3 text-slate-400 text-xs">{{ k.nik ?? '-' }}</td>
                                 <td class="px-4 py-3">
+                                    <span v-if="!k.units.length && k.dialihkan_count" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/25" title="Transaksinya dialihkan ke pembeli lain">Dialihkan</span>
                                     <button v-if="k.units.length" @click="toggleExpand(k.id)"
                                         class="inline-flex items-center gap-1 px-2 py-0.5 bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 rounded-full text-xs hover:bg-violet-500/20 transition-colors">
                                         {{ k.transaksi_count }} unit
@@ -397,7 +398,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                                         </svg>
                                     </button>
-                                    <span v-else class="text-slate-500 text-xs">Belum ada unit</span>
+                                    <span v-else-if="!k.dialihkan_count" class="text-slate-500 text-xs">Belum ada unit</span>
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     <div class="flex items-center justify-end gap-1">

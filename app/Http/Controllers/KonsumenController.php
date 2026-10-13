@@ -182,7 +182,7 @@ class KonsumenController extends Controller
                       ->when($request->status_penjualan, fn($q2) => $q2->where('status_penjualan', $request->status_penjualan))
                       ->with(['kavling.project', 'bankRekananPreset:id,nama'])
                 ])
-                ->withCount('kavlingKonsumens as transaksi_count')
+                ->withCount(['kavlingKonsumens as transaksi_count', 'riwayatDialihKeluar as dialihkan_count'])
                 ->orderBy('nama')
                 ->paginate($this->perPage($request, 20))
                 ->withQueryString()
@@ -194,6 +194,7 @@ class KonsumenController extends Controller
                     'email'           => $k->email,
                     'pekerjaan'       => $k->pekerjaan,
                     'transaksi_count' => $k->transaksi_count,
+                    'dialihkan_count' => $k->dialihkan_count,
                     'units'           => $k->kavlingKonsumens->map(fn($trx) => [
                         'id'                     => $trx->id,
                         'kavling_nomor'          => $trx->kavling->nomor_lengkap,
@@ -315,6 +316,7 @@ class KonsumenController extends Controller
                     'kavling_id'       => $trx->kavling_id,
                     'project_id'       => $trx->kavling->project_id,
                     'status'           => $trx->status,
+                    'peralihan'            => \App\Support\AlihPembeli::riwayatTransaksi($trx),
                     'has_pending_request'  => (bool) $pendingRequest,
                     'pending_request_type' => $pendingRequest?->type->value,
                     'kavling_nomor'    => $trx->kavling->nomor_lengkap,
@@ -456,6 +458,7 @@ class KonsumenController extends Controller
                 'catatan'   => $konsumen->catatan,
             ],
             'transaksis' => $transaksis,
+            'peralihan'  => \App\Support\AlihPembeli::riwayatKonsumen($konsumen),
             'openTransaksiId' => $request->integer('transaksi') ?: null,
             'dajamSbumPresets' => DajamSbumPreset::where('is_active', true)
                 ->orderBy('kategori')->orderBy('nama')

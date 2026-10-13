@@ -18,6 +18,8 @@ class CancellationRequest extends Model
         'type',
         'kavling_id',
         'kavling_baru_id',
+        'konsumen_baru_id',
+        'hubungan',
         'kavling_konsumen_id',
         'kavling_status_before',
         'requested_by',
@@ -60,6 +62,11 @@ class CancellationRequest extends Model
     public function kavlingBaru(): BelongsTo
     {
         return $this->belongsTo(Kavling::class, 'kavling_baru_id');
+    }
+
+    public function konsumenBaru(): BelongsTo
+    {
+        return $this->belongsTo(Konsumen::class, 'konsumen_baru_id')->withTrashed();
     }
 
     public function kavlingKonsumen(): BelongsTo
@@ -108,5 +115,10 @@ class CancellationRequest extends Model
     public function isUnitSwap(): bool
     {
         return $this->type === CancellationRequestType::UnitSwap;
+    }
+
+    public function isBuyerTransfer(): bool
+    {
+        return $this->type === CancellationRequestType::BuyerTransfer;
     }
 }

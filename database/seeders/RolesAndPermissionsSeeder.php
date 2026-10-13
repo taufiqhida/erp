@@ -68,6 +68,7 @@ class RolesAndPermissionsSeeder extends Seeder
 
             // Pembatalan & tukar unit
             'request cancellation',
+            'ajukan alih pembeli',   // mengajukan Alih Pembeli (pembeli diganti tanpa membatalkan transaksi); disetujui SPV/Leader
             'review cancellation',
 
             // Override transaksi terkunci (pasca "Tandai Selesai" di Keuangan)
@@ -142,7 +143,7 @@ class RolesAndPermissionsSeeder extends Seeder
                 'manage dokumen',
                 'kelola pipeline sales', 'isi bank rekanan kpr',
                 'view keuangan', 'manage pembayaran', 'manage rincian biaya akad',
-                'book kavling', 'swap kavling', 'request cancellation',
+                'book kavling', 'swap kavling', 'request cancellation', 'ajukan alih pembeli',
                 'manage sales agent', // tambah/ubah Sales & Agent sendiri (halaman Pengaturan > Sales / Agent)
                 'isi id rumah',       // mengisi ID Rumah unit dari Stok Kavling
             ],

@@ -86,6 +86,12 @@ class Konsumen extends Model
         return $this->hasMany(KavlingKonsumen::class);
     }
 
+    /** Peralihan di mana konsumen ini adalah pembeli LAMA (transaksinya dialihkan ke orang lain). */
+    public function riwayatDialihKeluar(): HasMany
+    {
+        return $this->hasMany(AlihPembeliRiwayat::class, 'dari_konsumen_id');
+    }
+
     public function sumberLead(): BelongsTo
     {
         return $this->belongsTo(SumberLead::class);

@@ -9,6 +9,7 @@ use App\Models\CancellationRequest;
 use App\Models\DokumenKonsumen;
 use App\Models\KavlingKonsumen;
 use App\Models\NotarisPreset;
+use App\Support\AlihPembeli;
 use App\Support\SinkronDokumen;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -80,6 +81,8 @@ class DokumenKonsumenController extends Controller
                 'status_sp3k_label'      => $kk->status_sp3k_label,
                 'catatan_sp3k'           => $kk->catatan_sp3k,
                 'plafon_kpr'             => $kk->plafon_kpr,
+                'can_alih_pembeli'       => !$pendingRequest && Auth::user()->can('ajukan alih pembeli') && AlihPembeli::alasanTidakBoleh($kk) === null,
+                'peralihan'              => AlihPembeli::riwayatTransaksi($kk),
                 'has_pending_request'    => (bool) $pendingRequest,
                 'pending_request_type'   => $pendingRequest?->type->value,
             ],
