@@ -3,10 +3,12 @@ import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PengajuanKonsumenModal from '@/Components/PengajuanKonsumenModal.vue';
 import SinkronBerkasModal from '@/Components/SinkronBerkasModal.vue';
+import CatatanTransaksi from '@/Components/CatatanTransaksi.vue';
 import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 
 const props = defineProps({
+    catatanTransaksi: { type: Object, default: null },
     transaksi:  Object,   // kavling_konsumen record
     konsumen:   Object,
     kavling:    Object,
@@ -206,7 +208,6 @@ const showAdvanceModal = ref(false);
 const advanceForm = useForm({
     status_penjualan: '',
     catatan: '',
-    tanggal_pengajuan_bank: '',
     tanggal_akad: '',
 });
 
@@ -214,13 +215,6 @@ const openAdvance = () => {
     if (!nextStage.value || advanceBlocked.value) return;
     advanceForm.reset();
     advanceForm.status_penjualan = nextStage.value.key;
-    if (nextStage.value.key === 'proses_bank') {
-        // Kalau transaksi ini PERNAH masuk Proses Bank sebelumnya (mis.
-        // dikembalikan ke Pemberkasan buat revisi, lalu lanjut lagi), default
-        // ke tanggal pengajuan yang lama, bukan hari ini — supaya histori
-        // submit asli ke bank ga ketimpa cuma gara-gara direview ulang.
-        advanceForm.tanggal_pengajuan_bank = props.transaksi.tanggal_pengajuan_bank || todayDateStr();
-    }
     if (nextStage.value.key === 'akad') {
         // Default: tanggal rencana akad bila sudah lewat/hari ini; kalau masih di masa depan (atau kosong) → hari ini.
         const hariIni = todayDateStr();
@@ -252,11 +246,17 @@ const submitBankRekanan = () => {
 // (auto-stamp saat masuk tahap ini, tapi tetap bisa dikoreksi manual kalau
 // tanggal submit ke bank beda dari tanggal update sistem).
 const bankForm = useForm({
-    tanggal_pengajuan_bank: props.transaksi.tanggal_pengajuan_bank ?? '',
     status_bank: props.transaksi.status_bank === 'ditolak' ? 'ditolak' : 'disetujui',
     tanggal_keputusan_bank: props.transaksi.tanggal_keputusan_bank ?? '',
     catatan_bank: props.transaksi.catatan_bank ?? '',
 });
+
+// Tanggal pengajuan ke bank: SATU-satunya tempat mengisi/mengoreksinya (default otomatis saat masuk Proses Bank), disimpan terpisah
+// dari keputusan supaya menyimpan keputusan tidak menimpanya.
+const pengajuanForm = useForm({ tanggal_pengajuan_bank: props.transaksi.tanggal_pengajuan_bank ?? '' });
+const simpanTanggalPengajuan = () => {
+    pengajuanForm.patch(route('bookings.tanggal-pengajuan', props.transaksi.id), { preserveScroll: true });
+};
 
 const submitBankDecision = () => {
     bankForm.patch(route('bookings.bank-decision', props.transaksi.id), { preserveScroll: true });
@@ -540,11 +540,18 @@ const submitBast = () => {
                     <span v-if="hariBerjalanBank !== null" class="px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400 text-xs">{{ hariBerjalanBank }} hari berjalan</span>
                 </div>
 
-                <!-- Pengajuan — fakta submit ke bank, bukan keputusan -->
+                <!-- Pengajuan — fakta submit ke bank, bukan keputusan. Satu-satunya tempat tanggal ini diisi/dikoreksi. -->
                 <div class="mb-4">
-                    <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Pengajuan</label>
-                    <input v-model="bankForm.tanggal_pengajuan_bank" type="date" :disabled="!canPemberkasanBank"
-                        class="w-full sm:w-1/2 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
+                    <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Pengajuan ke Bank</label>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <input v-model="pengajuanForm.tanggal_pengajuan_bank" type="date" :max="todayDateStr()" :disabled="!canPemberkasanBank"
+                            class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-60" />
+                        <button v-if="canPemberkasanBank" type="button" @click="simpanTanggalPengajuan"
+                            :disabled="pengajuanForm.processing || !pengajuanForm.tanggal_pengajuan_bank || pengajuanForm.tanggal_pengajuan_bank === transaksi.tanggal_pengajuan_bank"
+                            class="px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-200 text-xs font-medium rounded-lg transition-colors">Simpan tanggal</button>
+                    </div>
+                    <p class="text-slate-500 text-xs mt-1">Terisi otomatis saat masuk Proses Bank (hari ini, atau tanggal pengajuan sebelumnya). Ubah di sini bila berkas disubmit ke bank di tanggal lain.</p>
+                    <p v-if="pengajuanForm.errors.tanggal_pengajuan_bank" class="text-rose-400 text-xs mt-1">{{ pengajuanForm.errors.tanggal_pengajuan_bank }}</p>
                 </div>
 
                 <div class="border-t border-slate-800 my-4"/>
@@ -713,6 +720,9 @@ const submitBast = () => {
                 </div>
             </div>
 
+            <!-- Catatan transaksi -->
+            <CatatanTransaksi v-if="catatanTransaksi" :data="catatanTransaksi" :kk-id="transaksi.id" />
+
             <!-- Dokumen List -->
             <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 <div class="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
@@ -821,16 +831,9 @@ const submitBast = () => {
                             <p class="text-slate-400 text-xs mt-1">Setelah dikonfirmasi, status transaksi berubah menjadi Akad dan lanjut ke pengisian kesiapan BAST di bawah.</p>
                             <p v-if="advanceForm.errors.tanggal_akad" class="text-rose-400 text-xs mt-1">{{ advanceForm.errors.tanggal_akad }}</p>
                         </div>
-                        <div v-if="advanceForm.status_penjualan === 'proses_bank'">
-                            <label class="block text-slate-400 text-xs font-medium mb-1.5">Tanggal Pengajuan ke Bank</label>
-                            <input v-model="advanceForm.tanggal_pengajuan_bank" type="date"
-                                class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                            <p class="text-slate-500 text-xs mt-1">
-                                {{ transaksi.tanggal_pengajuan_bank
-                                    ? 'Transaksi ini pernah masuk Proses Bank sebelumnya — default ke tanggal pengajuan yang lama. Ubah kalau memang submit ulang ke bank.'
-                                    : 'Default hari ini — ubah kalau berkas sudah disubmit ke bank di tanggal lain.' }}
-                            </p>
-                        </div>
+                        <p v-if="advanceForm.status_penjualan === 'proses_bank'" class="text-slate-400 text-xs bg-slate-800/60 rounded-lg px-3 py-2">
+                            Tanggal pengajuan ke bank otomatis diisi {{ transaksi.tanggal_pengajuan_bank ? 'dengan tanggal pengajuan sebelumnya' : 'hari ini' }} dan bisa dikoreksi di kartu Proses Bank setelahnya.
+                        </p>
                         <div>
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">Catatan {{ dokumenIncomplete ? '(wajib)' : '(opsional)' }}</label>
                             <textarea v-model="advanceForm.catatan" rows="2" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-violet-500" />

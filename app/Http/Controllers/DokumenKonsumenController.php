@@ -27,7 +27,7 @@ class DokumenKonsumenController extends Controller
     {
         $this->authorizeProjectAccess($kk->kavling->project);
 
-        $kk->load(['konsumen', 'kavling.project', 'kavling.statusBangunStage', 'dokumens.verifiedBy', 'dokumens.template', 'bastRecord', 'jadwalTagihans']);
+        $kk->load(['konsumen', 'kavling.project', 'kavling.statusBangunStage', 'dokumens.verifiedBy', 'dokumens.template', 'bastRecord', 'catatans.penyelesai', 'jadwalTagihans']);
 
         $pendingRequest = CancellationRequest::where('kavling_konsumen_id', $kk->id)->pending()->first();
 
@@ -97,6 +97,7 @@ class DokumenKonsumenController extends Controller
                 'status_bangun_label' => $kk->kavling->status_bangun_label,
                 'status_bangun_is_final' => $kk->kavling->bangun_selesai,
             ],
+            'catatanTransaksi' => \App\Models\CatatanTransaksi::payload($kk, Auth::user()),
             'dokumens'   => $kk->dokumens->map(fn($d) => [
                 'id'           => $d->id,
                 'nama_dokumen' => $d->nama_dokumen,

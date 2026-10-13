@@ -5,6 +5,7 @@ use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CancellationRequestController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DokumenKonsumenController;
+use App\Http\Controllers\CatatanTransaksiController;
 use App\Http\Controllers\KavlingController;
 use App\Http\Controllers\KeuanganController;
 use App\Http\Controllers\KonsumenController;
@@ -171,6 +172,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('bookings.update-status');
     Route::patch('kavling-konsumen/{kk}/bank-decision', [BookingController::class, 'updateBankDecision'])
         ->name('bookings.bank-decision');
+    Route::patch('kavling-konsumen/{kk}/tanggal-pengajuan', [BookingController::class, 'updateTanggalPengajuan'])
+        ->name('bookings.tanggal-pengajuan');
+    Route::post('pemasaran/transaksi/{kk}/catatan', [CatatanTransaksiController::class, 'store'])->name('catatan.store');
+    Route::patch('catatan-transaksi/{catatan}', [CatatanTransaksiController::class, 'update'])->name('catatan.update');
+    Route::patch('catatan-transaksi/{catatan}/selesai', [CatatanTransaksiController::class, 'selesai'])->name('catatan.selesai');
+    Route::delete('catatan-transaksi/{catatan}', [CatatanTransaksiController::class, 'destroy'])->name('catatan.destroy');
     Route::patch('kavling-konsumen/{kk}/sp3k-decision', [BookingController::class, 'updateSp3kDecision'])
         ->name('bookings.sp3k-decision');
     Route::patch('kavling-konsumen/{kk}/revert-previous', [BookingController::class, 'revertToPreviousStage'])

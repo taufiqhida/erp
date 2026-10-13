@@ -469,9 +469,11 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                     'tanggal_expired_sp3k' => $tglExp,
                     'status_sp3k' => $sp3kKey,
                     'bank_rekanan_preset_id' => $bankPreset?->id,
-                    'catatan' => $catatan,
                     'created_by' => Auth::id(),
                 ]);
+                if (filled($catatan)) {
+                    \App\Models\CatatanTransaksi::tulis($trx, 'booking', $catatan);
+                }
 
                 // Biaya Tambahan Lain per-preset
                 $btRows = [];

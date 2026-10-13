@@ -7,6 +7,7 @@ use App\Http\Controllers\Concerns\AuthorizesProjectAccess;
 use App\Http\Controllers\Concerns\ChecksTransactionLock;
 use App\Models\BiayaTambahanPreset;
 use App\Models\DokumenKonsumen;
+use App\Models\CatatanTransaksi;
 use App\Models\DokumenTemplate;
 use App\Models\Kavling;
 use App\Models\KavlingKonsumenBiayaTambahan;
@@ -367,9 +368,13 @@ class BookingController extends Controller
                 // perlu dikonfirmasi terpisah lagi (tetap bisa direview lewat
                 // revertToBooking() kalau perlu revisi dari awal).
                 'status_penjualan' => 'pemberkasan',
-                'catatan'          => $validated['catatan'] ?? null,
                 'created_by'       => Auth::id(),
             ]);
+
+            // Catatan booking (promo, gratis kanopi, biaya hook, dan sebagainya) jadi catatan transaksi yang bisa diedit/diselesaikan.
+            if (filled($validated['catatan'] ?? null)) {
+                CatatanTransaksi::tulis($transaksi, 'booking', $validated['catatan']);
+            }
 
             foreach ($biayaTambahanItems as $item) {
                 $transaksi->biayaTambahans()->create($item);
@@ -500,8 +505,8 @@ class BookingController extends Controller
             403
         );
 
-        // Catatan di modal "Lanjutkan" TIDAK boleh menimpa `catatan` (catatan booking): ditambahkan sebagai riwayat ke
-        // `catatan_pemberkasan` setelah transisi berhasil (lihat bawah).
+        // Catatan di modal "Lanjutkan" tidak disimpan di kolom transaksi: dijadikan catatan pemberkasan (entri tersendiri)
+        // setelah transisi berhasil (lihat bawah).
         $catatanLanjut = trim((string) ($validated['catatan'] ?? ''));
         unset($validated['catatan']);
         $statusAsalLabel = $kk->status_penjualan_label;
@@ -570,8 +575,7 @@ class BookingController extends Controller
 
         if ($catatanLanjut !== '') {
             $kk->refresh();
-            $entri = '[' . now()->format('d M Y H:i') . ' · ' . Auth::user()->name . ' · ' . $statusAsalLabel . ' → ' . $kk->status_penjualan_label . "]\n" . $catatanLanjut;
-            $kk->update(['catatan_pemberkasan' => trim(($kk->catatan_pemberkasan ? $kk->catatan_pemberkasan . "\n\n" : '') . $entri)]);
+            CatatanTransaksi::tulis($kk, 'pemberkasan', $catatanLanjut, $statusAsalLabel . ' → ' . $kk->status_penjualan_label);
         }
 
         // Jika akad, ini konfirmasi bahwa akad terlaksana pada tanggal yang dipilih staff (default: Tanggal Rencana Akad).
@@ -609,8 +613,8 @@ class BookingController extends Controller
         abort_unless(Auth::user()->can('kelola pemberkasan bank'), 403);
         abort_unless($kk->status_penjualan === 'proses_bank', 422, 'Transaksi tidak sedang di tahap Proses Bank.');
 
+        // Tanggal pengajuan TIDAK ikut di sini (diubah lewat updateTanggalPengajuan) supaya menyimpan keputusan tidak menimpanya.
         $validated = $request->validate([
-            'tanggal_pengajuan_bank' => 'nullable|date',
             'status_bank'           => 'required|in:disetujui,ditolak',
             'tanggal_keputusan_bank' => 'nullable|date',
             'catatan_bank'          => 'nullable|string',
@@ -623,6 +627,25 @@ class BookingController extends Controller
         }
 
         return back()->with('success', 'Keputusan Proses Bank berhasil disimpan.');
+    }
+
+    /**
+     * Ubah Tanggal Pengajuan ke bank. Satu-satunya tempat mengisi/mengoreksi tanggal ini (default saat masuk Proses Bank = hari ini
+     * atau tanggal pengajuan sebelumnya), terpisah dari form keputusan agar tidak tertimpa nilai lama.
+     */
+    public function updateTanggalPengajuan(Request $request, KavlingKonsumen $kk): RedirectResponse
+    {
+        $this->authorizeProjectAccess($kk->kavling->project);
+        abort_unless(Auth::user()->can('kelola pemberkasan bank'), 403);
+        abort_unless(in_array($kk->status_penjualan, ['proses_bank', 'sp3k'], true), 422, 'Tanggal pengajuan hanya bisa diubah saat transaksi di tahap Proses Bank atau SP3K.');
+
+        $validated = $request->validate(
+            ['tanggal_pengajuan_bank' => 'required|date|before_or_equal:today'],
+            ['tanggal_pengajuan_bank.required' => 'Isi tanggal pengajuan.', 'tanggal_pengajuan_bank.before_or_equal' => 'Tanggal pengajuan tidak boleh di masa depan.']
+        );
+        $kk->update($validated);
+
+        return back()->with('success', 'Tanggal pengajuan disimpan.');
     }
 
     /**
