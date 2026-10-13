@@ -19,20 +19,28 @@ const showSinkron = ref(false);
 const syaratId = ref(null);          // id template yang panel syaratnya terbuka
 const syaratPernikahan = ref([]);
 const syaratPekerjaan = ref([]);
+const syaratGalat = ref(null);
 const bukaSyarat = (doc) => {
     if (syaratId.value === doc.id) { syaratId.value = null; return; }
     syaratId.value = doc.id;
+    syaratGalat.value = null;
     syaratPernikahan.value = [...(doc.syarat_pernikahan ?? [])];
     syaratPekerjaan.value = [...(doc.syarat_pekerjaan ?? [])];
 };
+// Memilih sifat Kondisional di dropdown tidak langsung tersimpan: panel syarat dibuka dulu (kondisional wajib punya syarat).
 const simpanSyarat = (doc) => {
     router.patch(route('pengaturan.dokumen-templates.update', doc.id), {
         nama_dokumen: doc.nama_dokumen,
-        sifat: doc.sifat,
+        sifat: 'kondisional',
         syarat_pernikahan: syaratPernikahan.value,
         syarat_pekerjaan: syaratPekerjaan.value,
-    }, { preserveScroll: true, onSuccess: () => { syaratId.value = null; } });
+    }, {
+        preserveScroll: true,
+        onSuccess: () => { syaratId.value = null; },
+        onError: (e) => { syaratGalat.value = Object.values(e)[0] ?? 'Gagal menyimpan.'; },
+    });
 };
+const tanpaPilihan = () => !syaratPernikahan.value.length && !syaratPekerjaan.value.length;
 
 const activeCaraBayar = ref(Object.keys(props.caraBayarOptions)[0] ?? 'kpr_subsidi');
 
@@ -40,12 +48,14 @@ const addForm = useForm({
     cara_bayar:   activeCaraBayar.value,
     nama_dokumen: '',
     sifat:        'wajib',
+    syarat_pernikahan: [],
+    syarat_pekerjaan:  [],
 });
 
 const addDoc = () => {
     addForm.cara_bayar = activeCaraBayar.value;
     addForm.post(route('pengaturan.dokumen-templates.store'), {
-        onSuccess: () => { addForm.reset('nama_dokumen'); }
+        onSuccess: () => { addForm.reset('nama_dokumen', 'syarat_pernikahan', 'syarat_pekerjaan'); }
     });
 };
 
@@ -55,8 +65,14 @@ const sifatBadgeCls = {
     opsional:    'bg-slate-700 text-slate-400',
 };
 
-const changeSifat = (doc, sifat) => {
+const changeSifat = (doc, sifat, selectEl) => {
     if (doc.sifat === sifat) return;
+    if (sifat === 'kondisional') {
+        // Belum disimpan: buka panel syarat; dropdown dikembalikan sampai syarat disimpan.
+        if (selectEl) selectEl.value = doc.sifat;
+        if (syaratId.value !== doc.id) bukaSyarat(doc);
+        return;
+    }
     router.patch(route('pengaturan.dokumen-templates.update', doc.id), {
         nama_dokumen: doc.nama_dokumen,
         sifat,
@@ -141,10 +157,11 @@ const del = async (id) => {
                                 @keyup.enter="saveEdit(doc)" @keyup.esc="cancelEdit" @blur="saveEdit(doc)"
                                 class="px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm w-72 focus:outline-none focus:ring-1 focus:ring-violet-500" />
                             <span v-else class="text-slate-200 text-sm">{{ doc.nama_dokumen }}</span>
-                            <span v-if="doc.syarat_label" class="text-slate-500 text-xs">· berlaku jika {{ doc.syarat_label }}</span>
+                            <span v-if="doc.syarat_label" class="text-slate-500 text-xs">· wajib jika {{ doc.syarat_label }}</span>
+                            <span v-else-if="doc.tanpa_syarat" class="text-amber-400 text-xs" title="Berkas kondisional tanpa syarat tidak dihitung untuk siapa pun">⚠ belum ada syarat — tidak dihitung. Beri syarat atau ubah ke Opsional.</span>
                         </div>
                         <div class="flex items-center gap-2">
-                            <select :value="doc.sifat" @change="changeSifat(doc, $event.target.value)"
+                            <select :value="doc.sifat" @change="changeSifat(doc, $event.target.value, $event.target)"
                                 :class="sifatBadgeCls[doc.sifat]"
                                 class="text-xs font-medium rounded-lg px-2 py-1 border-0 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer">
                                 <option v-for="(label, key) in sifatOptions" :key="key" :value="key">{{ label }}</option>
@@ -164,7 +181,7 @@ const del = async (id) => {
                         </div>
                         <!-- Panel syarat (kondisional) -->
                         <div v-if="syaratId === doc.id" class="basis-full w-full mt-3 pt-3 border-t border-slate-800 space-y-3">
-                            <p class="text-slate-400 text-xs">Berkas ini hanya <b class="text-slate-300">berlaku</b> bila konsumen memenuhi syarat di bawah. Kosongkan semuanya untuk menentukan berlaku/tidaknya manual per konsumen. Bila dua kelompok diisi, keduanya harus terpenuhi.</p>
+                            <p class="text-slate-400 text-xs">Berkas ini menjadi <b class="text-slate-300">wajib</b> hanya untuk konsumen yang memenuhi syarat di bawah; untuk konsumen lain tidak berlaku dan tidak dihitung. Pilih minimal satu. Bila dua kelompok diisi, keduanya harus terpenuhi. Kalau tidak ada syaratnya, gunakan sifat Opsional.</p>
                             <div>
                                 <div class="text-slate-300 text-xs font-medium mb-1.5">Status pernikahan</div>
                                 <div class="flex flex-wrap gap-3">
@@ -182,7 +199,8 @@ const del = async (id) => {
                                 </div>
                             </div>
                             <div class="flex gap-2">
-                                <button @click="simpanSyarat(doc)" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-lg">Simpan syarat</button>
+                                <button @click="simpanSyarat(doc)" :disabled="tanpaPilihan()" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-xs rounded-lg">Simpan syarat</button>
+                                <span v-if="syaratGalat" class="text-rose-400 text-xs self-center">{{ syaratGalat }}</span>
                                 <button @click="syaratId = null" class="px-3 py-1.5 text-slate-400 hover:text-slate-200 text-xs">Batal</button>
                             </div>
                         </div>
@@ -204,10 +222,26 @@ const del = async (id) => {
                             class="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
                             <option v-for="(label, key) in sifatOptions" :key="key" :value="key">{{ label }}</option>
                         </select>
-                        <button @click="addDoc" :disabled="addForm.processing || !addForm.nama_dokumen"
+                        <button @click="addDoc" :disabled="addForm.processing || !addForm.nama_dokumen || (addForm.sifat === 'kondisional' && !addForm.syarat_pernikahan.length && !addForm.syarat_pekerjaan.length)"
                             class="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors whitespace-nowrap">
                             + Tambah
                         </button>
+                    </div>
+                    <div v-if="addForm.sifat === 'kondisional'" class="mt-3 space-y-2">
+                        <p class="text-slate-400 text-xs">Berkas kondisional hanya wajib untuk konsumen yang memenuhi syarat — pilih minimal satu. Kalau tidak ada syaratnya, pilih sifat Opsional.</p>
+                        <div class="flex flex-wrap gap-x-5 gap-y-2">
+                            <span class="text-slate-300 text-xs font-medium">Status pernikahan:</span>
+                            <label v-for="(label, key) in pernikahanOptions" :key="'ap' + key" class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                                <input type="checkbox" :value="key" v-model="addForm.syarat_pernikahan" class="rounded border-slate-600 bg-slate-800 text-violet-500" /> {{ label }}
+                            </label>
+                        </div>
+                        <div class="flex flex-wrap gap-x-5 gap-y-2">
+                            <span class="text-slate-300 text-xs font-medium">Pekerjaan:</span>
+                            <label v-for="(label, key) in pekerjaanOptions" :key="'ak' + key" class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                                <input type="checkbox" :value="key" v-model="addForm.syarat_pekerjaan" class="rounded border-slate-600 bg-slate-800 text-violet-500" /> {{ label }}
+                            </label>
+                        </div>
+                        <p v-if="addForm.errors.syarat_pernikahan" class="text-rose-400 text-xs">{{ addForm.errors.syarat_pernikahan }}</p>
                     </div>
                 </div>
             </div>

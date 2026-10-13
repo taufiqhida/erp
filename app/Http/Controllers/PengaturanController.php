@@ -172,6 +172,8 @@ class PengaturanController extends Controller
                 'syarat_pernikahan' => $t->syaratPernikahan(),
                 'syarat_pekerjaan'  => $t->syaratPekerjaan(),
                 'syarat_label'      => $t->syaratLabel(),
+                // Kondisional tanpa syarat tidak dihitung untuk siapa pun — ditandai agar diberi syarat atau diubah jadi Opsional.
+                'tanpa_syarat'      => $t->sifat === 'kondisional' && !$t->punyaSyarat(),
                 'urutan'       => $t->urutan,
             ]));
 
@@ -196,6 +198,7 @@ class PengaturanController extends Controller
             'syarat_pekerjaan.*'  => 'in:' . implode(',', array_keys(Konsumen::jenisPekerjaanLabel())),
         ]);
         $validated = $this->bersihkanSyarat($validated);
+        $this->wajibAdaSyarat($validated);
 
         // Item baru selalu masuk paling bawah di cara bayarnya; urutan diatur lewat tombol geser.
         $validated['urutan'] = (DokumenTemplate::where('cara_bayar', $validated['cara_bayar'])->max('urutan') ?? 0) + 1;
@@ -219,10 +222,25 @@ class PengaturanController extends Controller
         if (!$request->has('syarat_pernikahan')) unset($validated['syarat_pernikahan']);
         if (!$request->has('syarat_pekerjaan')) unset($validated['syarat_pekerjaan']);
         $validated = $this->bersihkanSyarat($validated);
+        // Syarat wajib saat sifat baru dipilih Kondisional atau syarat dikirim kosong; mengganti nama saja (tanpa menyentuh
+        // sifat/syarat) tetap diizinkan untuk template lama yang belum punya syarat.
+        if ($validated['sifat'] === 'kondisional' && ($template->sifat !== 'kondisional' || array_key_exists('syarat_pernikahan', $validated) || array_key_exists('syarat_pekerjaan', $validated))) {
+            $this->wajibAdaSyarat($validated + ['syarat_pernikahan' => $template->syaratPernikahan(), 'syarat_pekerjaan' => $template->syaratPekerjaan()]);
+        }
 
         $template->update($validated);
 
         return back()->with('success', 'Template dokumen berhasil diperbarui. Konsumen yang sudah tercatat belum ikut berubah — pakai "Sinkronkan ke konsumen" bila perlu.');
+    }
+
+    /** Berkas Kondisional harus punya minimal satu syarat; kalau tidak ada syarat yang cocok, pakai sifat Opsional. */
+    private function wajibAdaSyarat(array $validated): void
+    {
+        if (($validated['sifat'] ?? null) === 'kondisional' && empty($validated['syarat_pernikahan']) && empty($validated['syarat_pekerjaan'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'syarat_pernikahan' => 'Berkas Kondisional harus punya minimal satu syarat (status pernikahan atau pekerjaan). Kalau tidak ada syaratnya, pilih sifat Opsional.',
+            ]);
+        }
     }
 
     /** Syarat hanya bermakna untuk berkas kondisional; sifat lain otomatis membersihkannya. */

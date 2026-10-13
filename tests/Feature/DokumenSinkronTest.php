@@ -79,7 +79,7 @@ class DokumenSinkronTest extends TestCase
         $this->assertTrue($this->ktpPasangan->berlakuUntuk(new Konsumen()));                                   // belum diisi: tetap ditagih
         $this->assertFalse($this->nibUsaha->berlakuUntuk($this->konsumen));                                    // karyawan, bukan wirausaha
         $this->assertTrue($this->nibUsaha->berlakuUntuk(new Konsumen(['pekerjaan' => 'wirausaha'])));
-        $this->assertNull($this->suratManual->berlakuUntuk($this->konsumen));                                  // tanpa syarat: manual
+        $this->assertFalse($this->suratManual->berlakuUntuk($this->konsumen));                                 // kondisional tanpa syarat: tidak dihitung
         $this->assertTrue($this->ktp->berlakuUntuk($this->konsumen));                                          // bukan kondisional
 
         $dua = $this->template('Dua Syarat', 'kondisional', ['syarat_pernikahan' => ['menikah'], 'syarat_pekerjaan' => ['wirausaha']]);
@@ -95,21 +95,21 @@ class DokumenSinkronTest extends TestCase
         $this->assertTrue($this->berkas('KTP Pasangan')->berlaku);
         $this->assertFalse($this->berkas('NIB Usaha')->berlaku);
         $this->assertTrue($this->berkas('NIB Usaha')->tidak_berlaku);
+        $this->assertFalse($this->berkas('Surat Keterangan')->berlaku);                // tanpa syarat: tidak dihitung
     }
 
     public function test_progress_hanya_menghitung_wajib_dan_kondisional_yang_berlaku(): void
     {
-        $this->booking();                                        // dihitung: KTP, KTP Pasangan (menikah), Surat Keterangan (manual, default berlaku)
+        $this->booking();                                        // dihitung: KTP (wajib) dan KTP Pasangan (menikah)
         $this->berkas('KTP')->update(['status' => 'sudah_ada']);
 
         $p = $this->trx->fresh()->progress_berkas;
-        $this->assertSame(['persen' => 33.0, 'ada' => 1, 'total' => 3], array_map(fn ($v) => is_float($v) ? round($v) : $v, $p));
+        $this->assertSame([50, 1, 2], [(int) $p['persen'], $p['ada'], $p['total']]);
         $this->assertFalse($this->trx->fresh()->dokumen_wajib_lengkap);
 
         $this->berkas('KTP Pasangan')->update(['status' => 'sudah_ada']);
-        $this->berkas('Surat Keterangan')->update(['berlaku' => false]);       // staff menandai tidak berlaku
-        $this->assertSame(100.0, (float) $this->trx->fresh()->progress_berkas['persen']);
-        $this->assertTrue($this->trx->fresh()->dokumen_wajib_lengkap);        // Foto (opsional) & NIB (tidak berlaku) tidak menghalangi
+        $this->assertSame(100, (int) $this->trx->fresh()->progress_berkas['persen']);
+        $this->assertTrue($this->trx->fresh()->dokumen_wajib_lengkap);        // Foto (opsional), NIB (tidak berlaku), Surat (tanpa syarat) tidak menghalangi
     }
 
     public function test_ubah_status_pernikahan_konsumen_menyesuaikan_berkas_kondisional(): void
@@ -225,16 +225,25 @@ class DokumenSinkronTest extends TestCase
         $this->assertNull($this->berkas('Surat Baru'));
     }
 
-    public function test_tandai_berkas_kondisional_berlaku_manual_hanya_untuk_yang_tanpa_syarat(): void
+    public function test_berkas_kondisional_wajib_punya_syarat_saat_dibuat_atau_dijadikan_kondisional(): void
     {
-        $this->booking();
+        $store = route('pengaturan.dokumen-templates.store');
 
-        $this->actingAs($this->admin)->patch(route('dokumen.update-berlaku', $this->berkas('Surat Keterangan')), ['berlaku' => false])->assertSessionHas('success');
-        $this->assertFalse($this->berkas('Surat Keterangan')->berlaku);
+        $this->actingAs($this->admin)->post($store, ['cara_bayar' => 'kpr_subsidi', 'nama_dokumen' => 'Tanpa Syarat', 'sifat' => 'kondisional'])->assertSessionHasErrors('syarat_pernikahan');
+        $this->assertNull(DokumenTemplate::where('nama_dokumen', 'Tanpa Syarat')->first());
 
-        $this->actingAs($this->admin)->patch(route('dokumen.update-berlaku', $this->berkas('KTP Pasangan')), ['berlaku' => false])->assertStatus(422);   // ber-syarat: otomatis
-        $this->actingAs($this->admin)->patch(route('dokumen.update-berlaku', $this->berkas('KTP')), ['berlaku' => false])->assertStatus(422);           // wajib
-        $this->assertTrue($this->berkas('KTP Pasangan')->berlaku);
+        $this->actingAs($this->admin)->post($store, ['cara_bayar' => 'kpr_subsidi', 'nama_dokumen' => 'Dengan Syarat', 'sifat' => 'kondisional', 'syarat_pekerjaan' => ['wirausaha']])->assertSessionDoesntHaveErrors();
+        $this->assertSame(['wirausaha'], DokumenTemplate::where('nama_dokumen', 'Dengan Syarat')->first()->syaratPekerjaan());
+
+        // Mengubah sifat Wajib → Kondisional tanpa syarat ditolak.
+        $this->actingAs($this->admin)->patch(route('pengaturan.dokumen-templates.update', $this->ktp), ['nama_dokumen' => 'KTP', 'sifat' => 'kondisional'])->assertSessionHasErrors('syarat_pernikahan');
+        $this->assertSame('wajib', $this->ktp->fresh()->sifat);
+
+        // Template lama (kondisional tanpa syarat) tetap bisa diganti namanya tanpa dipaksa memberi syarat.
+        $this->actingAs($this->admin)->patch(route('pengaturan.dokumen-templates.update', $this->suratManual), ['nama_dokumen' => 'Surat Keterangan Baru', 'sifat' => 'kondisional'])->assertSessionDoesntHaveErrors();
+        $this->assertSame('Surat Keterangan Baru', $this->suratManual->fresh()->nama_dokumen);
+        // …tetapi bila syarat dikirim kosong untuk kondisional, ditolak.
+        $this->actingAs($this->admin)->patch(route('pengaturan.dokumen-templates.update', $this->suratManual), ['nama_dokumen' => 'X', 'sifat' => 'kondisional', 'syarat_pernikahan' => [], 'syarat_pekerjaan' => []])->assertSessionHasErrors('syarat_pernikahan');
     }
 
     public function test_template_menyimpan_syarat_membersihkannya_saat_bukan_kondisional_dan_tidak_hilang_saat_ganti_nama(): void

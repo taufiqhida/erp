@@ -397,6 +397,7 @@ class KonsumenController extends Controller
                         'sifat_label'  => $d->sifat_label,
                         'dihitung'     => $d->dihitung,
                         'tidak_berlaku' => $d->tidak_berlaku,
+                        'syarat_label' => $d->template?->syaratLabel(),
                         'status'       => $d->status,
                         'status_label' => $d->status_label,
                         'status_icon'  => $d->status_icon,

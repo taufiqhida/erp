@@ -41,7 +41,7 @@ class SinkronDokumen
         }
         foreach ($templateBaru as $template) {
             $butir[] = ['aksi' => 'tambah', 'berkas_id' => null, 'template_id' => $template->id, 'nama' => $template->nama_dokumen,
-                'detail' => $template->sifat_label . (($template->berlakuUntuk($kk->konsumen) ?? true) ? '' : ' (tidak berlaku untuk konsumen ini)'), 'data' => []];
+                'detail' => $template->sifat_label . ($template->berlakuUntuk($kk->konsumen) ? '' : ' (tidak berlaku untuk konsumen ini)'), 'data' => []];
         }
         foreach ($sisaBerkas as $berkas) {
             if ($berkas->status === 'belum_ada') {
@@ -146,10 +146,10 @@ class SinkronDokumen
         if ($berkas->sifat !== $template->sifat) {
             $teks[] = "Sifat {$berkas->sifat_label} → {$template->sifat_label}";
             $data['sifat'] = $template->sifat;
-            $data['berlaku'] = $template->berlakuUntuk($kk->konsumen) ?? true;
-        } else {
+            $data['berlaku'] = $template->berlakuUntuk($kk->konsumen);
+        } elseif ($template->sifat === 'kondisional') {
             $baru = $template->berlakuUntuk($kk->konsumen);
-            if ($baru !== null && $berkas->berlaku !== $baru) {
+            if ($berkas->berlaku !== $baru) {
                 $teks[] = $baru ? 'Sekarang berlaku untuk konsumen ini' : 'Tidak berlaku untuk konsumen ini';
                 $data['berlaku'] = $baru;
             }

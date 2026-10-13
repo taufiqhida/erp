@@ -625,6 +625,7 @@ onMounted(() => {
                                         <span class="text-base">{{ dok.status_icon }}</span>
                                         <span class="text-slate-300 text-sm">{{ dok.nama_dokumen }}</span>
                                         <span v-if="dok.tidak_berlaku" class="text-slate-500 text-xs">(Tidak berlaku)</span>
+                                        <span v-else-if="dok.sifat === 'kondisional'" class="text-slate-500 text-xs">(Wajib{{ dok.syarat_label ? ' · ' + dok.syarat_label : '' }})</span>
                                         <span v-else-if="dok.sifat !== 'wajib'" class="text-slate-500 text-xs">({{ dok.sifat_label }})</span>
                                     </div>
                                     <span class="text-xs" :class="dok.status === 'sudah_ada' ? 'text-emerald-400' : ['perlu_revisi','ditolak'].includes(dok.status) ? 'text-amber-400' : 'text-slate-500'">

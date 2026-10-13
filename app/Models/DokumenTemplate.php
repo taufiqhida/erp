@@ -90,14 +90,15 @@ class DokumenTemplate extends Model
     }
 
     /**
-     * Apakah berkas ini berlaku untuk konsumen tertentu. null = tidak ditentukan otomatis (kondisional tanpa syarat → diatur
-     * manual per konsumen). Kedua syarat (pernikahan dan pekerjaan) harus terpenuhi bila keduanya diisi. Data konsumen yang
-     * masih kosong dianggap berlaku — lebih baik berkas ditagih daripada terlewat karena data belum dilengkapi.
+     * Apakah berkas ini berlaku untuk konsumen tertentu. Hanya relevan untuk kondisional: berlaku bila konsumen memenuhi syarat
+     * (pernikahan dan pekerjaan — keduanya bila keduanya diisi). Kondisional TANPA syarat dianggap tidak berlaku (tidak dihitung);
+     * template seperti itu ditandai agar Superadmin memberinya syarat atau mengubahnya jadi Opsional. Data konsumen yang masih
+     * kosong dianggap memenuhi syarat — lebih baik berkas ditagih daripada terlewat karena data belum dilengkapi.
      */
-    public function berlakuUntuk(?Konsumen $konsumen): ?bool
+    public function berlakuUntuk(?Konsumen $konsumen): bool
     {
         if ($this->sifat !== 'kondisional') return true;
-        if (!$this->punyaSyarat()) return null;
+        if (!$this->punyaSyarat()) return false;
 
         $cocok = fn (array $syarat, ?string $nilai) => !$syarat || $nilai === null || $nilai === '' || in_array($nilai, $syarat, true);
 

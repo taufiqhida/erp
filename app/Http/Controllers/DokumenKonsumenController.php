@@ -105,8 +105,6 @@ class DokumenKonsumenController extends Controller
                 'berlaku'      => $d->berlaku,
                 'dihitung'     => $d->dihitung,
                 'syarat_label' => $d->template?->syaratLabel(),
-                // Kondisional tanpa syarat otomatis: berlaku/tidaknya diatur manual oleh staff.
-                'manual'       => $d->sifat === 'kondisional' && !$d->template?->punyaSyarat(),
                 'status'       => $d->status,
                 'status_label' => $d->status_label,
                 'status_icon'  => $d->status_icon,
@@ -148,23 +146,6 @@ class DokumenKonsumenController extends Controller
         $hasil = SinkronDokumen::terapkan($kk);
 
         return back()->with('success', "Berkas disinkronkan: {$hasil['tambah']} ditambah, {$hasil['ubah']} diubah, {$hasil['hapus']} dihapus.");
-    }
-
-    /**
-     * Tandai berkas kondisional (tanpa syarat otomatis) berlaku / tidak berlaku untuk konsumen ini. Yang tidak berlaku tidak
-     * dihitung di progress dan tidak menghalangi lanjut tahap.
-     */
-    public function updateBerlaku(Request $request, DokumenKonsumen $dok): RedirectResponse
-    {
-        $this->authorizeProjectAccess($dok->transaksi->kavling->project);
-        abort_unless(Auth::user()->can('manage dokumen'), 403);
-        $this->assertTransactionEditable($dok->transaksi, 'Ubah berlaku berkas');
-        abort_unless($dok->sifat === 'kondisional' && !$dok->template?->punyaSyarat(), 422, 'Berlaku/tidaknya berkas ini ditentukan otomatis oleh syarat di template.');
-
-        $validated = $request->validate(['berlaku' => 'required|boolean']);
-        $dok->update(['berlaku' => $validated['berlaku'], 'updated_by' => Auth::id()]);
-
-        return back()->with('success', "'{$dok->nama_dokumen}' ditandai " . ($dok->berlaku ? 'berlaku' : 'tidak berlaku') . '.');
     }
 
     /**

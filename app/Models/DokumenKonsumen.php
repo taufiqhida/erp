@@ -62,7 +62,7 @@ class DokumenKonsumen extends Model
             'dokumen_template_id' => $template->id,
             'nama_dokumen'        => $template->nama_dokumen,
             'sifat'               => $template->sifat,
-            'berlaku'             => $template->berlakuUntuk($konsumen) ?? true,
+            'berlaku'             => $template->berlakuUntuk($konsumen),
             'status'              => $status,
         ];
     }

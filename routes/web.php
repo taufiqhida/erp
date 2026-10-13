@@ -191,8 +191,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('dokumen.index');
     Route::patch('dokumen/{dok}/status', [DokumenKonsumenController::class, 'updateStatus'])
         ->name('dokumen.update-status');
-    Route::patch('dokumen/{dok}/berlaku', [DokumenKonsumenController::class, 'updateBerlaku'])
-        ->name('dokumen.update-berlaku');
     Route::post('pemasaran/transaksi/{kk}/dokumen/sinkron', [DokumenKonsumenController::class, 'sinkron'])
         ->name('dokumen.sinkron')->middleware('throttle:heavy');
 

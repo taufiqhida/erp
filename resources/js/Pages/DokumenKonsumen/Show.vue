@@ -40,11 +40,26 @@ const wajibTotal = computed(() => dihitung.value.length);
 const wajibDone  = computed(() => dihitung.value.filter(d => d.status === 'sudah_ada').length);
 const progress = computed(() => (wajibTotal.value ? Math.round((wajibDone.value / wajibTotal.value) * 100) : 0));
 
-// Berkas kondisional tanpa syarat otomatis: staff menandai berlaku / tidak berlaku.
-const ubahBerlaku = (dok) => {
-    router.patch(route('dokumen.update-berlaku', dok.id), { berlaku: !dok.berlaku }, { preserveScroll: true });
-};
 const showSinkron = ref(false);
+
+// Label sifat yang EFEKTIF untuk konsumen ini: kondisional yang syaratnya terpenuhi tampil sebagai Wajib (plus syaratnya),
+// yang tidak terpenuhi sebagai Tidak berlaku. Staff langsung tahu mana yang harus dikumpulkan.
+const badgeDok = (dok) => {
+    if (dok.sifat !== 'kondisional') return { teks: dok.sifat_label, cls: sifatBadgeCls[dok.sifat], title: '' };
+    if (dok.berlaku) return { teks: dok.syarat_label ? `Wajib · ${dok.syarat_label}` : 'Wajib', cls: sifatBadgeCls.wajib, title: `Wajib untuk konsumen ini karena memenuhi syarat: ${dok.syarat_label ?? '-'}` };
+
+    return { teks: 'Tidak berlaku', cls: 'bg-slate-700 text-slate-300', title: dok.syarat_label ? `Hanya berlaku jika: ${dok.syarat_label}` : 'Template ini belum diberi syarat, jadi tidak dihitung' };
+};
+const ringkasSifat = computed(() => {
+    const d = props.dokumens ?? [];
+
+    return {
+        wajib: d.filter(x => x.sifat === 'wajib').length,
+        kondisional: d.filter(x => x.sifat === 'kondisional' && x.berlaku).length,
+        tidakBerlaku: d.filter(x => x.sifat === 'kondisional' && !x.berlaku).length,
+        opsional: d.filter(x => x.sifat === 'opsional').length,
+    };
+});
 
 const sifatBadgeCls = {
     wajib:       'bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20',
@@ -710,6 +725,11 @@ const submitBast = () => {
                     </div>
                 </div>
 
+                <div v-if="dokumens.length" class="px-5 py-2 border-b border-slate-800 text-slate-500 text-xs">
+                    Wajib {{ ringkasSifat.wajib }}<template v-if="ringkasSifat.kondisional"> · Wajib karena syarat {{ ringkasSifat.kondisional }}</template><template v-if="ringkasSifat.tidakBerlaku"> · Tidak berlaku {{ ringkasSifat.tidakBerlaku }}</template><template v-if="ringkasSifat.opsional"> · Opsional {{ ringkasSifat.opsional }}</template>
+                    <span class="text-slate-600"> — progress hanya menghitung yang wajib.</span>
+                </div>
+
                 <div v-if="!dokumens.length" class="py-12 text-center text-slate-500 text-sm">
                     Belum ada template dokumen. Atur di Pengaturan → Template Dokumen.
                 </div>
@@ -728,12 +748,8 @@ const submitBast = () => {
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2">
                                 <span class="text-slate-200 text-sm font-medium">{{ dok.nama_dokumen }}</span>
-                                <span :class="sifatBadgeCls[dok.sifat]"
-                                    class="px-1.5 py-0.5 text-xs rounded">{{ dok.sifat_label }}</span>
-                                <span v-if="dok.sifat === 'kondisional' && !dok.berlaku" class="px-1.5 py-0.5 text-xs rounded bg-slate-700 text-slate-300">Tidak berlaku</span>
-                                <span v-else-if="dok.syarat_label" class="text-slate-500 text-xs">Berlaku jika: {{ dok.syarat_label }}</span>
-                                <button v-if="dok.manual && canManageDokumen" type="button" @click="ubahBerlaku(dok)"
-                                    class="text-xs text-violet-400 hover:text-violet-300 underline">{{ dok.berlaku ? 'Tandai tidak berlaku' : 'Tandai berlaku' }}</button>
+                                <span :class="badgeDok(dok).cls" :title="badgeDok(dok).title"
+                                    class="px-1.5 py-0.5 text-xs rounded">{{ badgeDok(dok).teks }}</span>
                             </div>
                             <div class="mt-1 flex flex-wrap items-center gap-2">
                                 <span :class="statusConfig[dok.status]?.badgeCls ?? 'bg-slate-700 text-slate-400'"
