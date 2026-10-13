@@ -9,6 +9,7 @@ use App\Models\CancellationRequest;
 use App\Models\DokumenKonsumen;
 use App\Models\KavlingKonsumen;
 use App\Models\NotarisPreset;
+use App\Support\SinkronDokumen;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,7 +27,7 @@ class DokumenKonsumenController extends Controller
     {
         $this->authorizeProjectAccess($kk->kavling->project);
 
-        $kk->load(['konsumen', 'kavling.project', 'kavling.statusBangunStage', 'dokumens.verifiedBy', 'bastRecord', 'jadwalTagihans']);
+        $kk->load(['konsumen', 'kavling.project', 'kavling.statusBangunStage', 'dokumens.verifiedBy', 'dokumens.template', 'bastRecord', 'jadwalTagihans']);
 
         $pendingRequest = CancellationRequest::where('kavling_konsumen_id', $kk->id)->pending()->first();
 
@@ -101,6 +102,11 @@ class DokumenKonsumenController extends Controller
                 'nama_dokumen' => $d->nama_dokumen,
                 'sifat'        => $d->sifat,
                 'sifat_label'  => $d->sifat_label,
+                'berlaku'      => $d->berlaku,
+                'dihitung'     => $d->dihitung,
+                'syarat_label' => $d->template?->syaratLabel(),
+                // Kondisional tanpa syarat otomatis: berlaku/tidaknya diatur manual oleh staff.
+                'manual'       => $d->sifat === 'kondisional' && !$d->template?->punyaSyarat(),
                 'status'       => $d->status,
                 'status_label' => $d->status_label,
                 'status_icon'  => $d->status_icon,
@@ -119,6 +125,46 @@ class DokumenKonsumenController extends Controller
                 ->orWhere('id', $kk->notaris_preset_id)
                 ->ordered()->get(['id', 'nama']),
         ]);
+    }
+
+    /**
+     * Sinkronkan berkas satu konsumen dengan Template Pemberkasan terbaru. `simulasi` = hanya tampilkan rencana (JSON).
+     */
+    public function sinkron(Request $request, KavlingKonsumen $kk): \Illuminate\Http\JsonResponse|RedirectResponse
+    {
+        $this->authorizeProjectAccess($kk->kavling->project);
+        abort_unless(Auth::user()->can('manage dokumen'), 403);
+        $this->assertTransactionEditable($kk, 'Sinkronkan berkas');
+
+        if ($request->boolean('simulasi')) {
+            $butir = SinkronDokumen::rencana($kk);
+
+            return response()->json([
+                'ringkas' => SinkronDokumen::hitung($butir),
+                'butir'   => collect($butir)->whereIn('aksi', ['tambah', 'ubah', 'hapus', 'pertahankan'])->map(fn ($b) => collect($b)->only(['aksi', 'nama', 'detail']))->values(),
+            ]);
+        }
+
+        $hasil = SinkronDokumen::terapkan($kk);
+
+        return back()->with('success', "Berkas disinkronkan: {$hasil['tambah']} ditambah, {$hasil['ubah']} diubah, {$hasil['hapus']} dihapus.");
+    }
+
+    /**
+     * Tandai berkas kondisional (tanpa syarat otomatis) berlaku / tidak berlaku untuk konsumen ini. Yang tidak berlaku tidak
+     * dihitung di progress dan tidak menghalangi lanjut tahap.
+     */
+    public function updateBerlaku(Request $request, DokumenKonsumen $dok): RedirectResponse
+    {
+        $this->authorizeProjectAccess($dok->transaksi->kavling->project);
+        abort_unless(Auth::user()->can('manage dokumen'), 403);
+        $this->assertTransactionEditable($dok->transaksi, 'Ubah berlaku berkas');
+        abort_unless($dok->sifat === 'kondisional' && !$dok->template?->punyaSyarat(), 422, 'Berlaku/tidaknya berkas ini ditentukan otomatis oleh syarat di template.');
+
+        $validated = $request->validate(['berlaku' => 'required|boolean']);
+        $dok->update(['berlaku' => $validated['berlaku'], 'updated_by' => Auth::id()]);
+
+        return back()->with('success', "'{$dok->nama_dokumen}' ditandai " . ($dok->berlaku ? 'berlaku' : 'tidak berlaku') . '.');
     }
 
     /**

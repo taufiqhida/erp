@@ -108,7 +108,7 @@ class KonsumenImportSpec
     public static function dokumenTemplates(string $caraBayar): array
     {
         return DokumenTemplate::where('cara_bayar', $caraBayar)->orderBy('urutan')->orderBy('id')
-            ->get(['nama_dokumen', 'sifat'])->all();
+            ->get()->all();
     }
 
     /** Daftar isi dropdown untuk sheet "Daftar" — nama list => array opsi. */

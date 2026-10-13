@@ -2,6 +2,7 @@
 import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import PengajuanKonsumenModal from '@/Components/PengajuanKonsumenModal.vue';
+import SinkronBerkasModal from '@/Components/SinkronBerkasModal.vue';
 import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
 
@@ -33,14 +34,17 @@ const statusConfig = {
     ditolak:    { label: 'Ditolak',    icon: '🚫', cls: 'bg-rose-500/20 text-rose-400', badgeCls: 'bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30' },
 };
 
-// Progress
-const progress = computed(() => {
-    if (!props.dokumens?.length) return 0;
-    const done = props.dokumens.filter(d => d.status === 'sudah_ada').length;
-    return Math.round((done / props.dokumens.length) * 100);
-});
-const wajibTotal = computed(() => props.dokumens?.filter(d => d.sifat === 'wajib').length ?? 0);
-const wajibDone  = computed(() => props.dokumens?.filter(d => d.sifat === 'wajib' && d.status === 'sudah_ada').length ?? 0);
+// Progress: hanya berkas yang dihitung (wajib + kondisional yang berlaku); opsional dan yang tidak berlaku tidak ikut.
+const dihitung = computed(() => props.dokumens?.filter(d => d.dihitung) ?? []);
+const wajibTotal = computed(() => dihitung.value.length);
+const wajibDone  = computed(() => dihitung.value.filter(d => d.status === 'sudah_ada').length);
+const progress = computed(() => (wajibTotal.value ? Math.round((wajibDone.value / wajibTotal.value) * 100) : 0));
+
+// Berkas kondisional tanpa syarat otomatis: staff menandai berlaku / tidak berlaku.
+const ubahBerlaku = (dok) => {
+    router.patch(route('dokumen.update-berlaku', dok.id), { berlaku: !dok.berlaku }, { preserveScroll: true });
+};
+const showSinkron = ref(false);
 
 const sifatBadgeCls = {
     wajib:       'bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20',
@@ -698,7 +702,12 @@ const submitBast = () => {
             <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 <div class="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
                     <h2 class="text-slate-300 font-medium text-sm">Daftar Dokumen</h2>
-                    <span class="text-slate-500 text-xs">{{ dokumens.length }} dokumen</span>
+                    <div class="flex items-center gap-3">
+                        <span class="text-slate-500 text-xs">{{ dokumens.length }} dokumen</span>
+                        <button v-if="canManageDokumen" type="button" @click="showSinkron = true"
+                            title="Samakan daftar berkas ini dengan Template Pemberkasan terbaru"
+                            class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors">⟳ Sinkronkan dengan template</button>
+                    </div>
                 </div>
 
                 <div v-if="!dokumens.length" class="py-12 text-center text-slate-500 text-sm">
@@ -707,6 +716,7 @@ const submitBast = () => {
 
                 <div class="divide-y divide-slate-800/60">
                     <div v-for="dok in dokumens" :key="dok.id"
+                        :class="dok.sifat === 'kondisional' && !dok.berlaku ? 'opacity-50' : ''"
                         class="flex items-center gap-4 px-5 py-4 hover:bg-slate-800/20 transition-colors">
                         <!-- Status icon -->
                         <div class="w-9 h-9 rounded-full flex items-center justify-center text-lg flex-shrink-0"
@@ -720,6 +730,10 @@ const submitBast = () => {
                                 <span class="text-slate-200 text-sm font-medium">{{ dok.nama_dokumen }}</span>
                                 <span :class="sifatBadgeCls[dok.sifat]"
                                     class="px-1.5 py-0.5 text-xs rounded">{{ dok.sifat_label }}</span>
+                                <span v-if="dok.sifat === 'kondisional' && !dok.berlaku" class="px-1.5 py-0.5 text-xs rounded bg-slate-700 text-slate-300">Tidak berlaku</span>
+                                <span v-else-if="dok.syarat_label" class="text-slate-500 text-xs">Berlaku jika: {{ dok.syarat_label }}</span>
+                                <button v-if="dok.manual && canManageDokumen" type="button" @click="ubahBerlaku(dok)"
+                                    class="text-xs text-violet-400 hover:text-violet-300 underline">{{ dok.berlaku ? 'Tandai tidak berlaku' : 'Tandai berlaku' }}</button>
                             </div>
                             <div class="mt-1 flex flex-wrap items-center gap-2">
                                 <span :class="statusConfig[dok.status]?.badgeCls ?? 'bg-slate-700 text-slate-400'"
@@ -816,6 +830,8 @@ const submitBast = () => {
                 </div>
             </div>
         </Teleport>
+
+        <SinkronBerkasModal v-if="showSinkron" :url="route('dokumen.sinkron', transaksi.id)" @tutup="showSinkron = false" @selesai="showSinkron = false" />
 
         <PengajuanKonsumenModal
             :show="showPengajuanBatal"

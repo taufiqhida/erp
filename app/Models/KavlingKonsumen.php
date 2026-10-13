@@ -296,10 +296,10 @@ class KavlingKonsumen extends Model
         };
     }
 
-    /** Apakah semua dokumen wajib sudah berstatus sudah_ada */
+    /** Apakah semua dokumen yang dihitung (wajib + kondisional yang berlaku) sudah berstatus sudah_ada */
     public function getDokumenWajibLengkapAttribute(): bool
     {
-        $wajib = $this->dokumens->where('sifat', 'wajib');
+        $wajib = $this->dokumens->filter(fn ($d) => $d->dihitung);
         if ($wajib->isEmpty()) return true;
         return $wajib->every(fn($d) => $d->status === 'sudah_ada');
     }
@@ -321,10 +321,10 @@ class KavlingKonsumen extends Model
         return 'safe';
     }
 
-    /** Progress kelengkapan berkas (persen) */
+    /** Progress kelengkapan berkas (persen) — hanya berkas wajib + kondisional yang berlaku; opsional tidak dihitung. */
     public function getProgressBerkasAttribute(): array
     {
-        $dokumens = $this->dokumens;
+        $dokumens = $this->dokumens->filter(fn ($d) => $d->dihitung);
         $total = $dokumens->count();
         if ($total === 0) return ['persen' => 0, 'ada' => 0, 'total' => 0];
 

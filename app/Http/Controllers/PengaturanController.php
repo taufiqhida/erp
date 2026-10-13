@@ -9,6 +9,8 @@ use App\Models\DajamSbumPreset;
 use App\Models\DeveloperProfile;
 use App\Models\DeveloperProfileBank;
 use App\Models\DokumenTemplate;
+use App\Models\Konsumen;
+use App\Support\SinkronDokumen;
 use App\Models\Kavling;
 use App\Models\Kontraktor;
 use App\Models\ProgramAllInPreset;
@@ -167,6 +169,9 @@ class PengaturanController extends Controller
                 'nama_dokumen' => $t->nama_dokumen,
                 'sifat'        => $t->sifat,
                 'sifat_label'  => $t->sifat_label,
+                'syarat_pernikahan' => $t->syaratPernikahan(),
+                'syarat_pekerjaan'  => $t->syaratPekerjaan(),
+                'syarat_label'      => $t->syaratLabel(),
                 'urutan'       => $t->urutan,
             ]));
 
@@ -174,6 +179,8 @@ class PengaturanController extends Controller
             'templates'         => $templates,
             'caraBayarOptions'  => DokumenTemplate::caraBayarLabel(),
             'sifatOptions'      => DokumenTemplate::sifatLabel(),
+            'pernikahanOptions' => Konsumen::statusPernikahanLabel(),
+            'pekerjaanOptions'  => Konsumen::jenisPekerjaanLabel(),
         ]);
     }
 
@@ -183,7 +190,12 @@ class PengaturanController extends Controller
             'cara_bayar'   => 'required|in:cash,cash_bertahap,kpr_subsidi,kpr_komersil',
             'nama_dokumen' => 'required|string|max:100',
             'sifat'        => 'required|in:wajib,kondisional,opsional',
+            'syarat_pernikahan'   => 'nullable|array',
+            'syarat_pernikahan.*' => 'in:' . implode(',', array_keys(Konsumen::statusPernikahanLabel())),
+            'syarat_pekerjaan'    => 'nullable|array',
+            'syarat_pekerjaan.*'  => 'in:' . implode(',', array_keys(Konsumen::jenisPekerjaanLabel())),
         ]);
+        $validated = $this->bersihkanSyarat($validated);
 
         // Item baru selalu masuk paling bawah di cara bayarnya; urutan diatur lewat tombol geser.
         $validated['urutan'] = (DokumenTemplate::where('cara_bayar', $validated['cara_bayar'])->max('urutan') ?? 0) + 1;
@@ -198,11 +210,69 @@ class PengaturanController extends Controller
         $validated = $request->validate([
             'nama_dokumen' => 'required|string|max:100',
             'sifat'        => 'required|in:wajib,kondisional,opsional',
+            'syarat_pernikahan'   => 'nullable|array',
+            'syarat_pernikahan.*' => 'in:' . implode(',', array_keys(Konsumen::statusPernikahanLabel())),
+            'syarat_pekerjaan'    => 'nullable|array',
+            'syarat_pekerjaan.*'  => 'in:' . implode(',', array_keys(Konsumen::jenisPekerjaanLabel())),
         ]);
+        // Perubahan nama/sifat saja (tanpa mengirim syarat) tidak boleh menghapus syarat yang sudah diatur.
+        if (!$request->has('syarat_pernikahan')) unset($validated['syarat_pernikahan']);
+        if (!$request->has('syarat_pekerjaan')) unset($validated['syarat_pekerjaan']);
+        $validated = $this->bersihkanSyarat($validated);
 
         $template->update($validated);
 
-        return back()->with('success', 'Template dokumen berhasil diperbarui.');
+        return back()->with('success', 'Template dokumen berhasil diperbarui. Konsumen yang sudah tercatat belum ikut berubah — pakai "Sinkronkan ke konsumen" bila perlu.');
+    }
+
+    /** Syarat hanya bermakna untuk berkas kondisional; sifat lain otomatis membersihkannya. */
+    private function bersihkanSyarat(array $validated): array
+    {
+        if (($validated['sifat'] ?? null) !== 'kondisional') {
+            $validated['syarat_pernikahan'] = null;
+            $validated['syarat_pekerjaan'] = null;
+        }
+
+        return $validated;
+    }
+
+    /**
+     * Sinkronkan seluruh transaksi yang masih berjalan dengan template terbaru. `simulasi` = hanya hitung (JSON); tanpa itu diterapkan.
+     * Berkas yang sudah diisi tidak ditimpa dan tidak dihapus (lihat App\Support\SinkronDokumen).
+     */
+    public function sinkronDokumenTemplate(Request $request): \Illuminate\Http\JsonResponse|RedirectResponse
+    {
+        $simulasi = $request->boolean('simulasi');
+        $total = ['tambah' => 0, 'ubah' => 0, 'hapus' => 0, 'pertahankan' => 0];
+        $transaksiTerdampak = 0;
+        $contoh = [];
+
+        SinkronDokumen::transaksiAktif()->with(['konsumen', 'dokumens', 'kavling'])->orderBy('id')->chunkById(100, function ($kks) use ($simulasi, &$total, &$transaksiTerdampak, &$contoh) {
+            foreach ($kks as $kk) {
+                $butir = SinkronDokumen::rencana($kk);
+                $hitung = SinkronDokumen::hitung($butir);
+                if (!array_sum($hitung) && !collect($butir)->contains('aksi', 'tautan')) continue;
+                if (array_sum($hitung)) {
+                    $transaksiTerdampak++;
+                    foreach ($hitung as $k => $v) $total[$k] += $v;
+                    if (count($contoh) < 60) {
+                        $contoh[] = ['transaksi_id' => $kk->id, 'konsumen' => $kk->konsumen?->nama, 'unit' => $kk->kavling?->nomor_lengkap,
+                            'butir' => collect($butir)->whereIn('aksi', ['tambah', 'ubah', 'hapus', 'pertahankan'])->map(fn ($b) => collect($b)->only(['aksi', 'nama', 'detail']))->values()];
+                    }
+                }
+                if (!$simulasi) SinkronDokumen::terapkan($kk);
+            }
+        });
+
+        if ($simulasi) {
+            return response()->json(['transaksi_terdampak' => $transaksiTerdampak, 'total' => $total, 'contoh' => $contoh, 'terpotong' => $transaksiTerdampak > count($contoh)]);
+        }
+
+        activity('dokumen_template')->causedBy($request->user())
+            ->withProperties(['transaksi_terdampak' => $transaksiTerdampak, 'total' => $total])
+            ->log("Sinkronkan berkas konsumen dengan template: {$transaksiTerdampak} transaksi");
+
+        return back()->with('success', "Sinkronisasi selesai: {$transaksiTerdampak} transaksi diperbarui ({$total['tambah']} berkas ditambah, {$total['ubah']} diubah, {$total['hapus']} dihapus).");
     }
 
     public function moveUpDokumenTemplate(DokumenTemplate $template): RedirectResponse

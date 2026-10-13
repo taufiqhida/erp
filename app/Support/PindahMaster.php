@@ -110,8 +110,8 @@ class PindahMaster
             ],
             'dokumen_template' => [
                 'label' => 'Template Pemberkasan', 'model' => DokumenTemplate::class, 'cocok' => ['cara_bayar', 'nama_dokumen'], 'urut' => ['cara_bayar', 'urutan'],
-                'kolom' => ['cara_bayar', 'nama_dokumen', 'sifat'],
-                'aturan' => ['cara_bayar' => 'required|' . $cara, 'nama_dokumen' => 'required|string|max:255', 'sifat' => 'required|in:wajib,kondisional,opsional'],
+                'kolom' => ['cara_bayar', 'nama_dokumen', 'sifat', 'syarat_pernikahan', 'syarat_pekerjaan'],
+                'aturan' => ['cara_bayar' => 'required|' . $cara, 'nama_dokumen' => 'required|string|max:255', 'sifat' => 'required|in:wajib,kondisional,opsional', 'syarat_pernikahan' => 'nullable|string|max:255', 'syarat_pekerjaan' => 'nullable|string|max:255'],
                 'baru' => fn (array $row) => $row + ['urutan' => (int) DokumenTemplate::where('cara_bayar', $row['cara_bayar'])->max('urutan') + 1],
             ],
             'status_bangun' => [

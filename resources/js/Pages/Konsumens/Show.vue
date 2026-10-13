@@ -619,11 +619,13 @@ onMounted(() => {
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                                 <div v-for="dok in trx.dokumens" :key="dok.id"
+                                    :class="dok.tidak_berlaku ? 'opacity-50' : ''"
                                     class="flex items-center justify-between px-3 py-2 bg-slate-800/60 rounded-lg">
                                     <div class="flex items-center gap-2">
                                         <span class="text-base">{{ dok.status_icon }}</span>
                                         <span class="text-slate-300 text-sm">{{ dok.nama_dokumen }}</span>
-                                        <span v-if="dok.sifat !== 'wajib'" class="text-slate-500 text-xs">({{ dok.sifat_label }})</span>
+                                        <span v-if="dok.tidak_berlaku" class="text-slate-500 text-xs">(Tidak berlaku)</span>
+                                        <span v-else-if="dok.sifat !== 'wajib'" class="text-slate-500 text-xs">({{ dok.sifat_label }})</span>
                                     </div>
                                     <span class="text-xs" :class="dok.status === 'sudah_ada' ? 'text-emerald-400' : ['perlu_revisi','ditolak'].includes(dok.status) ? 'text-amber-400' : 'text-slate-500'">
                                         {{ dok.status_label }}

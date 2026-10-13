@@ -9,8 +9,10 @@ class DokumenKonsumen extends Model
 {
     protected $fillable = [
         'kavling_konsumen_id',
+        'dokumen_template_id',
         'nama_dokumen',
         'sifat',
+        'berlaku',
         'status',
         'catatan',
         'catatan_revisi',
@@ -21,6 +23,7 @@ class DokumenKonsumen extends Model
 
     protected $casts = [
         'tanggal_verifikasi' => 'datetime',
+        'berlaku'            => 'boolean',
     ];
 
     /* ---------------------------------------------------------------
@@ -30,6 +33,38 @@ class DokumenKonsumen extends Model
     public function transaksi(): BelongsTo
     {
         return $this->belongsTo(KavlingKonsumen::class, 'kavling_konsumen_id');
+    }
+
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(DokumenTemplate::class, 'dokumen_template_id');
+    }
+
+    /**
+     * Ikut dihitung di progress & syarat lanjut tahap: berkas wajib, dan kondisional yang berlaku untuk konsumen ini.
+     * Opsional dan kondisional yang tidak berlaku tidak dihitung.
+     */
+    public function getDihitungAttribute(): bool
+    {
+        return $this->sifat === 'wajib' || ($this->sifat === 'kondisional' && $this->berlaku);
+    }
+
+    /** Kondisional yang tidak berlaku untuk konsumen ini (tampil abu-abu). */
+    public function getTidakBerlakuAttribute(): bool
+    {
+        return $this->sifat === 'kondisional' && !$this->berlaku;
+    }
+
+    /** Atribut berkas baru dari template untuk konsumen tertentu (status awal Belum Ada). */
+    public static function atributDariTemplate(DokumenTemplate $template, ?Konsumen $konsumen, string $status = 'belum_ada'): array
+    {
+        return [
+            'dokumen_template_id' => $template->id,
+            'nama_dokumen'        => $template->nama_dokumen,
+            'sifat'               => $template->sifat,
+            'berlaku'             => $template->berlakuUntuk($konsumen) ?? true,
+            'status'              => $status,
+        ];
     }
 
     public function updatedBy(): BelongsTo

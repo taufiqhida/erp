@@ -191,6 +191,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('dokumen.index');
     Route::patch('dokumen/{dok}/status', [DokumenKonsumenController::class, 'updateStatus'])
         ->name('dokumen.update-status');
+    Route::patch('dokumen/{dok}/berlaku', [DokumenKonsumenController::class, 'updateBerlaku'])
+        ->name('dokumen.update-berlaku');
+    Route::post('pemasaran/transaksi/{kk}/dokumen/sinkron', [DokumenKonsumenController::class, 'sinkron'])
+        ->name('dokumen.sinkron')->middleware('throttle:heavy');
 
     // ── Konsumens (CRUD) — tanpa create/store: konsumen baru cuma dibuat
     // lewat form booking, biar tidak ada row konsumen yatim tanpa transaksi.
@@ -312,6 +316,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('dokumen-templates.move-down');
             Route::delete('dokumen-templates/{template}', [PengaturanController::class, 'destroyDokumenTemplate'])
                 ->name('dokumen-templates.destroy');
+            Route::post('dokumen-templates-sinkron', [PengaturanController::class, 'sinkronDokumenTemplate'])
+                ->name('dokumen-templates.sinkron')->middleware('throttle:heavy');
 
             // Template Surat
             Route::get('surat-templates', [PengaturanController::class, 'suratTemplates'])

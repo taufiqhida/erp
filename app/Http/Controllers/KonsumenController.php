@@ -395,6 +395,8 @@ class KonsumenController extends Controller
                         'nama_dokumen' => $d->nama_dokumen,
                         'sifat'        => $d->sifat,
                         'sifat_label'  => $d->sifat_label,
+                        'dihitung'     => $d->dihitung,
+                        'tidak_berlaku' => $d->tidak_berlaku,
                         'status'       => $d->status,
                         'status_label' => $d->status_label,
                         'status_icon'  => $d->status_icon,
@@ -568,6 +570,13 @@ class KonsumenController extends Controller
         }
 
         $konsumen->update($validated);
+
+        // Status pernikahan/pekerjaan menentukan berkas kondisional mana yang berlaku — ikut disesuaikan di transaksi yang masih berjalan.
+        if ($konsumen->wasChanged(['status_pernikahan', 'pekerjaan'])) {
+            foreach ($konsumen->kavlingKonsumens()->where('status', 'active')->where('status_penjualan', '!=', 'batal')->get() as $kk) {
+                \App\Support\SinkronDokumen::segarkanBerlaku($kk);
+            }
+        }
 
         return redirect()->route('konsumens.index')
             ->with('success', "Konsumen {$konsumen->nama} berhasil diperbarui.");

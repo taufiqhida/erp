@@ -3,12 +3,36 @@ import { konfirmasi } from '@/Composables/useConfirm';
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
 import { useForm, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import SinkronBerkasModal from '@/Components/SinkronBerkasModal.vue';
 
 const props = defineProps({
     templates:        Object,
     caraBayarOptions: Object,
     sifatOptions:     Object,
+    pernikahanOptions: Object,
+    pekerjaanOptions:  Object,
 });
+
+const showSinkron = ref(false);
+
+// ── Syarat berkas kondisional ("Berlaku jika") ──
+const syaratId = ref(null);          // id template yang panel syaratnya terbuka
+const syaratPernikahan = ref([]);
+const syaratPekerjaan = ref([]);
+const bukaSyarat = (doc) => {
+    if (syaratId.value === doc.id) { syaratId.value = null; return; }
+    syaratId.value = doc.id;
+    syaratPernikahan.value = [...(doc.syarat_pernikahan ?? [])];
+    syaratPekerjaan.value = [...(doc.syarat_pekerjaan ?? [])];
+};
+const simpanSyarat = (doc) => {
+    router.patch(route('pengaturan.dokumen-templates.update', doc.id), {
+        nama_dokumen: doc.nama_dokumen,
+        sifat: doc.sifat,
+        syarat_pernikahan: syaratPernikahan.value,
+        syarat_pekerjaan: syaratPekerjaan.value,
+    }, { preserveScroll: true, onSuccess: () => { syaratId.value = null; } });
+};
 
 const activeCaraBayar = ref(Object.keys(props.caraBayarOptions)[0] ?? 'kpr_subsidi');
 
@@ -72,6 +96,13 @@ const del = async (id) => {
             <div>
                 <h1 class="text-white font-bold text-xl">Template Dokumen Pemberkasan</h1>
                 <p class="text-slate-400 text-sm mt-0.5">Checklist dokumen akan auto-generate saat booking berdasarkan cara pembayaran</p>
+                <div class="mt-3 flex flex-wrap items-center gap-3 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
+                    <p class="text-slate-400 text-xs flex-1 min-w-[260px]">
+                        Perubahan template <b class="text-slate-300">tidak otomatis</b> berlaku untuk konsumen yang sudah tercatat. Setelah menambah, menghapus, atau mengubah sifat/syarat berkas,
+                        pakai tombol ini untuk menyamakan konsumen yang masih berjalan. Berkas yang sudah diisi tidak ditimpa.
+                    </p>
+                    <button type="button" @click="showSinkron = true" class="px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium rounded-lg">⟳ Sinkronkan ke konsumen</button>
+                </div>
             </div>
 
             <!-- Cara Bayar Tabs -->
@@ -88,7 +119,7 @@ const del = async (id) => {
                 <!-- Dokumen List -->
                 <div v-if="templates[activeCaraBayar]?.length">
                     <div v-for="(doc, idx) in templates[activeCaraBayar]" :key="doc.id"
-                        class="flex items-center justify-between px-5 py-3 border-b border-slate-800 hover:bg-slate-800/30 transition-colors group">
+                        class="flex flex-wrap items-center justify-between px-5 py-3 border-b border-slate-800 hover:bg-slate-800/30 transition-colors group">
                         <div class="flex items-center gap-3">
                             <div class="flex flex-col">
                                 <button @click="move(doc, 'up')" :disabled="idx === 0" title="Naikkan"
@@ -110,6 +141,7 @@ const del = async (id) => {
                                 @keyup.enter="saveEdit(doc)" @keyup.esc="cancelEdit" @blur="saveEdit(doc)"
                                 class="px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm w-72 focus:outline-none focus:ring-1 focus:ring-violet-500" />
                             <span v-else class="text-slate-200 text-sm">{{ doc.nama_dokumen }}</span>
+                            <span v-if="doc.syarat_label" class="text-slate-500 text-xs">· berlaku jika {{ doc.syarat_label }}</span>
                         </div>
                         <div class="flex items-center gap-2">
                             <select :value="doc.sifat" @change="changeSifat(doc, $event.target.value)"
@@ -117,6 +149,10 @@ const del = async (id) => {
                                 class="text-xs font-medium rounded-lg px-2 py-1 border-0 focus:outline-none focus:ring-1 focus:ring-violet-500 cursor-pointer">
                                 <option v-for="(label, key) in sifatOptions" :key="key" :value="key">{{ label }}</option>
                             </select>
+                            <button v-if="doc.sifat === 'kondisional'" @click="bukaSyarat(doc)"
+                                class="px-2 py-1 text-amber-400 hover:bg-amber-500/10 rounded-lg text-xs transition-all">
+                                Syarat
+                            </button>
                             <button v-if="editingId !== doc.id" @click="startEdit(doc)"
                                 class="opacity-0 group-hover:opacity-100 px-2 py-1 text-violet-400 hover:bg-violet-500/10 rounded-lg text-xs transition-all">
                                 Edit
@@ -125,6 +161,30 @@ const del = async (id) => {
                                 class="opacity-0 group-hover:opacity-100 px-2 py-1 text-rose-400 hover:bg-rose-500/10 rounded-lg text-xs transition-all">
                                 Hapus
                             </button>
+                        </div>
+                        <!-- Panel syarat (kondisional) -->
+                        <div v-if="syaratId === doc.id" class="basis-full w-full mt-3 pt-3 border-t border-slate-800 space-y-3">
+                            <p class="text-slate-400 text-xs">Berkas ini hanya <b class="text-slate-300">berlaku</b> bila konsumen memenuhi syarat di bawah. Kosongkan semuanya untuk menentukan berlaku/tidaknya manual per konsumen. Bila dua kelompok diisi, keduanya harus terpenuhi.</p>
+                            <div>
+                                <div class="text-slate-300 text-xs font-medium mb-1.5">Status pernikahan</div>
+                                <div class="flex flex-wrap gap-3">
+                                    <label v-for="(label, key) in pernikahanOptions" :key="key" class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                                        <input type="checkbox" :value="key" v-model="syaratPernikahan" class="rounded border-slate-600 bg-slate-800 text-violet-500" /> {{ label }}
+                                    </label>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="text-slate-300 text-xs font-medium mb-1.5">Pekerjaan</div>
+                                <div class="flex flex-wrap gap-3">
+                                    <label v-for="(label, key) in pekerjaanOptions" :key="key" class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                                        <input type="checkbox" :value="key" v-model="syaratPekerjaan" class="rounded border-slate-600 bg-slate-800 text-violet-500" /> {{ label }}
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button @click="simpanSyarat(doc)" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-lg">Simpan syarat</button>
+                                <button @click="syaratId = null" class="px-3 py-1.5 text-slate-400 hover:text-slate-200 text-xs">Batal</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -151,5 +211,7 @@ const del = async (id) => {
                     </div>
                 </div>
             </div>
+        <SinkronBerkasModal v-if="showSinkron" :url="route('pengaturan.dokumen-templates.sinkron')" judul="Sinkronkan Berkas ke Konsumen Aktif"
+            @tutup="showSinkron = false" @selesai="showSinkron = false" />
     </PengaturanLayout>
 </template>

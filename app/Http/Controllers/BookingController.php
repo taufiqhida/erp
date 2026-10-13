@@ -448,12 +448,7 @@ class BookingController extends Controller
                 ->get();
 
             foreach ($templates as $template) {
-                DokumenKonsumen::create([
-                    'kavling_konsumen_id' => $transaksi->id,
-                    'nama_dokumen'        => $template->nama_dokumen,
-                    'sifat'               => $template->sifat,
-                    'status'              => 'belum_ada',
-                ]);
+                DokumenKonsumen::create(['kavling_konsumen_id' => $transaksi->id] + DokumenKonsumen::atributDariTemplate($template, $konsumen));
             }
 
             // Update status kavling

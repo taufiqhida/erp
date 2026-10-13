@@ -383,7 +383,7 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
             $label = $str("dok:{$d->nama_dokumen}");
             $key = $label ? (KonsumenImportSpec::statusDokumenMap()[$label] ?? null) : 'belum_ada';
             if ($label && !$key) $errors[] = "Status dokumen '{$d->nama_dokumen}': '{$label}' tidak dikenal.";
-            $docStatuses[$d->nama_dokumen] = ['status' => $key ?? 'belum_ada', 'sifat' => $d->sifat];
+            $docStatuses[$d->nama_dokumen] = ['status' => $key ?? 'belum_ada', 'sifat' => $d->sifat, 'template' => $d];
         }
 
         $catatan = $str('catatan');
@@ -579,10 +579,7 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
 
                 // Checklist dokumen dari Template Pemberkasan.
                 foreach ($docStatuses as $namaDok => $d) {
-                    DokumenKonsumen::create([
-                        'kavling_konsumen_id' => $trx->id, 'nama_dokumen' => $namaDok,
-                        'sifat' => $d['sifat'], 'status' => $d['status'],
-                    ]);
+                    DokumenKonsumen::create(['kavling_konsumen_id' => $trx->id] + DokumenKonsumen::atributDariTemplate($d['template'], $trx->konsumen, $d['status']));
                 }
 
                 // Status kavling: mengikuti aturan sama seperti alur booking biasa.
