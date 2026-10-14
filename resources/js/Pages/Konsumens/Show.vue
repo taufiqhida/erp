@@ -1,6 +1,7 @@
 <script setup>
 import CatatanTransaksi from '@/Components/CatatanTransaksi.vue';
 import AlihPembeliModal from '@/Components/AlihPembeliModal.vue';
+import KoreksiTanggalBookingModal from '@/Components/KoreksiTanggalBookingModal.vue';
 import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import CatatPembayaran from '@/Components/CatatPembayaran.vue';
@@ -35,6 +36,7 @@ const openPengajuan = (trx, type) => {
     pengajuanModal.show = true;
 };
 const closePengajuan = () => { pengajuanModal.show = false; };
+const koreksiTrx = ref(null);   // transaksi yang tanggal bookingnya sedang dikoreksi
 const alihTrx = ref(null);       // transaksi yang sedang diajukan Alih Pembeli
 const onPengajuanSuccess = () => { pengajuanModal.show = false; router.reload({ only: ['transaksis'] }); };
 const overrideLock = computed(() => usePage().props.auth.user?.permissions?.includes('override transaction lock'));
@@ -376,7 +378,7 @@ onMounted(() => {
                     </div>
 
                     <!-- Aksi transaksi: Batal / Tukar Unit — keduanya muara ke menu Pembatalan -->
-                    <div v-if="trx.status === 'active'" class="flex items-center gap-2">
+                    <div v-if="trx.status === 'active'" class="flex flex-wrap items-center gap-2">
                         <span v-if="trx.has_pending_request" class="px-2.5 py-1 bg-amber-500/10 text-amber-400 text-xs rounded-lg border border-amber-500/20">
                             ⏳ Menunggu review {{ { unit_swap: 'tukar unit', buyer_transfer: 'alih pembeli' }[trx.pending_request_type] ?? 'pembatalan' }}
                         </span>
@@ -394,6 +396,12 @@ onMounted(() => {
                                 👥 Alihkan Pembeli
                             </button>
                         </template>
+                    </div>
+
+                    <div v-if="trx.can_koreksi_tanggal_booking" class="-mt-3">
+                        <button @click="koreksiTrx = trx" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors border border-slate-700">
+                            📅 Koreksi Tanggal Booking
+                        </button>
                     </div>
 
                     <!-- Riwayat peralihan pembeli pada transaksi ini -->
@@ -968,6 +976,9 @@ onMounted(() => {
                 Konsumen belum memiliki transaksi
             </div>
         </div>
+
+        <KoreksiTanggalBookingModal v-if="koreksiTrx" :kk-id="koreksiTrx.id" :tanggal-sekarang="koreksiTrx.tanggal_booking_raw" :unit="koreksiTrx.kavling_nomor"
+            @tutup="koreksiTrx = null" @selesai="koreksiTrx = null" />
 
         <AlihPembeliModal v-if="alihTrx" :kk-id="alihTrx.id" :pembeli-lama="konsumen.nama" :unit="alihTrx.kavling_nomor"
             @tutup="alihTrx = null" @selesai="alihTrx = null" />

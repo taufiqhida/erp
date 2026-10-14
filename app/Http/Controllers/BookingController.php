@@ -8,6 +8,7 @@ use App\Http\Controllers\Concerns\ChecksTransactionLock;
 use App\Models\BiayaTambahanPreset;
 use App\Models\DokumenKonsumen;
 use App\Models\CatatanTransaksi;
+use App\Support\KoreksiTanggalBooking;
 use App\Models\DokumenTemplate;
 use App\Models\Kavling;
 use App\Models\KavlingKonsumenBiayaTambahan;
@@ -426,7 +427,7 @@ class BookingController extends Controller
                         'jenis'         => 'booking_fee',
                         'jumlah'        => $bookingFee,
                         'tanggal_bayar' => $tanggalBooking,
-                        'keterangan'    => 'Booking fee otomatis dibayar saat booking',
+                        'keterangan'    => KoreksiTanggalBooking::KETERANGAN_UTJ_OTOMATIS,
                         'created_by'    => Auth::id(),
                     ]);
 
@@ -638,6 +639,42 @@ class BookingController extends Controller
         }
 
         return back()->with('success', 'Keputusan Proses Bank berhasil disimpan.');
+    }
+
+    /**
+     * Koreksi Tanggal Booking (salah input). `simulasi` = hanya hitung dampaknya (JSON): berapa jadwal cicilan yang digeser, apakah
+     * tanggal bayar UTJ bawaan booking ikut berubah. Penerapan menggeser jatuh tempo cicilan yang belum dibayar sebesar selisih hari.
+     * Detail aturan: App\Support\KoreksiTanggalBooking.
+     */
+    public function koreksiTanggalBooking(Request $request, KavlingKonsumen $kk): \Illuminate\Http\JsonResponse|RedirectResponse
+    {
+        $this->authorizeProjectAccess($kk->kavling->project);
+        if ($alasan = KoreksiTanggalBooking::alasanTidakBoleh($kk, Auth::user())) abort(403, $alasan);
+        $this->assertTransactionEditable($kk, 'Koreksi tanggal booking');
+
+        // Galat validasi untuk permintaan JSON dirender manual (aplikasi ini hanya merender JSON untuk api/*).
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'tanggal_booking' => 'required|date|before_or_equal:today',
+            'alasan'          => $request->boolean('simulasi') ? 'nullable|string|max:300' : 'required|string|min:5|max:300',
+        ], [
+            'tanggal_booking.before_or_equal' => 'Tanggal booking tidak boleh di masa depan.',
+            'alasan.required' => 'Isi alasan koreksi (min. 5 karakter).', 'alasan.min' => 'Alasan koreksi minimal 5 karakter.',
+        ]);
+        $gagal = fn (array $errors) => $request->wantsJson()
+            ? response()->json(['message' => collect($errors)->flatten()->first(), 'errors' => $errors], 422)
+            : throw \Illuminate\Validation\ValidationException::withMessages($errors);
+        if ($validator->fails()) return $gagal($validator->errors()->toArray());
+
+        $baru = \Carbon\Carbon::parse($validator->validated()['tanggal_booking'])->startOfDay();
+        if ($baru->isSameDay($kk->tanggal_booking)) return $gagal(['tanggal_booking' => ['Tanggal booking sama dengan yang sekarang.']]);
+
+        if ($request->boolean('simulasi')) {
+            return response()->json(KoreksiTanggalBooking::ringkas(KoreksiTanggalBooking::rencana($kk, $baru)));
+        }
+
+        $ringkas = KoreksiTanggalBooking::terapkan($kk, $baru, trim($validator->validated()['alasan']), Auth::user());
+
+        return back()->with('success', "Tanggal booking dikoreksi ke {$baru->format('d M Y')}. {$ringkas['cicilan_digeser']} jadwal cicilan digeser.");
     }
 
     /**

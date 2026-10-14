@@ -331,6 +331,8 @@ class KonsumenController extends Controller
                     'project_id'       => $trx->kavling->project_id,
                     'status'           => $trx->status,
                     'peralihan'            => \App\Support\AlihPembeli::riwayatTransaksi($trx),
+                    'tanggal_booking_raw'  => $trx->tanggal_booking?->format('Y-m-d'),
+                    'can_koreksi_tanggal_booking' => \App\Support\KoreksiTanggalBooking::alasanTidakBoleh($trx, Auth::user()) === null,
                     'can_alih_pembeli'     => !$pendingRequest && Auth::user()->can('ajukan alih pembeli') && \App\Support\AlihPembeli::alasanTidakBoleh($trx) === null,
                     'has_pending_request'  => (bool) $pendingRequest,
                     'pending_request_type' => $pendingRequest?->type->value,
