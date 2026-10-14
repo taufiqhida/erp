@@ -311,13 +311,13 @@ class KonsumenController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
-        $pendingRequestsByTrx = CancellationRequest::whereIn('kavling_konsumen_id', $transaksis->pluck('id'))
-            ->pending()
-            ->get()
-            ->keyBy('kavling_konsumen_id');
+        // Usulan perubahan rincian tidak mengunci pipeline, jadi dilaporkan terpisah dari pengajuan lain (batal/tukar unit/alih pembeli).
+        $semuaPending = CancellationRequest::whereIn('kavling_konsumen_id', $transaksis->pluck('id'))->pending()->get();
+        $pendingRequestsByTrx = $semuaPending->filter(fn ($r) => $r->type->value !== 'rincian_change')->keyBy('kavling_konsumen_id');
+        $pendingRincianIds = $semuaPending->filter(fn ($r) => $r->type->value === 'rincian_change')->pluck('kavling_konsumen_id')->all();
 
         $transaksis = $transaksis
-            ->map(function ($trx) use ($pendingRequestsByTrx) {
+            ->map(function ($trx) use ($pendingRequestsByTrx, $pendingRincianIds) {
                 $isKpr = in_array($trx->cara_bayar, ['kpr_subsidi', 'kpr_komersil']);
                 $isKprSubsidi = $trx->cara_bayar === 'kpr_subsidi';
                 $dpTotal = (float) $trx->jadwalTagihans->where('jenis', 'dp')->sum('jumlah');
@@ -332,8 +332,16 @@ class KonsumenController extends Controller
                     'status'           => $trx->status,
                     'peralihan'            => \App\Support\AlihPembeli::riwayatTransaksi($trx),
                     'tanggal_booking_raw'  => $trx->tanggal_booking?->format('Y-m-d'),
-                    'can_koreksi_tanggal_booking' => \App\Support\KoreksiTanggalBooking::alasanTidakBoleh($trx, Auth::user()) === null,
+                    // Rincian: SPV/Leader/Superadmin mengubah langsung; Admin Sales mengusulkan (hanya sebelum Akad, dan tidak saat transaksi terkunci).
+                    'rincian_langsung'     => Auth::user()->can('override transaction lock'),
+                    'can_ubah_rincian'     => $trx->status === 'active' && $trx->status_penjualan !== 'batal' && (
+                        Auth::user()->can('override transaction lock')
+                            ? true
+                            : (Auth::user()->can('book kavling') && !$trx->is_locked && in_array($trx->status_penjualan, ['booking', 'pemberkasan', 'proses_bank', 'sp3k', 'rencana_akad'], true))
+                    ),
+                    'harga_unit_sekarang'  => $trx->kavling->harga,
                     'can_alih_pembeli'     => !$pendingRequest && Auth::user()->can('ajukan alih pembeli') && \App\Support\AlihPembeli::alasanTidakBoleh($trx) === null,
+                    'has_pending_rincian'  => in_array($trx->id, $pendingRincianIds, true),
                     'has_pending_request'  => (bool) $pendingRequest,
                     'pending_request_type' => $pendingRequest?->type->value,
                     'kavling_nomor'    => $trx->kavling->nomor_lengkap,

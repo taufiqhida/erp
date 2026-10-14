@@ -466,7 +466,7 @@ const submitBast = () => {
                 </div>
 
                 <p v-if="transaksi.has_pending_request" class="mt-4 text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                    ⏳ Menunggu review {{ { unit_swap: 'tukar unit', buyer_transfer: 'alih pembeli' }[transaksi.pending_request_type] ?? 'pembatalan' }} di menu Pembatalan — transaksi tidak bisa diproses lebih lanjut sampai pengajuan diputuskan.
+                    ⏳ Menunggu review {{ { unit_swap: 'tukar unit', buyer_transfer: 'alih pembeli' }[transaksi.pending_request_type] ?? 'pembatalan' }} di menu Pengajuan — transaksi tidak bisa diproses lebih lanjut sampai pengajuan diputuskan.
                 </p>
 
                 <!-- Riwayat peralihan pembeli: uang yang masuk sebelum tanggal peralihan dibayar atas nama pembeli lama -->

@@ -1,7 +1,6 @@
 <script setup>
 import CatatanTransaksi from '@/Components/CatatanTransaksi.vue';
 import AlihPembeliModal from '@/Components/AlihPembeliModal.vue';
-import KoreksiTanggalBookingModal from '@/Components/KoreksiTanggalBookingModal.vue';
 import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import CatatPembayaran from '@/Components/CatatPembayaran.vue';
@@ -36,7 +35,6 @@ const openPengajuan = (trx, type) => {
     pengajuanModal.show = true;
 };
 const closePengajuan = () => { pengajuanModal.show = false; };
-const koreksiTrx = ref(null);   // transaksi yang tanggal bookingnya sedang dikoreksi
 const alihTrx = ref(null);       // transaksi yang sedang diajukan Alih Pembeli
 const onPengajuanSuccess = () => { pengajuanModal.show = false; router.reload({ only: ['transaksis'] }); };
 const overrideLock = computed(() => usePage().props.auth.user?.permissions?.includes('override transaction lock'));
@@ -46,8 +44,9 @@ const canEditBiayaAkad = (trx) => canManageRincianBiayaAkad.value && (!trx.is_lo
 // yang BELUM ada pembayaran tercatat (Biaya Kelebihan Tanah, Biaya Tambahan
 // per-item, Diskon/Promo). Cara Bayar & Skema DP tidak bisa diganti di sini
 // sama sekali (lihat BookingController::updateRincianPesanan).
-const canBookKavling = computed(() => usePage().props.auth.user?.permissions?.includes('book kavling'));
-const canEditRincian = (trx) => canBookKavling.value && (!trx.is_locked || overrideLock.value);
+// Rincian (termasuk Tanggal Booking): SPV/Leader/Superadmin mengubah langsung; Admin Sales mengirim USULAN yang disetujui SPV/Leader.
+// Hak dan tahap yang diizinkan ditentukan server (trx.can_ubah_rincian); selama usulan menunggu, edit berikutnya dikunci.
+const canEditRincian = (trx) => !!trx.can_ubah_rincian && !trx.has_pending_rincian;
 const biayaKelebihanLocked = (trx) => !!trx.biaya_kelebihan_tanah_locked;
 const titipanBiayaAkadLocked = (trx) => !!trx.titipan_biaya_akad_locked;
 
@@ -67,6 +66,11 @@ const getRincianForm = (trx) => {
             diskon_mode: trx.diskon_mode ?? '',
             diskon_nilai: trx.diskon_nilai ?? '',
             program_all_in_preset_id: trx.program_all_in_preset_id ?? '',
+            tanggal_booking: trx.tanggal_booking_raw ?? '',
+            harga_dasar_ke_unit: false,
+            alasan: '',
+            pratinjau: null,
+            memuat: false,
             processing: false,
             errors: {},
         };
@@ -88,22 +92,43 @@ const removeRincianBiayaTambahan = (trx, idx) => {
     getRincianForm(trx).biaya_tambahan.splice(idx, 1);
 };
 
+const muatanRincian = (form, tambahan = {}) => ({
+    biaya_kelebihan_tanah_aktif: form.biaya_kelebihan_tanah_aktif,
+    biaya_kelebihan_tanah_luas: form.biaya_kelebihan_tanah_luas || null,
+    biaya_kelebihan_tanah_mode: form.biaya_kelebihan_tanah_mode,
+    biaya_kelebihan_tanah_harga_per_m2: form.biaya_kelebihan_tanah_harga_per_m2 || null,
+    biaya_kelebihan_tanah_nominal_input: form.biaya_kelebihan_tanah_nominal_input || null,
+    biaya_tambahan: form.biaya_tambahan.map(bt => ({ id: bt.id || null, preset_id: bt.preset_id, nominal: Number(bt.nominal) || 0 })),
+    promo_preset_id: form.promo_preset_id || null,
+    diskon_mode: form.diskon_mode || null,
+    diskon_nilai: form.diskon_nilai || null,
+    program_all_in_preset_id: form.program_all_in_preset_id || null,
+    tanggal_booking: form.tanggal_booking || null,
+    harga_dasar_ke_unit: form.harga_dasar_ke_unit,
+    alasan: form.alasan,
+    ...tambahan,
+});
+
+// Pratinjau perbedaan sebelum/sesudah (server menerapkan lalu membatalkan, jadi pasti sama dengan hasil penyimpanan).
+const periksaRincian = async (trx) => {
+    const form = getRincianForm(trx);
+    form.memuat = true;
+    form.errors = {};
+    try {
+        form.pratinjau = (await window.axios.patch(route('bookings.rincian-pesanan', trx.id), muatanRincian(form, { simulasi: true }))).data;
+    } catch (e) {
+        form.pratinjau = null;
+        form.errors = e.response?.data?.errors ?? { galat: e.response?.data?.message ?? 'Gagal memeriksa perubahan.' };
+    } finally {
+        form.memuat = false;
+    }
+};
+
 const submitRincianPesanan = (trx) => {
     const form = getRincianForm(trx);
     form.processing = true;
     form.errors = {};
-    router.patch(route('bookings.rincian-pesanan', trx.id), {
-        biaya_kelebihan_tanah_aktif: form.biaya_kelebihan_tanah_aktif,
-        biaya_kelebihan_tanah_luas: form.biaya_kelebihan_tanah_luas || null,
-        biaya_kelebihan_tanah_mode: form.biaya_kelebihan_tanah_mode,
-        biaya_kelebihan_tanah_harga_per_m2: form.biaya_kelebihan_tanah_harga_per_m2 || null,
-        biaya_kelebihan_tanah_nominal_input: form.biaya_kelebihan_tanah_nominal_input || null,
-        biaya_tambahan: form.biaya_tambahan.map(bt => ({ id: bt.id || null, preset_id: bt.preset_id, nominal: Number(bt.nominal) || 0 })),
-        promo_preset_id: form.promo_preset_id || null,
-        diskon_mode: form.diskon_mode || null,
-        diskon_nilai: form.diskon_nilai || null,
-        program_all_in_preset_id: form.program_all_in_preset_id || null,
-    }, {
+    router.patch(route('bookings.rincian-pesanan', trx.id), muatanRincian(form), {
         preserveScroll: true,
         onSuccess: () => { editingRincian[trx.id] = false; delete rincianForms[trx.id]; },
         onError: (errors) => { form.errors = errors; },
@@ -377,7 +402,7 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <!-- Aksi transaksi: Batal / Tukar Unit — keduanya muara ke menu Pembatalan -->
+                    <!-- Aksi transaksi: Batal / Tukar Unit / Alih Pembeli — semuanya muara ke menu Pengajuan -->
                     <div v-if="trx.status === 'active'" class="flex flex-wrap items-center gap-2">
                         <span v-if="trx.has_pending_request" class="px-2.5 py-1 bg-amber-500/10 text-amber-400 text-xs rounded-lg border border-amber-500/20">
                             ⏳ Menunggu review {{ { unit_swap: 'tukar unit', buyer_transfer: 'alih pembeli' }[trx.pending_request_type] ?? 'pembatalan' }}
@@ -396,12 +421,6 @@ onMounted(() => {
                                 👥 Alihkan Pembeli
                             </button>
                         </template>
-                    </div>
-
-                    <div v-if="trx.can_koreksi_tanggal_booking" class="-mt-3">
-                        <button @click="koreksiTrx = trx" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors border border-slate-700">
-                            📅 Koreksi Tanggal Booking
-                        </button>
                     </div>
 
                     <!-- Riwayat peralihan pembeli pada transaksi ini -->
@@ -465,9 +484,16 @@ onMounted(() => {
                         <div class="flex items-center justify-between">
                             <h3 class="text-slate-300 text-sm font-semibold flex items-center gap-1.5">🧾 Rincian Pemesanan</h3>
                             <button v-if="canEditRincian(trx) && !editingRincian[trx.id]" @click="openEditRincian(trx)"
-                                class="text-xs text-violet-400 hover:text-violet-300 transition-colors">✏️ Edit</button>
+                                class="text-xs text-violet-400 hover:text-violet-300 transition-colors">{{ trx.rincian_langsung ? '✏️ Edit' : '✏️ Usulkan Perubahan' }}</button>
                         </div>
+                        <p v-if="trx.has_pending_rincian" class="text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                            ⏳ Usulan perubahan rincian menunggu persetujuan SPV/Leader di menu Pengajuan. Rincian baru berlaku setelah disetujui.
+                        </p>
                         <div v-if="!editingRincian[trx.id]" class="bg-slate-800/40 rounded-lg p-3 space-y-1.5 text-sm">
+                            <div class="flex justify-between text-slate-400">
+                                <span>Tanggal Booking</span>
+                                <span class="text-slate-300">{{ trx.tanggal_booking }}</span>
+                            </div>
                             <div class="flex justify-between text-slate-400">
                                 <span>Harga Dasar</span>
                                 <span class="text-slate-300">{{ formatRp(trx.harga_dasar) }}</span>
@@ -529,6 +555,19 @@ onMounted(() => {
                              pembayaran (Biaya Kelebihan Tanah/Biaya Tambahan/Diskon)
                              yang bisa diubah. Cara Bayar & Skema DP terkunci total. -->
                         <div v-else class="bg-slate-800/40 rounded-lg p-4 space-y-4 text-sm border border-violet-500/30">
+                            <p v-if="!trx.rincian_langsung" class="text-sky-300 text-xs bg-sky-500/10 border border-sky-500/20 rounded-lg px-3 py-2">
+                                Perubahan dikirim sebagai <b>usulan</b> dan baru berlaku setelah disetujui SPV/Leader.
+                            </p>
+                            <div>
+                                <div class="text-slate-300 font-medium mb-1.5">Tanggal Booking</div>
+                                <input v-model="getRincianForm(trx).tanggal_booking" type="date" :max="new Date().toISOString().slice(0, 10)"
+                                    class="px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                <p class="text-slate-500 text-[0.6875rem] mt-1">Mengubah tanggal juga menggeser UTJ bawaan booking dan jatuh tempo cicilan yang belum dibayar. Cicilan yang sudah dibayar tetap terkunci.</p>
+                            </div>
+                            <label v-if="trx.harga_unit_sekarang != null && Number(trx.harga_unit_sekarang) !== Number(trx.harga_dasar)" class="flex items-start gap-2 text-xs text-slate-300 cursor-pointer">
+                                <input type="checkbox" v-model="getRincianForm(trx).harga_dasar_ke_unit" class="mt-0.5 rounded border-slate-600 bg-slate-800 text-violet-500" />
+                                <span>Sesuaikan harga dasar ke harga unit saat ini ({{ formatRp(trx.harga_dasar) }} → <b>{{ formatRp(trx.harga_unit_sekarang) }}</b>)</span>
+                            </label>
                             <div>
                                 <div class="flex items-center justify-between mb-2">
                                     <span class="text-slate-300 font-medium">Biaya Kelebihan Tanah</span>
@@ -623,6 +662,29 @@ onMounted(() => {
                                 </select>
                             </div>
 
+                            <div>
+                                <label class="block text-slate-400 text-xs mb-1">Alasan perubahan
+                                    <span class="text-slate-600">{{ trx.rincian_langsung ? '(wajib bila mengubah tanggal booking atau harga dasar)' : '(wajib, min. 5 karakter)' }}</span></label>
+                                <textarea v-model="getRincianForm(trx).alasan" rows="2" placeholder="Mis. konsumen dijanjikan free kanopi / salah ketik tanggal"
+                                    class="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-300 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                            </div>
+
+                            <div class="space-y-2">
+                                <button type="button" @click="periksaRincian(trx)" :disabled="getRincianForm(trx).memuat"
+                                    class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-200 text-xs rounded-lg">{{ getRincianForm(trx).memuat ? 'Memeriksa…' : '🔍 Periksa perubahan' }}</button>
+                                <template v-if="getRincianForm(trx).pratinjau">
+                                    <p v-if="getRincianForm(trx).pratinjau.konflik" class="text-rose-400 text-xs">{{ getRincianForm(trx).pratinjau.konflik }}</p>
+                                    <p v-else-if="!getRincianForm(trx).pratinjau.baris.length" class="text-slate-400 text-xs">Tidak ada perubahan dibanding rincian sekarang.</p>
+                                    <div v-else class="text-xs bg-slate-900 rounded-lg divide-y divide-slate-800">
+                                        <div v-for="b in getRincianForm(trx).pratinjau.baris" :key="b.label" class="flex flex-wrap gap-x-3 px-3 py-1.5">
+                                            <span class="w-40 text-slate-500">{{ b.label }}</span>
+                                            <span class="text-slate-400 line-through">{{ b.lama }}</span>
+                                            <span class="text-emerald-400">→ {{ b.baru }}</span>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+
                             <p v-if="Object.keys(getRincianForm(trx).errors).length" class="text-rose-400 text-xs space-y-0.5">
                                 <span v-for="(msg, field) in getRincianForm(trx).errors" :key="field" class="block">{{ msg }}</span>
                             </p>
@@ -632,7 +694,7 @@ onMounted(() => {
                                 <button type="button" @click="cancelEditRincian(trx.id)" class="px-3 py-1.5 text-slate-400 hover:text-slate-200 text-xs">Batal</button>
                                 <button type="button" @click="submitRincianPesanan(trx)" :disabled="getRincianForm(trx).processing"
                                     class="px-4 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
-                                    {{ getRincianForm(trx).processing ? 'Menyimpan...' : 'Simpan' }}
+                                    {{ getRincianForm(trx).processing ? 'Menyimpan...' : (trx.rincian_langsung ? 'Simpan' : 'Kirim Usulan') }}
                                 </button>
                             </div>
                         </div>
@@ -976,9 +1038,6 @@ onMounted(() => {
                 Konsumen belum memiliki transaksi
             </div>
         </div>
-
-        <KoreksiTanggalBookingModal v-if="koreksiTrx" :kk-id="koreksiTrx.id" :tanggal-sekarang="koreksiTrx.tanggal_booking_raw" :unit="koreksiTrx.kavling_nomor"
-            @tutup="koreksiTrx = null" @selesai="koreksiTrx = null" />
 
         <AlihPembeliModal v-if="alihTrx" :kk-id="alihTrx.id" :pembeli-lama="konsumen.nama" :unit="alihTrx.kavling_nomor"
             @tutup="alihTrx = null" @selesai="alihTrx = null" />

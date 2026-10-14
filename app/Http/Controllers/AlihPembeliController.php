@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Pengajuan Alih Pembeli (oleh Admin Sales). Disetujui/ditolak SPV/Leader lewat menu Pembatalan — lihat
+ * Pengajuan Alih Pembeli (oleh Admin Sales). Disetujui/ditolak SPV/Leader lewat menu Pengajuan — lihat
  * CancellationRequestController::approve()/reject(), pelaksanaannya di App\Support\AlihPembeli.
  */
 class AlihPembeliController extends Controller
@@ -46,7 +46,7 @@ class AlihPembeliController extends Controller
         $this->authorizeProjectAccess($kk->kavling->project);
         abort_unless(Auth::user()->can('ajukan alih pembeli'), 403);
         if ($alasan = AlihPembeli::alasanTidakBoleh($kk)) abort(422, $alasan);
-        abort_if(CancellationRequest::where('kavling_konsumen_id', $kk->id)->pending()->exists(), 422, 'Sudah ada pengajuan yang sedang menunggu review untuk transaksi ini.');
+        abort_if(CancellationRequest::where('kavling_konsumen_id', $kk->id)->where('type', '!=', CancellationRequestType::RincianChange->value)->pending()->exists(), 422, 'Sudah ada pengajuan yang sedang menunggu review untuk transaksi ini.');
 
         $lama = $kk->konsumen;
         $validated = $request->validate([
@@ -111,6 +111,6 @@ class AlihPembeliController extends Controller
             ]);
         });
 
-        return back()->with('success', 'Pengajuan alih pembeli disubmit dan menunggu review SPV/Leader di menu Pembatalan.');
+        return back()->with('success', 'Pengajuan alih pembeli disubmit dan menunggu review SPV/Leader di menu Pengajuan.');
     }
 }

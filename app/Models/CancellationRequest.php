@@ -20,6 +20,7 @@ class CancellationRequest extends Model
         'kavling_baru_id',
         'konsumen_baru_id',
         'hubungan',
+        'payload',
         'kavling_konsumen_id',
         'konsumen_id',
         'kavling_status_before',
@@ -38,6 +39,7 @@ class CancellationRequest extends Model
         'type'                 => CancellationRequestType::class,
         'status'               => CancellationStatus::class,
         'reviewed_at'          => 'datetime',
+        'payload'              => 'array',
         'nominal_diterima'     => 'decimal:2',
         'nominal_dikembalikan' => 'decimal:2',
         'nominal_hangus'       => 'decimal:2',
@@ -122,6 +124,11 @@ class CancellationRequest extends Model
     public function isUnitSwap(): bool
     {
         return $this->type === CancellationRequestType::UnitSwap;
+    }
+
+    public function isRincianChange(): bool
+    {
+        return $this->type === CancellationRequestType::RincianChange;
     }
 
     public function isBuyerTransfer(): bool

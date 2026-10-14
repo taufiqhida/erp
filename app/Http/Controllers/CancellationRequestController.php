@@ -11,6 +11,7 @@ use App\Models\Kavling;
 use App\Models\UnitSwapHistory;
 use App\Models\AlihPembeliRiwayat;
 use App\Support\AlihPembeli;
+use App\Support\PerubahanRincian;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -76,6 +77,8 @@ class CancellationRequestController extends Controller
             'nominal_dikembalikan'  => $r->nominal_dikembalikan,
             'nominal_hangus'        => $r->nominal_hangus,
             'harga'                 => $r->isUnitSwap() && $r->isPending() ? $this->pratinjauHargaTukar($r) : null,
+            // Usulan perubahan rincian: perbedaan sebelum/sesudah dihitung SEKARANG (bukan saat diajukan) supaya SPV melihat dampak yang sebenarnya.
+            'perubahan'             => $r->isRincianChange() && $r->isPending() ? PerubahanRincian::pratinjau($r->kavlingKonsumen, $r->payload ?? [], $r->alasan) : null,
         ]);
 
         return Inertia::render('CancellationRequests/Index', [
@@ -143,7 +146,7 @@ class CancellationRequestController extends Controller
         // Cek tidak ada pending request sebelumnya untuk transaksi ini
         // (lintas kedua tipe — tidak boleh ada 2 pengajuan aktif bersamaan).
         abort_if(
-            CancellationRequest::where('kavling_konsumen_id', $validated['kavling_konsumen_id'])->pending()->exists(),
+            CancellationRequest::where('kavling_konsumen_id', $validated['kavling_konsumen_id'])->where('type', '!=', CancellationRequestType::RincianChange->value)->pending()->exists(),
             422,
             'Sudah ada pengajuan yang sedang menunggu review untuk transaksi ini.'
         );
@@ -190,6 +193,18 @@ class CancellationRequestController extends Controller
         $this->authorizeProjectAccess($cancellationRequest->kavling->project);
         abort_unless(Auth::user()->can('review cancellation'), 403);
         abort_if(!$cancellationRequest->isPending(), 422, 'Request ini sudah diproses.');
+
+        if ($cancellationRequest->isRincianChange()) {
+            $validated = $request->validate(['catatan_reviewer' => 'nullable|string']);
+
+            DB::transaction(function () use ($cancellationRequest, $validated) {
+                // Aturan penerapan diperiksa ulang saat ini (mis. komponen yang kini terkunci pembayaran membuat persetujuan gagal dengan pesan).
+                PerubahanRincian::terapkanSemua($cancellationRequest->kavlingKonsumen, $cancellationRequest->payload ?? [], $cancellationRequest->alasan, Auth::user(), $cancellationRequest->requester);
+                $cancellationRequest->update(['status' => CancellationStatus::Approved, 'reviewed_by' => Auth::id(), 'reviewed_at' => now(), 'catatan_reviewer' => $validated['catatan_reviewer'] ?? null]);
+            });
+
+            return back()->with('success', 'Usulan perubahan rincian disetujui dan sudah diterapkan.');
+        }
 
         if ($cancellationRequest->isBuyerTransfer()) {
             $validated = $request->validate(['catatan_reviewer' => 'nullable|string']);
@@ -314,8 +329,8 @@ class CancellationRequestController extends Controller
                 'catatan_reviewer' => $validated['catatan_reviewer'],
             ]);
 
-            // Alih pembeli tidak pernah mengubah status unit, jadi tidak ada yang perlu dipulihkan.
-            if (!$cancellationRequest->isBuyerTransfer()) {
+            // Alih pembeli dan usulan rincian tidak pernah mengubah status unit, jadi tidak ada yang perlu dipulihkan.
+            if (!$cancellationRequest->isBuyerTransfer() && !$cancellationRequest->isRincianChange()) {
                 $statusSebelum = StatusJual::from($cancellationRequest->kavling_status_before ?? StatusJual::Sold->value);
                 $cancellationRequest->kavling->update(['status_jual' => $statusSebelum]);
             }
@@ -324,6 +339,7 @@ class CancellationRequestController extends Controller
         return back()->with('success', match (true) {
             $cancellationRequest->isUnitSwap()      => 'Pengajuan tukar unit ditolak.',
             $cancellationRequest->isBuyerTransfer() => 'Pengajuan alih pembeli ditolak.',
+            $cancellationRequest->isRincianChange() => 'Usulan perubahan rincian ditolak.',
             default                                 => 'Pengajuan pembatalan ditolak.',
         });
     }

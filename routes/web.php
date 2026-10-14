@@ -175,8 +175,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('bookings.bank-decision');
     Route::patch('kavling-konsumen/{kk}/tanggal-pengajuan', [BookingController::class, 'updateTanggalPengajuan'])
         ->name('bookings.tanggal-pengajuan');
-    Route::patch('kavling-konsumen/{kk}/tanggal-booking', [BookingController::class, 'koreksiTanggalBooking'])
-        ->name('bookings.tanggal-booking');
     Route::post('pemasaran/transaksi/{kk}/catatan', [CatatanTransaksiController::class, 'store'])->name('catatan.store');
     Route::get('pemasaran/transaksi/{kk}/alih-pembeli/cari', [AlihPembeliController::class, 'cari'])->name('alih-pembeli.cari');
     Route::post('pemasaran/transaksi/{kk}/alih-pembeli', [AlihPembeliController::class, 'store'])->name('alih-pembeli.store')->middleware('throttle:heavy');

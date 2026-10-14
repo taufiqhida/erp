@@ -1,6 +1,6 @@
 <script setup>
 // Ajukan Alih Pembeli: pembeli transaksi diganti (mis. A tidak lolos BI Checking, UTJ dialihkan ke saudaranya B) tanpa membatalkan.
-// Pengajuan masuk ke menu Pembatalan dan diputuskan SPV/Leader; uang (UTJ, pembayaran) tetap pada transaksi yang sama.
+// Pengajuan masuk ke menu Pengajuan dan diputuskan SPV/Leader; uang (UTJ, pembayaran) tetap pada transaksi yang sama.
 import { ref, watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 
@@ -69,7 +69,7 @@ const input = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg 
 
                 <div class="p-5 space-y-4 overflow-y-auto">
                     <div class="text-xs text-slate-400 bg-slate-800/60 rounded-lg px-3 py-2.5 space-y-1">
-                        <p>Pengajuan diputuskan <b class="text-slate-300">SPV/Leader</b> di menu Pembatalan. Bila disetujui:</p>
+                        <p>Pengajuan diputuskan <b class="text-slate-300">SPV/Leader</b> di menu Pengajuan. Bila disetujui:</p>
                         <ul class="list-disc pl-4 space-y-0.5">
                             <li>UTJ dan seluruh pembayaran <b>tetap</b> pada transaksi ini (tidak dihitung dua kali).</li>
                             <li>Berkas pembeli lama diarsipkan; pembeli baru mulai dari daftar berkas baru.</li>

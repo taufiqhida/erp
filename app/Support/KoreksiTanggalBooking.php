@@ -61,9 +61,9 @@ class KoreksiTanggalBooking
         ];
     }
 
-    public static function terapkan(KavlingKonsumen $kk, Carbon $baru, string $alasan, User $pengguna): array
+    public static function terapkan(KavlingKonsumen $kk, Carbon $baru, string $alasan, User $pengguna, bool $catat = true): array
     {
-        return DB::transaction(function () use ($kk, $baru, $alasan, $pengguna) {
+        return DB::transaction(function () use ($kk, $baru, $alasan, $pengguna, $catat) {
             $r = self::rencana($kk, $baru);
 
             if ($r['utj_ids']) {
@@ -77,7 +77,7 @@ class KoreksiTanggalBooking
             $ringkas = self::ringkas($r);
             activity('transaksi')->causedBy($pengguna)->performedOn($kk)->withProperties($ringkas + ['alasan' => $alasan])
                 ->log("Tanggal booking dikoreksi {$ringkas['tanggal_lama']} → {$ringkas['tanggal_baru']} ({$ringkas['cicilan_digeser']} jadwal cicilan digeser)");
-            CatatanTransaksi::tulis($kk, 'booking',
+            if ($catat) CatatanTransaksi::tulis($kk, 'booking',
                 "Tanggal booking dikoreksi dari {$r['lama']->format('d M Y')} ke {$r['baru']->format('d M Y')}. Alasan: {$alasan}. "
                 . "{$ringkas['cicilan_digeser']} jadwal cicilan digeser " . ($r['selisih_hari'] >= 0 ? '+' : '') . "{$r['selisih_hari']} hari"
                 . ($ringkas['utj_ikut'] ? '; tanggal bayar UTJ bawaan booking ikut diubah' : '') . '.', 'Koreksi tanggal booking', $pengguna);

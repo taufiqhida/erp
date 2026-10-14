@@ -30,7 +30,8 @@ class DokumenKonsumenController extends Controller
 
         $kk->load(['konsumen', 'kavling.project', 'kavling.statusBangunStage', 'dokumens.verifiedBy', 'dokumens.template', 'bastRecord', 'catatans.penyelesai', 'jadwalTagihans']);
 
-        $pendingRequest = CancellationRequest::where('kavling_konsumen_id', $kk->id)->pending()->first();
+        $pendingRequest = CancellationRequest::where('kavling_konsumen_id', $kk->id)->where('type', '!=', 'rincian_change')->pending()->first();
+        $pendingRincian = CancellationRequest::where('kavling_konsumen_id', $kk->id)->where('type', 'rincian_change')->pending()->exists();
 
         return Inertia::render('DokumenKonsumen/Show', [
             'transaksi'  => [
@@ -83,6 +84,7 @@ class DokumenKonsumenController extends Controller
                 'plafon_kpr'             => $kk->plafon_kpr,
                 'can_alih_pembeli'       => !$pendingRequest && Auth::user()->can('ajukan alih pembeli') && AlihPembeli::alasanTidakBoleh($kk) === null,
                 'peralihan'              => AlihPembeli::riwayatTransaksi($kk),
+                'has_pending_rincian'    => $pendingRincian,
                 'has_pending_request'    => (bool) $pendingRequest,
                 'pending_request_type'   => $pendingRequest?->type->value,
             ],

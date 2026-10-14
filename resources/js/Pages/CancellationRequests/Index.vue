@@ -53,18 +53,18 @@ const statusBadgeClass = {
 </script>
 
 <template>
-    <Head title="Pengajuan Pembatalan" />
+    <Head title="Pengajuan" />
     <AuthenticatedLayout>
         <template #header>
             <div class="flex items-center gap-2 text-slate-400 text-sm">
-                <span class="text-slate-200 font-medium">Pembatalan Kavling</span>
+                <span class="text-slate-200 font-medium">Pengajuan</span>
             </div>
         </template>
 
         <div class="p-6 space-y-5">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 class="text-white font-bold text-xl">Pembatalan &amp; Tukar Unit</h1>
+                    <h1 class="text-white font-bold text-xl">Pengajuan</h1>
                     <p class="text-slate-400 text-sm mt-0.5">Review dan kelola permintaan pembatalan &amp; tukar unit kavling</p>
                 </div>
                 <div class="flex items-center gap-2">
@@ -110,7 +110,7 @@ const statusBadgeClass = {
                                 class="hover:bg-slate-800/20 transition-colors"
                             >
                                 <td class="px-4 py-4">
-                                    <span :class="req.type === 'unit_swap' ? 'bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/25' : req.type === 'buyer_transfer' ? 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/25' : 'bg-slate-700/50 text-slate-300 ring-1 ring-slate-600'"
+                                    <span :class="req.type === 'unit_swap' ? 'bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/25' : req.type === 'buyer_transfer' ? 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/25' : req.type === 'rincian_change' ? 'bg-teal-500/15 text-teal-300 ring-1 ring-teal-500/25' : 'bg-slate-700/50 text-slate-300 ring-1 ring-slate-600'"
                                         class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium">
                                         {{ req.type_label }}
                                     </span>
@@ -191,7 +191,23 @@ const statusBadgeClass = {
                             <div class="text-slate-400"><span class="text-slate-500">Alasan:</span> {{ selectedRequest.alasan }}</div>
                         </div>
 
-                        <template v-if="selectedRequest.type === 'buyer_transfer'">
+                        <template v-if="selectedRequest.type === 'rincian_change'">
+                            <div v-if="selectedRequest.perubahan" class="space-y-2 text-xs">
+                                <p v-if="selectedRequest.perubahan.konflik" class="text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg p-3">
+                                    ⚠️ Usulan tidak bisa diterapkan saat ini: {{ selectedRequest.perubahan.konflik }}
+                                </p>
+                                <p v-else-if="!selectedRequest.perubahan.baris.length" class="text-slate-400 bg-slate-800/50 rounded-lg p-3">Usulan ini tidak lagi menghasilkan perubahan dibanding kondisi sekarang.</p>
+                                <div v-else class="bg-slate-800/50 rounded-lg divide-y divide-slate-800">
+                                    <div class="px-3 py-1.5 text-slate-500">Perubahan yang akan diterapkan (dihitung dari kondisi sekarang):</div>
+                                    <div v-for="b in selectedRequest.perubahan.baris" :key="b.label" class="flex flex-wrap gap-x-3 px-3 py-1.5">
+                                        <span class="w-36 text-slate-500">{{ b.label }}</span>
+                                        <span class="text-slate-400 line-through">{{ b.lama }}</span>
+                                        <span class="text-emerald-400">→ {{ b.baru }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <template v-else-if="selectedRequest.type === 'buyer_transfer'">
                             <div v-if="reviewType === 'approve'" class="text-yellow-400 text-xs bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3 space-y-1">
                                 <p>⚠️ Pembeli akan diganti dari <b>{{ selectedRequest.konsumen }}</b> ke <b>{{ selectedRequest.konsumen_baru }}</b>.</p>
                                 <p>UTJ dan pembayaran tetap pada transaksi ini. Berkas pembeli lama diarsipkan, hasil Proses Bank/SLIK dan SP3K dikosongkan, dan transaksi kembali ke Pemberkasan. Tindakan ini tidak bisa diurungkan (peralihan baru harus diajukan lagi).</p>
@@ -267,7 +283,7 @@ const statusBadgeClass = {
                             <button type="button" @click="showReviewModal = false" class="px-4 py-2 text-slate-400 text-sm">Batal</button>
                             <button
                                 @click="submitReview"
-                                :disabled="reviewForm.processing"
+                                :disabled="reviewForm.processing || (reviewType === 'approve' && !!selectedRequest.perubahan?.konflik)"
                                 :class="reviewType === 'approve'
                                     ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-500/20'
                                     : 'bg-rose-600 hover:bg-rose-500 shadow-rose-500/20'"

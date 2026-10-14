@@ -77,7 +77,7 @@ const close = () => emit('close');
                 <p v-if="form.errors.alasan" class="text-rose-400 text-xs mt-1">{{ form.errors.alasan }}</p>
             </div>
 
-            <p class="text-slate-500 text-xs mb-4">Pengajuan ini akan menunggu review &amp; persetujuan manajer di menu Pembatalan.</p>
+            <p class="text-slate-500 text-xs mb-4">Pengajuan ini akan menunggu review &amp; persetujuan manajer di menu Pengajuan.</p>
 
             <div class="flex items-center justify-end gap-2">
                 <button type="button" @click="close"

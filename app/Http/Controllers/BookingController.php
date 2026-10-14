@@ -6,9 +6,11 @@ use App\Enums\StatusJual;
 use App\Http\Controllers\Concerns\AuthorizesProjectAccess;
 use App\Http\Controllers\Concerns\ChecksTransactionLock;
 use App\Models\BiayaTambahanPreset;
+use App\Models\CancellationRequest;
 use App\Models\DokumenKonsumen;
 use App\Models\CatatanTransaksi;
 use App\Support\KoreksiTanggalBooking;
+use App\Support\PerubahanRincian;
 use App\Models\DokumenTemplate;
 use App\Models\Kavling;
 use App\Models\KavlingKonsumenBiayaTambahan;
@@ -642,42 +644,6 @@ class BookingController extends Controller
     }
 
     /**
-     * Koreksi Tanggal Booking (salah input). `simulasi` = hanya hitung dampaknya (JSON): berapa jadwal cicilan yang digeser, apakah
-     * tanggal bayar UTJ bawaan booking ikut berubah. Penerapan menggeser jatuh tempo cicilan yang belum dibayar sebesar selisih hari.
-     * Detail aturan: App\Support\KoreksiTanggalBooking.
-     */
-    public function koreksiTanggalBooking(Request $request, KavlingKonsumen $kk): \Illuminate\Http\JsonResponse|RedirectResponse
-    {
-        $this->authorizeProjectAccess($kk->kavling->project);
-        if ($alasan = KoreksiTanggalBooking::alasanTidakBoleh($kk, Auth::user())) abort(403, $alasan);
-        $this->assertTransactionEditable($kk, 'Koreksi tanggal booking');
-
-        // Galat validasi untuk permintaan JSON dirender manual (aplikasi ini hanya merender JSON untuk api/*).
-        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
-            'tanggal_booking' => 'required|date|before_or_equal:today',
-            'alasan'          => $request->boolean('simulasi') ? 'nullable|string|max:300' : 'required|string|min:5|max:300',
-        ], [
-            'tanggal_booking.before_or_equal' => 'Tanggal booking tidak boleh di masa depan.',
-            'alasan.required' => 'Isi alasan koreksi (min. 5 karakter).', 'alasan.min' => 'Alasan koreksi minimal 5 karakter.',
-        ]);
-        $gagal = fn (array $errors) => $request->wantsJson()
-            ? response()->json(['message' => collect($errors)->flatten()->first(), 'errors' => $errors], 422)
-            : throw \Illuminate\Validation\ValidationException::withMessages($errors);
-        if ($validator->fails()) return $gagal($validator->errors()->toArray());
-
-        $baru = \Carbon\Carbon::parse($validator->validated()['tanggal_booking'])->startOfDay();
-        if ($baru->isSameDay($kk->tanggal_booking)) return $gagal(['tanggal_booking' => ['Tanggal booking sama dengan yang sekarang.']]);
-
-        if ($request->boolean('simulasi')) {
-            return response()->json(KoreksiTanggalBooking::ringkas(KoreksiTanggalBooking::rencana($kk, $baru)));
-        }
-
-        $ringkas = KoreksiTanggalBooking::terapkan($kk, $baru, trim($validator->validated()['alasan']), Auth::user());
-
-        return back()->with('success', "Tanggal booking dikoreksi ke {$baru->format('d M Y')}. {$ringkas['cicilan_digeser']} jadwal cicilan digeser.");
-    }
-
-    /**
      * Ubah Tanggal Pengajuan ke bank. Satu-satunya tempat mengisi/mengoreksi tanggal ini (default saat masuk Proses Bank = hari ini
      * atau tanggal pengajuan sebelumnya), terpisah dari form keputusan agar tidak tertimpa nilai lama.
      */
@@ -837,26 +803,34 @@ class BookingController extends Controller
     }
 
     /**
-     * Edit Rincian Pesanan pasca-booking — sengaja dibatasi cuma boleh
-     * mengubah komponen yang BELUM ada pembayaran tercatat (Biaya Kelebihan
-     * Tanah, Biaya Tambahan per-item, Diskon/Promo, Program All In). Cara
-     * Bayar & Skema DP TIDAK bisa diganti di sini sama sekali — itu mengubah
-     * seluruh pipeline & checklist dokumen, jadi kalau memang perlu ganti,
-     * transaksi harus dibatalkan & booking ulang dari awal.
+     * Edit Rincian Pemesanan pasca-booking (komponen yang BELUM ada pembayaran: biaya kelebihan tanah, biaya tambahan, promo/diskon, program
+     * All In), ditambah Tanggal Booking dan "harga dasar mengikuti harga unit". Cara Bayar & Skema DP tidak bisa diganti di sini.
      *
-     * Booking Fee & DP yang sudah digenerate ke jadwal_tagihan TIDAK ikut
-     * dihitung ulang di sini (sengaja) — nominalnya tetap sesuai skema yang
-     * dikunci saat booking, walau harga_deal berubah karena revisi ini.
-     * Hanya harga_dasar/total_biaya_tambahan/diskon/harga_deal (dipakai untuk
-     * tampilan Kartu Piutang & estimasi plafon KPR) yang di-refresh.
+     * Dua jalur:
+     *  - SPV/Leader/Superadmin (pemegang override): perubahan LANGSUNG berlaku.
+     *  - Admin Sales: perubahan dikirim sebagai USULAN yang diputuskan SPV/Leader di menu Pengajuan; hanya sebelum Akad.
+     * `simulasi` = pratinjau perbedaan sebelum/sesudah tanpa menyimpan (JSON). Aturan penerapan: App\Support\PerubahanRincian.
      */
-    public function updateRincianPesanan(Request $request, KavlingKonsumen $kk): RedirectResponse
+    public function updateRincianPesanan(Request $request, KavlingKonsumen $kk): \Illuminate\Http\JsonResponse|RedirectResponse
     {
         $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('book kavling'), 403);
-        $this->assertTransactionEditable($kk, 'Edit rincian pesanan');
+        $user = Auth::user();
+        $langsung = $user->can('override transaction lock');
+        abort_unless($langsung || $user->can('book kavling'), 403);
+        abort_if($kk->status === 'cancelled' || $kk->status_penjualan === 'batal', 422, 'Transaksi ini sudah dibatalkan.');
+        if ($langsung) {
+            $this->assertTransactionEditable($kk, 'Edit rincian pesanan');
+        } else {
+            abort_if($kk->is_locked, 403, 'Transaksi sudah Selesai dan terkunci.');
+            abort_unless(in_array($kk->status_penjualan, ['booking', 'pemberkasan', 'proses_bank', 'sp3k', 'rencana_akad'], true), 403, 'Setelah Akad, perubahan rincian dilakukan oleh SPV/Leader.');
+        }
 
-        $validated = $request->validate([
+        // Galat validasi untuk permintaan JSON dirender manual (aplikasi ini hanya merender JSON untuk api/*).
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'tanggal_booking'                    => 'nullable|date|before_or_equal:today',
+            'harga_dasar_ke_unit'                => 'nullable|boolean',
+            'alasan'                             => 'nullable|string|max:300',
+            'simulasi'                           => 'nullable|boolean',
             'biaya_kelebihan_tanah_aktif'        => 'boolean',
             'biaya_kelebihan_tanah_luas'         => [
                 'nullable', 'numeric', 'min:0',
@@ -879,117 +853,57 @@ class BookingController extends Controller
             'diskon_mode'         => 'nullable|in:persen,nominal',
             'diskon_nilai'        => 'required_with:diskon_mode|nullable|numeric|min:0',
             'program_all_in_preset_id' => 'nullable|exists:program_all_in_presets,id',
+        ], [
+            'tanggal_booking.before_or_equal' => 'Tanggal booking tidak boleh di masa depan.',
+        ]);
+        $gagal = fn (array $errors) => $request->wantsJson()
+            ? response()->json(['message' => collect($errors)->flatten()->first(), 'errors' => $errors], 422)
+            : throw \Illuminate\Validation\ValidationException::withMessages($errors);
+        if ($validator->fails()) return $gagal($validator->errors()->toArray());
+        $v = $validator->validated();
+
+        $tanggal = filled($v['tanggal_booking'] ?? null) && !\Carbon\Carbon::parse($v['tanggal_booking'])->isSameDay($kk->tanggal_booking) ? $v['tanggal_booking'] : null;
+        $usulan = [
+            'rincian'             => PerubahanRincian::ambil($v),
+            'harga_dasar_ke_unit' => (bool) ($v['harga_dasar_ke_unit'] ?? false),
+            'tanggal_booking'     => $tanggal,
+        ];
+        $alasan = trim((string) ($v['alasan'] ?? ''));
+        $perluAlasan = !$langsung || $tanggal || $usulan['harga_dasar_ke_unit'];
+
+        $pratinjau = PerubahanRincian::pratinjau($kk, $usulan);
+        if ($request->boolean('simulasi')) {
+            return response()->json($pratinjau + ['langsung' => $langsung, 'perlu_alasan' => $perluAlasan]);
+        }
+
+        if ($pratinjau['konflik']) return $gagal(['rincian' => [$pratinjau['konflik']]]);
+        if (!$pratinjau['baris']) return back()->with('warning', 'Tidak ada perubahan yang perlu disimpan.');
+        if ($perluAlasan && mb_strlen($alasan) < 5) return $gagal(['alasan' => ['Isi alasan perubahan (min. 5 karakter).']]);
+
+        if ($langsung) {
+            PerubahanRincian::terapkanSemua($kk, $usulan, $alasan ?: 'Perubahan rincian pemesanan', $user);
+
+            return back()->with('success', 'Rincian pemesanan berhasil diperbarui. Catatan: Booking Fee/DP yang sudah digenerate tidak ikut berubah (selain pergeseran jatuh tempo bila tanggal booking diubah).');
+        }
+
+        // Admin Sales: kirim sebagai usulan. Satu usulan aktif per transaksi; tidak boleh bersamaan dengan pengajuan lain yang sedang menunggu.
+        $menunggu = CancellationRequest::where('kavling_konsumen_id', $kk->id)->pending()->get();
+        if ($menunggu->contains(fn ($r) => $r->type === \App\Enums\CancellationRequestType::RincianChange)) return $gagal(['rincian' => ['Sudah ada usulan perubahan rincian yang menunggu persetujuan untuk transaksi ini.']]);
+        if ($menunggu->isNotEmpty()) return $gagal(['rincian' => ['Transaksi ini sedang menunggu keputusan pengajuan lain. Tunggu hingga diputuskan.']]);
+
+        CancellationRequest::create([
+            'type'                  => \App\Enums\CancellationRequestType::RincianChange,
+            'kavling_id'            => $kk->kavling_id,
+            'kavling_konsumen_id'   => $kk->id,
+            'konsumen_id'           => $kk->konsumen_id,
+            'kavling_status_before' => $kk->kavling->status_jual->value,   // status unit TIDAK diubah oleh usulan ini
+            'alasan'                => $alasan,
+            'payload'               => $usulan,
+            'requested_by'          => $user->id,
+            'status'                => \App\Enums\CancellationStatus::Pending,
         ]);
 
-        DB::transaction(function () use ($kk, $validated) {
-            $kk->loadMissing('biayaTambahans.pembayarans', 'pembayarans');
-
-            // ── Biaya Kelebihan Tanah: cuma boleh diubah kalau belum ada
-            // cicilan tercatat sama sekali. Kalau sudah ada (status
-            // sebagian/lunas dihitung dari cicilan, bukan kolom tersimpan
-            // lagi — lihat KavlingKonsumen::kartuPiutangBreakdown), abaikan
-            // input & pertahankan nilai lama apa adanya.
-            $biayaKelebihanLocked = $kk->pembayarans->where('jenis', 'biaya_tanah')->isNotEmpty();
-            if ($biayaKelebihanLocked) {
-                $biayaKelebihanNominal = (float) $kk->biaya_kelebihan_tanah_nominal;
-            } else {
-                $biayaKelebihanNominal = 0;
-                if ($validated['biaya_kelebihan_tanah_aktif'] ?? false) {
-                    $biayaKelebihanNominal = $validated['biaya_kelebihan_tanah_mode'] === 'per_m2'
-                        ? round($validated['biaya_kelebihan_tanah_luas'] * $validated['biaya_kelebihan_tanah_harga_per_m2'], 2)
-                        : (float) $validated['biaya_kelebihan_tanah_nominal_input'];
-                }
-                $kk->biaya_kelebihan_tanah_aktif        = $validated['biaya_kelebihan_tanah_aktif'] ?? false;
-                $kk->biaya_kelebihan_tanah_luas         = $validated['biaya_kelebihan_tanah_luas'] ?? null;
-                $kk->biaya_kelebihan_tanah_mode         = $validated['biaya_kelebihan_tanah_mode'] ?? null;
-                $kk->biaya_kelebihan_tanah_harga_per_m2 = $validated['biaya_kelebihan_tanah_harga_per_m2'] ?? null;
-                $kk->biaya_kelebihan_tanah_nominal      = $biayaKelebihanNominal;
-            }
-
-            // ── Biaya Tambahan: item yang sudah punya cicilan tercatat tetap
-            // dipertahankan apa adanya (tidak boleh dihapus/diubah lewat sini);
-            // item yang belum ada cicilan boleh dihapus/diubah, item baru
-            // boleh ditambah.
-            $submitted = collect($validated['biaya_tambahan'] ?? []);
-            $existingLocked = $kk->biayaTambahans->filter(fn($bt) => $bt->pembayarans->isNotEmpty());
-            $existingUnpaid = $kk->biayaTambahans->filter(fn($bt) => $bt->pembayarans->isEmpty());
-
-            $submittedIds = $submitted->pluck('id')->filter()->all();
-            $lockedTouched = $existingLocked->pluck('id')->intersect($submittedIds)->isNotEmpty();
-            abort_if($lockedTouched, 422, 'Ada item Biaya Tambahan yang sudah ada pembayaran — tidak bisa diubah.');
-
-            // Hapus item unpaid lama yang tidak lagi disertakan di submission.
-            $existingUnpaid->whereNotIn('id', $submittedIds)->each->delete();
-
-            foreach ($submitted as $item) {
-                if (!empty($item['id'])) {
-                    $row = $existingUnpaid->firstWhere('id', $item['id']);
-                    abort_if(!$row, 422, 'Item Biaya Tambahan tidak valid.');
-                    $preset = BiayaTambahanPreset::find($item['preset_id']);
-                    $row->update([
-                        'biaya_tambahan_preset_id' => $item['preset_id'],
-                        'nama'                     => $preset?->nama ?? $row->nama,
-                        'nominal'                  => (float) $item['nominal'],
-                    ]);
-                } else {
-                    $preset = BiayaTambahanPreset::find($item['preset_id']);
-                    $kk->biayaTambahans()->create([
-                        'biaya_tambahan_preset_id' => $item['preset_id'],
-                        'nama'                     => $preset?->nama ?? 'Biaya Tambahan',
-                        'nominal'                  => (float) $item['nominal'],
-                    ]);
-                }
-            }
-
-            $biayaTambahanTotal = (float) $kk->biayaTambahans()->sum('nominal');
-            $totalBiayaTambahan = $biayaKelebihanNominal + $biayaTambahanTotal;
-
-            // ── Diskon / Promo — boleh selalu diubah, cuma mempengaruhi
-            // total tampilan (harga_deal), tidak menyentuh Booking Fee/DP
-            // yang sudah digenerate.
-            $subtotal = (float) $kk->harga_dasar + $totalBiayaTambahan;
-            $diskonNominal = 0;
-            if (!empty($validated['diskon_mode'])) {
-                $diskonNominal = $validated['diskon_mode'] === 'persen'
-                    ? round($subtotal * ((float) $validated['diskon_nilai'] / 100), 2)
-                    : (float) $validated['diskon_nilai'];
-            }
-            $hargaJualNetto = $subtotal - $diskonNominal;
-
-            $kk->promo_preset_id     = $validated['promo_preset_id'] ?? null;
-            $kk->diskon_mode         = $validated['diskon_mode'] ?? null;
-            $kk->diskon_nilai        = $validated['diskon_nilai'] ?? null;
-            $kk->diskon_nominal      = $diskonNominal;
-            $kk->total_biaya_tambahan = $totalBiayaTambahan;
-            $kk->harga_deal          = $hargaJualNetto;
-
-            // ── Program All In: pola sama persis Biaya Kelebihan Tanah — cuma
-            // boleh diganti kalau Titipan Biaya Akad belum ada cicilan
-            // tercatat, karena nominalnya langsung mempengaruhi baris itu.
-            $titipanLocked = $kk->pembayarans->where('jenis', 'titipan_biaya_akad')->isNotEmpty();
-            if (!$titipanLocked) {
-                $allInPreset = !empty($validated['program_all_in_preset_id'])
-                    ? ProgramAllInPreset::find($validated['program_all_in_preset_id'])
-                    : null;
-                $titipanBiayaAkadNominal = 0;
-                if ($allInPreset) {
-                    $titipanBiayaAkadNominal = (float) $allInPreset->nominal;
-                    if ($allInPreset->include_booking_fee) {
-                        $titipanBiayaAkadNominal -= (float) $kk->booking_fee;
-                    }
-                    if ($allInPreset->include_dp) {
-                        $titipanBiayaAkadNominal -= (float) $kk->jadwalTagihans()->where('jenis', 'dp')->sum('jumlah');
-                    }
-                    $titipanBiayaAkadNominal = max(0, $titipanBiayaAkadNominal);
-                }
-                $kk->program_all_in_preset_id   = $allInPreset?->id;
-                $kk->titipan_biaya_akad_nominal = $titipanBiayaAkadNominal;
-            }
-
-            $kk->save();
-        });
-
-        return back()->with('success', 'Rincian pesanan berhasil diperbarui. Catatan: Booking Fee/DP yang sudah digenerate tidak ikut berubah.');
+        return back()->with('success', 'Usulan perubahan rincian dikirim dan menunggu persetujuan SPV/Leader di menu Pengajuan. Rincian baru berlaku setelah disetujui.');
     }
 
     /** Satu baris unit untuk halaman Penjualan (siteplan & tabel memakai bentuk yang sama). */
