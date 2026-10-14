@@ -86,6 +86,18 @@ class Konsumen extends Model
         return $this->hasMany(KavlingKonsumen::class);
     }
 
+    /** Peralihan di mana konsumen ini adalah pembeli BARU. */
+    public function riwayatDialihMasuk(): HasMany
+    {
+        return $this->hasMany(AlihPembeliRiwayat::class, 'ke_konsumen_id');
+    }
+
+    /** Konsumen boleh dihapus hanya bila belum punya jejak transaksi sama sekali (calon pembeli). */
+    public function punyaRiwayat(): bool
+    {
+        return $this->kavlingKonsumens()->exists() || $this->riwayatDialihKeluar()->exists() || $this->riwayatDialihMasuk()->exists();
+    }
+
     /** Peralihan di mana konsumen ini adalah pembeli LAMA (transaksinya dialihkan ke orang lain). */
     public function riwayatDialihKeluar(): HasMany
     {

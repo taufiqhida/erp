@@ -193,7 +193,7 @@ class KonsumenController extends Controller
                       ->when($request->status_penjualan, fn($q2) => $q2->where('status_penjualan', $request->status_penjualan))
                       ->with(['kavling.project', 'bankRekananPreset:id,nama'])
                 ])
-                ->withCount(['kavlingKonsumens as transaksi_count', 'kavlingKonsumens as transaksi_aktif_count' => fn ($q) => $q->where('status_penjualan', '!=', 'batal'), 'riwayatDialihKeluar as dialihkan_count'])
+                ->withCount(['kavlingKonsumens as transaksi_count', 'kavlingKonsumens as transaksi_aktif_count' => fn ($q) => $q->where('status_penjualan', '!=', 'batal'), 'riwayatDialihKeluar as dialihkan_count', 'riwayatDialihMasuk as dialihmasuk_count'])
                 ->orderBy('nama')
                 ->paginate($this->perPage($request, 20))
                 ->withQueryString()
@@ -207,6 +207,8 @@ class KonsumenController extends Controller
                     'transaksi_count' => $k->transaksi_count,
                     'dialihkan_count' => $k->dialihkan_count,
                     'transaksi_aktif_count' => $k->transaksi_aktif_count,
+                    // Ikon hapus hanya untuk konsumen tanpa jejak transaksi sama sekali, dan hanya bagi yang berizin.
+                    'bisa_dihapus'    => !$k->transaksi_count && !$k->dialihkan_count && !$k->dialihmasuk_count && $user->can('delete konsumens'),
                     'units'           => $k->kavlingKonsumens->map(fn($trx) => [
                         'id'                     => $trx->id,
                         'kavling_nomor'          => $trx->kavling->nomor_lengkap,
@@ -603,6 +605,12 @@ class KonsumenController extends Controller
     public function destroy(Konsumen $konsumen): RedirectResponse
     {
         $this->authorize('delete', $konsumen);
+
+        // Menghapus konsumen TIDAK membatalkan booking: unit tetap terjual/dipesan dan transaksinya tetap ada, hanya pembelinya hilang
+        // dari daftar. Karena itu hanya calon pembeli (tanpa transaksi/riwayat) yang boleh dihapus.
+        if ($konsumen->punyaRiwayat()) {
+            return back()->with('error', "Konsumen \"{$konsumen->nama}\" masih punya transaksi/riwayat dan tidak bisa dihapus. Untuk melepas unitnya, gunakan Ajukan Batal di halaman transaksi.");
+        }
 
         $konsumen->delete();
 

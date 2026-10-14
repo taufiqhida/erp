@@ -100,9 +100,10 @@ class KavlingKonsumen extends Model
         return $this->belongsTo(Kavling::class);
     }
 
+    /** withTrashed: transaksi tetap menunjuk pembelinya walau data konsumen terlanjur dihapus (tanpa ini daftar/halaman transaksi error). */
     public function konsumen(): BelongsTo
     {
-        return $this->belongsTo(Konsumen::class);
+        return $this->belongsTo(Konsumen::class)->withTrashed();
     }
 
     public function creator(): BelongsTo
