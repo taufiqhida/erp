@@ -21,6 +21,7 @@ class CancellationRequest extends Model
         'konsumen_baru_id',
         'hubungan',
         'kavling_konsumen_id',
+        'konsumen_id',
         'kavling_status_before',
         'requested_by',
         'reviewed_by',
@@ -62,6 +63,12 @@ class CancellationRequest extends Model
     public function kavlingBaru(): BelongsTo
     {
         return $this->belongsTo(Kavling::class, 'kavling_baru_id');
+    }
+
+    /** Pembeli pada saat pengajuan dibuat (tidak ikut berubah bila transaksi kemudian dialihkan). */
+    public function konsumenSaatPengajuan(): BelongsTo
+    {
+        return $this->belongsTo(Konsumen::class, 'konsumen_id')->withTrashed();
     }
 
     public function konsumenBaru(): BelongsTo

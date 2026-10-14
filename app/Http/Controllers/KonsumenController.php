@@ -59,6 +59,10 @@ class KonsumenController extends Controller
         $isGlobal = $user->can('view all projects');
         $viewMode = $request->view === 'konsumen' ? 'konsumen' : 'unit';
 
+        // Konsumen/transaksi yang BATAL atau DIALIHKAN disembunyikan secara default; centang "Tampilkan yang batal & dialihkan"
+        // menampilkannya. Memilih filter pipeline "Batal" otomatis menampilkannya (kalau tidak, hasil filter selalu kosong).
+        $tampilkanNonaktif = $request->boolean('tampilkan_nonaktif') || $request->status_penjualan === 'batal';
+
         // Proyek aktif (Halaman Utama Pilih Proyek) — bukan lagi filter
         // dropdown di halaman ini, murni ikut context global. Kosong berarti
         // mode "Semua Proyek", data lintas-proyek (tetap dibatasi RBAC).
@@ -111,7 +115,8 @@ class KonsumenController extends Controller
             $rows = KavlingKonsumen::query()
                 ->join('kavlings', 'kavlings.id', '=', 'kavling_konsumen.kavling_id')
                 ->select('kavling_konsumen.*')
-                ->with(['konsumen', 'kavling.project', 'kavling.tipeUnitPreset', 'kavling.statusBangunStage', 'dokumens', 'bankRekananPreset:id,nama'])
+                ->with(['konsumen', 'kavling.project', 'kavling.tipeUnitPreset', 'kavling.statusBangunStage', 'dokumens', 'bankRekananPreset:id,nama', 'alihPembeliRiwayats.dari'])
+                ->when(!$tampilkanNonaktif, fn ($q) => $q->where('kavling_konsumen.status_penjualan', '!=', 'batal'))
                 ->whereHas('kavling', function ($q) use ($unitFilter, $isGlobal, $projectScope) {
                     $unitFilter($q);
                     if (!$isGlobal) $projectScope($q);
@@ -137,6 +142,7 @@ class KonsumenController extends Controller
                     'tanggal_booking'   => $trx->tanggal_booking?->format('d M Y'),
                     'konsumen_id'       => $trx->konsumen_id,
                     'konsumen_nama'     => $trx->konsumen->nama,
+                    'peralihan_dari'    => $trx->alihPembeliRiwayats->last()?->dari?->nama,    // pembeli sebelumnya bila transaksi pernah dialihkan
                     'konsumen_no_hp'    => $trx->konsumen->no_hp,
                     'kavling_nomor'     => $trx->kavling->nomor_lengkap,
                     'project_nama'      => $trx->kavling->project->nama,
@@ -175,6 +181,11 @@ class KonsumenController extends Controller
                         ->orWhere('nik', 'like', "%{$request->search}%")
                     )
                 )
+                // Default: sembunyikan konsumen yang tidak punya transaksi berjalan tetapi punya riwayat batal/dialihkan. Calon pembeli
+                // yang belum pernah bertransaksi tetap tampil.
+                ->when(!$tampilkanNonaktif, fn ($q) => $q->where(fn ($w) => $w
+                    ->where(fn ($polos) => $polos->whereDoesntHave('kavlingKonsumens')->whereDoesntHave('riwayatDialihKeluar'))
+                    ->orWhereHas('kavlingKonsumens', fn ($t) => $t->where('status_penjualan', '!=', 'batal'))))
                 ->when($hasUnitFilter, fn($q) => $q->whereHas('kavlingKonsumens.kavling', $unitFilter))
                 ->when($request->status_penjualan, fn($q) => $q->whereHas('kavlingKonsumens', fn($q2) => $q2->where('status_penjualan', $request->status_penjualan)))
                 ->with(['kavlingKonsumens' => fn($q) =>
@@ -182,7 +193,7 @@ class KonsumenController extends Controller
                       ->when($request->status_penjualan, fn($q2) => $q2->where('status_penjualan', $request->status_penjualan))
                       ->with(['kavling.project', 'bankRekananPreset:id,nama'])
                 ])
-                ->withCount(['kavlingKonsumens as transaksi_count', 'riwayatDialihKeluar as dialihkan_count'])
+                ->withCount(['kavlingKonsumens as transaksi_count', 'kavlingKonsumens as transaksi_aktif_count' => fn ($q) => $q->where('status_penjualan', '!=', 'batal'), 'riwayatDialihKeluar as dialihkan_count'])
                 ->orderBy('nama')
                 ->paginate($this->perPage($request, 20))
                 ->withQueryString()
@@ -195,6 +206,7 @@ class KonsumenController extends Controller
                     'pekerjaan'       => $k->pekerjaan,
                     'transaksi_count' => $k->transaksi_count,
                     'dialihkan_count' => $k->dialihkan_count,
+                    'transaksi_aktif_count' => $k->transaksi_aktif_count,
                     'units'           => $k->kavlingKonsumens->map(fn($trx) => [
                         'id'                     => $trx->id,
                         'kavling_nomor'          => $trx->kavling->nomor_lengkap,
@@ -217,7 +229,7 @@ class KonsumenController extends Controller
             'mode'          => $viewMode,
             'rows'          => $rows,
             'filterOptions' => $filterOptions,
-            'filters'       => $request->only(['search', 'kluster', 'blok', 'tipe_unit_preset_id', 'status_jual', 'status_bangun_stage_id', 'status_penjualan', 'view', 'sort', 'dir']),
+            'filters'       => $request->only(['search', 'kluster', 'blok', 'tipe_unit_preset_id', 'status_jual', 'status_bangun_stage_id', 'status_penjualan', 'tampilkan_nonaktif', 'view', 'sort', 'dir']),
         ]);
     }
 

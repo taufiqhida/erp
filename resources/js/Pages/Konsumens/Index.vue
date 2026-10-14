@@ -35,6 +35,8 @@ const tipeUnit    = ref(props.filters?.tipe_unit_preset_id ?? '');
 const statusJual  = ref(props.filters?.status_jual ?? '');
 const statusBangun = ref(props.filters?.status_bangun_stage_id ?? '');
 const statusPenjualan = ref(props.filters?.status_penjualan ?? '');
+// Batal & dialihkan disembunyikan secara default; filter pipeline "Batal" otomatis menampilkannya.
+const tampilNonaktif = ref(!!props.filters?.tampilkan_nonaktif);
 
 // Export Excel (mode Per Unit) ikut filter & pencarian yang sedang aktif.
 const exportKonsumenUrl = computed(() => {
@@ -70,6 +72,7 @@ const applyFilter = (sortOverride = null) => {
             status_jual: statusJual.value || undefined,
             status_bangun_stage_id: statusBangun.value || undefined,
             status_penjualan: statusPenjualan.value || undefined,
+            tampilkan_nonaktif: tampilNonaktif.value ? 1 : undefined,
         },
         { preserveState: true, replace: true }
     );
@@ -80,7 +83,7 @@ watch(search, () => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => applyFilter(), 400);
 });
-watch([kluster, blok, tipeUnit, statusJual, statusBangun, statusPenjualan], () => applyFilter());
+watch([kluster, blok, tipeUnit, statusJual, statusBangun, statusPenjualan, tampilNonaktif], () => applyFilter());
 
 const resetFilters = () => {
     kluster.value = '';
@@ -104,6 +107,7 @@ const switchMode = (mode) => {
     router.get(route('konsumens.index'), {
         view: mode,
         search: search.value || undefined,
+        tampilkan_nonaktif: tampilNonaktif.value ? 1 : undefined,
     }, { preserveState: false });
 };
 
@@ -243,6 +247,10 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                         <option value="">Semua Pipeline</option>
                         <option v-for="s in filterOptions.status_penjualan" :key="s.key" :value="s.key">{{ s.label }}</option>
                     </select>
+                    <label class="inline-flex items-center gap-1.5 px-2 text-xs text-slate-400 cursor-pointer" title="Konsumen/transaksi yang batal atau dialihkan disembunyikan secara default">
+                        <input type="checkbox" v-model="tampilNonaktif" class="rounded border-slate-600 bg-slate-800 text-violet-500" />
+                        Tampilkan yang batal &amp; dialihkan
+                    </label>
                     <button v-if="kluster || blok || tipeUnit || statusJual || statusBangun || statusPenjualan" @click="resetFilters"
                         class="px-3 py-1.5 text-slate-500 hover:text-slate-300 text-xs transition-colors">
                         ✕ Reset filter unit
@@ -304,6 +312,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                 class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
                                 <td class="px-4 py-3">
                                     <div class="text-slate-200 font-medium">{{ row.konsumen_nama }}</div>
+                                    <div v-if="row.peralihan_dari" class="text-sky-300 text-[0.6875rem]" :title="`Transaksi ini dialihkan dari ${row.peralihan_dari}`">↩ peralihan dari {{ row.peralihan_dari }}</div>
                                     <div class="text-slate-500 text-xs">{{ row.konsumen_no_hp ?? '-' }}</div>
                                 </td>
                                 <td class="px-4 py-3 text-slate-400">
@@ -389,7 +398,8 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                 </td>
                                 <td class="px-4 py-3 text-slate-400 text-xs">{{ k.nik ?? '-' }}</td>
                                 <td class="px-4 py-3">
-                                    <span v-if="!k.units.length && k.dialihkan_count" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/25" title="Transaksinya dialihkan ke pembeli lain">Dialihkan</span>
+                                    <span v-if="!k.transaksi_aktif_count && k.dialihkan_count" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/25" title="Transaksinya dialihkan ke pembeli lain">Dialihkan</span>
+                                    <span v-if="k.transaksi_count && !k.transaksi_aktif_count" class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/25" title="Semua transaksinya batal">Batal</span>
                                     <button v-if="k.units.length" @click="toggleExpand(k.id)"
                                         class="inline-flex items-center gap-1 px-2 py-0.5 bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 rounded-full text-xs hover:bg-violet-500/20 transition-colors">
                                         {{ k.transaksi_count }} unit

@@ -151,6 +151,12 @@ class KavlingKonsumen extends Model
         return $this->hasMany(DokumenKonsumen::class)->whereNotNull('diarsipkan_at');
     }
 
+    /** Riwayat Alih Pembeli pada transaksi ini. */
+    public function alihPembeliRiwayats(): HasMany
+    {
+        return $this->hasMany(AlihPembeliRiwayat::class)->orderBy('id');
+    }
+
     /** Catatan transaksi (booking/pemberkasan), urut waktu tulis. */
     public function catatans(): HasMany
     {

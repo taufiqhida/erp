@@ -266,4 +266,49 @@ class AlihPembeliTest extends TestCase
             ->assertInertia(fn ($page) => $page->where('requests.data.0.type', 'buyer_transfer')->where('requests.data.0.type_label', 'Alih Pembeli')
                 ->where('requests.data.0.konsumen', 'Anton')->where('requests.data.0.konsumen_baru', 'Budi')->where('requests.data.0.hubungan', 'Saudara kandung'));
     }
+
+    // ── Salinan pembeli pada pengajuan (daftar Pembatalan tidak boleh jadi "B → B") ──
+
+    public function test_daftar_pembatalan_tetap_menampilkan_pembeli_lama_setelah_peralihan_disetujui(): void
+    {
+        $sales = $this->user('admin_sales');
+        $spv = $this->user('spv');
+        // Pengajuan pembatalan lama milik A yang ditolak, sebelum peralihan.
+        $this->actingAs($sales)->post(route('cancellation-requests.store'), ['type' => 'cancellation', 'kavling_id' => $this->unit->id, 'kavling_konsumen_id' => $this->trx->id, 'alasan' => 'Konsumen ragu-ragu membeli'])->assertSessionHas('success');
+        $this->actingAs($spv)->patch(route('cancellation-requests.reject', CancellationRequest::where('type', 'cancellation')->firstOrFail()), ['catatan_reviewer' => 'Belum perlu dibatalkan'])->assertSessionHas('success');
+
+        $this->ajukan([], $sales)->assertSessionHas('success');
+        $this->actingAs($spv)->patch(route('cancellation-requests.approve', $this->pengajuan()), [])->assertSessionHas('success');
+
+        $this->assertSame($this->a->id, $this->pengajuan()->konsumen_id);                      // salinan pembeli saat diajukan
+        $this->actingAs($spv)->get(route('cancellation-requests.index'))->assertOk()->assertInertia(function ($page) {
+            $baris = collect($page->toArray()['props']['requests']['data'])->keyBy('type');
+
+            $this->assertSame('Anton', $baris['buyer_transfer']['konsumen']);                  // bukan Budi
+            $this->assertSame('Budi', $baris['buyer_transfer']['konsumen_baru']);
+            $this->assertSame('Anton', $baris['cancellation']['konsumen']);                    // pengajuan lama A tidak ikut berganti nama
+
+            return $page;
+        });
+    }
+
+    public function test_migrasi_mengisi_ulang_salinan_pembeli_untuk_data_lama(): void
+    {
+        $sales = $this->user('admin_sales');
+        $spv = $this->user('spv');
+        $this->actingAs($sales)->post(route('cancellation-requests.store'), ['type' => 'cancellation', 'kavling_id' => $this->unit->id, 'kavling_konsumen_id' => $this->trx->id, 'alasan' => 'Konsumen ragu-ragu membeli'])->assertSessionHas('success');
+        $this->actingAs($spv)->patch(route('cancellation-requests.reject', CancellationRequest::where('type', 'cancellation')->firstOrFail()), ['catatan_reviewer' => 'Belum perlu dibatalkan']);
+        $this->ajukan([], $sales);
+        $this->actingAs($spv)->patch(route('cancellation-requests.approve', $this->pengajuan()), []);
+
+        // Simulasikan keadaan sebelum perbaikan: kolom belum ada, lalu jalankan ulang migrasinya.
+        $migrasi = require database_path('migrations/2026_10_14_000002_add_konsumen_snapshot_to_cancellation_requests.php');
+        $migrasi->down();
+        $migrasi->up();
+
+        $b = Konsumen::where('nama', 'Budi')->firstOrFail();
+        $this->assertSame($this->a->id, CancellationRequest::where('type', 'buyer_transfer')->firstOrFail()->konsumen_id);
+        $this->assertSame($this->a->id, CancellationRequest::where('type', 'cancellation')->firstOrFail()->konsumen_id);   // dibuat sebelum peralihan → pembeli lama
+        $this->assertSame($b->id, $this->trx->fresh()->konsumen_id);                                                     // transaksi tetap milik B
+    }
 }

@@ -81,6 +81,7 @@ class AlihPembeliController extends Controller
                 'type'                  => CancellationRequestType::BuyerTransfer,
                 'kavling_id'            => $kk->kavling_id,
                 'kavling_konsumen_id'   => $kk->id,
+                'konsumen_id'           => $kk->konsumen_id,
                 'konsumen_baru_id'      => $baruId,
                 'hubungan'              => $validated['hubungan'],
                 'kavling_status_before' => $kk->kavling->status_jual->value,   // status unit TIDAK diubah oleh pengajuan ini
