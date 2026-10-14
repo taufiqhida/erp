@@ -152,6 +152,21 @@ class KavlingKonsumen extends Model
         return $this->hasMany(DokumenKonsumen::class)->whereNotNull('diarsipkan_at');
     }
 
+    /**
+     * Harga transaksi bila harga dasar diganti (mis. tukar unit ke unit yang harganya berbeda): harga dasar baru + biaya tambahan
+     * tetap, diskon persen dihitung ulang dari subtotal baru (diskon nominal tetap). Booking Fee/DP/jadwal cicilan yang sudah dibuat
+     * TIDAK ikut dihitung ulang (konvensi yang sama dengan Edit Rincian Pesanan).
+     */
+    public function hitungHargaDenganDasar(float $hargaDasarBaru): array
+    {
+        $subtotal = $hargaDasarBaru + (float) $this->total_biaya_tambahan;
+        $diskon = $this->diskon_mode === 'persen'
+            ? round($subtotal * ((float) $this->diskon_nilai / 100), 2)
+            : (float) $this->diskon_nominal;
+
+        return ['harga_dasar' => $hargaDasarBaru, 'diskon_nominal' => $diskon, 'harga_deal' => $subtotal - $diskon];
+    }
+
     /** Riwayat Alih Pembeli pada transaksi ini. */
     public function alihPembeliRiwayats(): HasMany
     {

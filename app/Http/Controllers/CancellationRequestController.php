@@ -75,6 +75,7 @@ class CancellationRequestController extends Controller
             'nominal_diterima'      => $r->nominal_diterima,
             'nominal_dikembalikan'  => $r->nominal_dikembalikan,
             'nominal_hangus'        => $r->nominal_hangus,
+            'harga'                 => $r->isUnitSwap() && $r->isPending() ? $this->pratinjauHargaTukar($r) : null,
         ]);
 
         return Inertia::render('CancellationRequests/Index', [
@@ -83,6 +84,29 @@ class CancellationRequestController extends Controller
             'statusOptions' => array_map(fn($s) => ['value' => $s->value, 'label' => $s->label()], CancellationStatus::cases()),
             'typeOptions'   => array_map(fn($t) => ['value' => $t->value, 'label' => $t->label()], CancellationRequestType::cases()),
         ]);
+    }
+
+    /**
+     * Pratinjau harga untuk persetujuan tukar unit: bandingkan harga transaksi sekarang dengan harga unit tujuan, dan hitung harga deal
+     * bila SPV memilih mengikuti harga unit baru. `ada_pembayaran_harga` = sudah ada DP/pelunasan tercatat (komponen harga), peringatan.
+     */
+    private function pratinjauHargaTukar(CancellationRequest $r): ?array
+    {
+        $kk = $r->kavlingKonsumen;
+        $baru = $r->kavlingBaru;
+        if (!$baru || $baru->harga === null) return null;
+
+        $hitung = $kk->hitungHargaDenganDasar((float) $baru->harga);
+
+        return [
+            'dasar_sekarang'  => (float) $kk->harga_dasar,
+            'dasar_unit_baru' => (float) $baru->harga,
+            'selisih'         => (float) $baru->harga - (float) $kk->harga_dasar,
+            'deal_sekarang'   => (float) $kk->harga_deal,
+            'deal_baru'       => $hitung['harga_deal'],
+            'sama'            => abs((float) $baru->harga - (float) $kk->harga_dasar) < 0.005,
+            'ada_pembayaran_harga' => $kk->pembayarans()->whereIn('jenis', ['dp', 'pelunasan'])->exists(),
+        ];
     }
 
     /**
@@ -180,10 +204,11 @@ class CancellationRequestController extends Controller
 
         if ($cancellationRequest->isUnitSwap()) {
             $validated = $request->validate([
-                'catatan_reviewer' => 'nullable|string',
+                'catatan_reviewer'  => 'nullable|string',
+                'ikuti_harga_baru'  => 'nullable|boolean',     // SPV memilih: pertahankan harga lama (default) atau ikuti harga unit tujuan
             ]);
 
-            DB::transaction(function () use ($cancellationRequest, $validated) {
+            DB::transaction(function () use ($cancellationRequest, $validated, $request) {
                 $kavlingLama = Kavling::whereKey($cancellationRequest->kavling_id)->lockForUpdate()->firstOrFail();
                 $kavlingBaru = Kavling::whereKey($cancellationRequest->kavling_baru_id)->lockForUpdate()->firstOrFail();
 
@@ -201,7 +226,24 @@ class CancellationRequestController extends Controller
 
                 $kavlingLama->update(['status_jual' => StatusJual::Available]);
                 $kavlingBaru->update(['status_jual' => $statusSebelum]);
-                $cancellationRequest->kavlingKonsumen->update(['kavling_id' => $kavlingBaru->id]);
+                $kk = $cancellationRequest->kavlingKonsumen;
+                $kk->update(['kavling_id' => $kavlingBaru->id]);
+
+                // Harga transaksi tidak otomatis berubah saat unit ditukar; hanya bila SPV memilih mengikuti harga unit baru.
+                if ($request->boolean('ikuti_harga_baru')) {
+                    abort_if($kavlingBaru->harga === null, 422, 'Unit tujuan belum punya harga, harga transaksi tidak bisa mengikutinya.');
+                    $sebelum = ['harga_dasar' => (float) $kk->harga_dasar, 'harga_deal' => (float) $kk->harga_deal];
+                    $baru = $kk->hitungHargaDenganDasar((float) $kavlingBaru->harga);
+                    if (abs($baru['harga_dasar'] - $sebelum['harga_dasar']) >= 0.005) {
+                        $kk->update($baru);
+                        activity('transaksi')->causedBy(Auth::user())->performedOn($kk)
+                            ->withProperties(['sebelum' => $sebelum, 'sesudah' => ['harga_dasar' => $baru['harga_dasar'], 'harga_deal' => $baru['harga_deal']], 'pengajuan_id' => $cancellationRequest->id])
+                            ->log('Harga transaksi disesuaikan mengikuti unit baru saat tukar unit');
+                        \App\Models\CatatanTransaksi::tulis($kk, 'booking', 'Tukar unit ' . $kavlingLama->nomor_lengkap . ' → ' . $kavlingBaru->nomor_lengkap
+                            . ': harga dasar disesuaikan Rp ' . number_format($sebelum['harga_dasar'], 0, ',', '.') . ' → Rp ' . number_format($baru['harga_dasar'], 0, ',', '.')
+                            . ', harga deal Rp ' . number_format($sebelum['harga_deal'], 0, ',', '.') . ' → Rp ' . number_format($baru['harga_deal'], 0, ',', '.') . '.', 'Tukar unit', Auth::user());
+                    }
+                }
 
                 $cancellationRequest->update([
                     'status'           => CancellationStatus::Approved,

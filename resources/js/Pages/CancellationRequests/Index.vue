@@ -22,7 +22,7 @@ const showReviewModal = ref(false);
 const reviewType = ref(''); // 'approve' | 'reject'
 const selectedRequest = ref(null);
 
-const reviewForm = useForm({ catatan_reviewer: '', nominal_dikembalikan: '' });
+const reviewForm = useForm({ catatan_reviewer: '', nominal_dikembalikan: '', ikuti_harga_baru: false });
 
 const openReview = (request, type) => {
     selectedRequest.value = request;
@@ -200,6 +200,31 @@ const statusBadgeClass = {
                         <template v-else-if="selectedRequest.type === 'unit_swap'">
                             <div v-if="reviewType === 'approve'" class="text-yellow-400 text-xs bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
                                 ⚠️ Unit akan langsung ditukar: {{ selectedRequest.kavling }} → {{ selectedRequest.kavling_baru }}.
+                            </div>
+                            <!-- Penyesuaian harga: harga transaksi tidak berubah sendiri saat unit ditukar -->
+                            <div v-if="reviewType === 'approve' && selectedRequest.harga" class="space-y-2 text-xs">
+                                <template v-if="selectedRequest.harga.sama">
+                                    <p class="text-slate-400 bg-slate-800/50 rounded-lg p-3">Harga unit tujuan sama dengan harga transaksi ({{ formatRupiah(selectedRequest.harga.dasar_sekarang) }}), tidak ada yang perlu disesuaikan.</p>
+                                </template>
+                                <template v-else>
+                                    <div class="bg-slate-800/50 rounded-lg p-3 space-y-1">
+                                        <div class="flex justify-between"><span class="text-slate-500">Harga dasar transaksi sekarang</span><span class="text-slate-200">{{ formatRupiah(selectedRequest.harga.dasar_sekarang) }}</span></div>
+                                        <div class="flex justify-between"><span class="text-slate-500">Harga unit tujuan</span><span class="text-slate-200">{{ formatRupiah(selectedRequest.harga.dasar_unit_baru) }}</span></div>
+                                        <div class="flex justify-between"><span class="text-slate-500">Selisih</span><span :class="selectedRequest.harga.selisih > 0 ? 'text-rose-400' : 'text-emerald-400'">{{ selectedRequest.harga.selisih > 0 ? '+' : '−' }}{{ formatRupiah(Math.abs(selectedRequest.harga.selisih)) }}</span></div>
+                                    </div>
+                                    <label class="flex items-start gap-2 cursor-pointer rounded-lg border p-3" :class="!reviewForm.ikuti_harga_baru ? 'border-violet-500 bg-violet-500/10' : 'border-slate-700'">
+                                        <input type="radio" :value="false" v-model="reviewForm.ikuti_harga_baru" class="mt-0.5" />
+                                        <span class="text-slate-300">Pertahankan harga lama<br><span class="text-slate-500">Harga deal tetap {{ formatRupiah(selectedRequest.harga.deal_sekarang) }}.</span></span>
+                                    </label>
+                                    <label class="flex items-start gap-2 cursor-pointer rounded-lg border p-3" :class="reviewForm.ikuti_harga_baru ? 'border-violet-500 bg-violet-500/10' : 'border-slate-700'">
+                                        <input type="radio" :value="true" v-model="reviewForm.ikuti_harga_baru" class="mt-0.5" />
+                                        <span class="text-slate-300">Ikuti harga unit baru<br><span class="text-slate-500">Harga dasar dan harga deal dihitung ulang: harga deal {{ formatRupiah(selectedRequest.harga.deal_sekarang) }} → <b class="text-slate-200">{{ formatRupiah(selectedRequest.harga.deal_baru) }}</b>.</span></span>
+                                    </label>
+                                    <p v-if="reviewForm.ikuti_harga_baru" class="text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+                                        Booking Fee/DP dan jadwal cicilan yang sudah dibuat <b>tidak ikut berubah</b>; periksa Kartu Piutang sesudahnya.
+                                        <span v-if="selectedRequest.harga.ada_pembayaran_harga"><br>⚠️ Sudah ada pembayaran DP/pelunasan tercatat pada transaksi ini; pastikan selisih harga sudah dibicarakan dengan konsumen.</span>
+                                    </p>
+                                </template>
                             </div>
                         </template>
                         <template v-else>
