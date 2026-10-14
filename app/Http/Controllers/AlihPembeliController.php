@@ -51,18 +51,25 @@ class AlihPembeliController extends Controller
         $lama = $kk->konsumen;
         $validated = $request->validate([
             'konsumen_baru_id'        => 'nullable|integer|exists:konsumens,id',
+            // Pembeli baru: kolom wajib sama dengan form booking (nama, NIK, No. HP, pekerjaan, status pernikahan — dua yang terakhir
+            // menentukan berkas kondisional yang berlaku). NPWP/email/alamat opsional. Sumber lead & sales mengikuti pembeli lama.
             'baru'                    => 'nullable|array',
             'baru.nama'               => 'required_without:konsumen_baru_id|nullable|string|max:100',
-            'baru.nik'                => 'nullable|string|max:20|unique:konsumens,nik',
-            'baru.no_hp'              => 'nullable|string|max:20',
-            'baru.alamat'             => 'nullable|string',
-            'baru.pekerjaan'          => 'nullable|in:' . implode(',', array_keys(Konsumen::jenisPekerjaanLabel())),
-            'baru.status_pernikahan'  => 'nullable|in:' . implode(',', array_keys(Konsumen::statusPernikahanLabel())),
+            'baru.nik'                => 'required_without:konsumen_baru_id|nullable|string|max:20',
+            'baru.no_hp'              => 'required_without:konsumen_baru_id|nullable|string|max:20',
+            'baru.npwp'               => Konsumen::npwpRules(),
+            'baru.email'              => 'nullable|email|max:100',
+            'baru.alamat'             => 'nullable|string|max:500',
+            'baru.pekerjaan'          => 'required_without:konsumen_baru_id|nullable|in:' . implode(',', array_keys(Konsumen::jenisPekerjaanLabel())),
+            'baru.status_pernikahan'  => 'required_without:konsumen_baru_id|nullable|in:' . implode(',', array_keys(Konsumen::statusPernikahanLabel())),
             'hubungan'                => 'required|in:' . implode(',', array_keys(AlihPembeliRiwayat::hubunganLabel())),
             'alasan'                  => 'required|string|min:10',
         ], [
             'baru.nama.required_without' => 'Pilih konsumen yang sudah terdaftar, atau isi nama pembeli baru.',
-            'baru.nik.unique'            => 'NIK ini sudah terdaftar atas nama konsumen lain — cari dan pilih konsumen tersebut.',
+            'baru.nik.required_without'  => 'NIK pembeli baru wajib diisi.',
+            'baru.no_hp.required_without' => 'No. HP pembeli baru wajib diisi.',
+            'baru.pekerjaan.required_without' => 'Pilih pekerjaan pembeli baru.',
+            'baru.status_pernikahan.required_without' => 'Pilih status pernikahan pembeli baru.',
             'alasan.min'                 => 'Alasan minimal 10 karakter.',
         ]);
 
@@ -72,10 +79,23 @@ class AlihPembeliController extends Controller
         if (($data['id'] ?? null) === $lama->id) $galat['konsumen_baru_id'] = 'Pembeli baru tidak boleh sama dengan pembeli saat ini.';
         if (filled($lama->nik) && ($data['nik'] ?? null) === $lama->nik) $galat['baru.nik'] = 'NIK sama dengan pembeli saat ini.';
         if (filled($lama->no_hp) && ($data['no_hp'] ?? null) === $lama->no_hp) $galat['baru.no_hp'] = 'No. HP sama dengan pembeli saat ini. Pembeli baru harus punya kontak sendiri.';
+        // NIK yang sudah terdaftar (termasuk yang datanya sudah dihapus): arahkan memilih konsumen itu, jangan membuat ganda.
+        if (!($validated['konsumen_baru_id'] ?? null) && filled($validated['baru']['nik'] ?? null)) {
+            $ada = Konsumen::withTrashed()->where('nik', $validated['baru']['nik'])->first();
+            if ($ada) {
+                $galat['baru.nik'] = $ada->trashed()
+                    ? "NIK ini pernah terdaftar atas nama {$ada->nama} (datanya sudah dihapus). Hubungi admin untuk memulihkannya."
+                    : "NIK ini sudah terdaftar atas nama {$ada->nama}. Pilih konsumen itu di tab \"Konsumen terdaftar\".";
+            }
+        }
         if ($galat) throw ValidationException::withMessages($galat);
 
         DB::transaction(function () use ($kk, $validated) {
-            $baruId = $validated['konsumen_baru_id'] ?? Konsumen::create($validated['baru'])->id;
+            // Sumber lead (dan keterangan referral) diwarisi dari pembeli lama: penjualannya tetap berasal dari kanal yang sama.
+            $lama = $kk->konsumen;
+            $baruId = $validated['konsumen_baru_id'] ?? Konsumen::create($validated['baru'] + [
+                'sumber_lead_id' => $lama->sumber_lead_id, 'referral_keterangan' => $lama->referral_keterangan,
+            ])->id;
 
             CancellationRequest::create([
                 'type'                  => CancellationRequestType::BuyerTransfer,

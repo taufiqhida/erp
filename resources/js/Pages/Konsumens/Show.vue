@@ -1,5 +1,6 @@
 <script setup>
 import CatatanTransaksi from '@/Components/CatatanTransaksi.vue';
+import AlihPembeliModal from '@/Components/AlihPembeliModal.vue';
 import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import CatatPembayaran from '@/Components/CatatPembayaran.vue';
@@ -34,6 +35,7 @@ const openPengajuan = (trx, type) => {
     pengajuanModal.show = true;
 };
 const closePengajuan = () => { pengajuanModal.show = false; };
+const alihTrx = ref(null);       // transaksi yang sedang diajukan Alih Pembeli
 const onPengajuanSuccess = () => { pengajuanModal.show = false; router.reload({ only: ['transaksis'] }); };
 const overrideLock = computed(() => usePage().props.auth.user?.permissions?.includes('override transaction lock'));
 const canEditBiayaAkad = (trx) => canManageRincianBiayaAkad.value && (!trx.is_locked || overrideLock.value);
@@ -386,6 +388,10 @@ onMounted(() => {
                             <button v-if="canSwapKavling" @click="openPengajuan(trx, 'unit_swap')"
                                 class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors border border-slate-700">
                                 🔄 Ajukan Tukar Unit
+                            </button>
+                            <button v-if="trx.can_alih_pembeli" @click="alihTrx = trx"
+                                class="px-2.5 py-1 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 text-xs rounded-lg transition-colors border border-sky-500/20">
+                                👥 Alihkan Pembeli
                             </button>
                         </template>
                     </div>
@@ -962,6 +968,9 @@ onMounted(() => {
                 Konsumen belum memiliki transaksi
             </div>
         </div>
+
+        <AlihPembeliModal v-if="alihTrx" :kk-id="alihTrx.id" :pembeli-lama="konsumen.nama" :unit="alihTrx.kavling_nomor"
+            @tutup="alihTrx = null" @selesai="alihTrx = null" />
 
         <PengajuanKonsumenModal
             :show="pengajuanModal.show"

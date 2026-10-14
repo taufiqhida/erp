@@ -311,4 +311,51 @@ class AlihPembeliTest extends TestCase
         $this->assertSame($this->a->id, CancellationRequest::where('type', 'cancellation')->firstOrFail()->konsumen_id);   // dibuat sebelum peralihan → pembeli lama
         $this->assertSame($b->id, $this->trx->fresh()->konsumen_id);                                                     // transaksi tetap milik B
     }
+
+    // ── Form: kolom wajib, data diwarisi, pesan NIK ──────────────────────
+
+    public function test_kolom_pembeli_baru_wajib_sama_seperti_form_booking_dan_opsional_boleh_kosong(): void
+    {
+        foreach (['nama', 'nik', 'no_hp', 'pekerjaan', 'status_pernikahan'] as $kolom) {
+            $this->ajukan(['baru' => [$kolom => '']])->assertSessionHasErrors("baru.{$kolom}");
+        }
+        $this->assertSame(0, CancellationRequest::where('type', 'buyer_transfer')->count());
+
+        // NPWP/email/alamat opsional; NPWP yang diisi tetap dicek formatnya.
+        $this->ajukan(['baru' => ['npwp' => '123']])->assertSessionHasErrors('baru.npwp');
+        $this->ajukan(['baru' => ['npwp' => '', 'email' => '', 'alamat' => '']])->assertSessionHas('success');
+    }
+
+    public function test_pembeli_baru_mewarisi_sumber_lead_dan_menyimpan_data_tambahan(): void
+    {
+        $lead = \App\Models\SumberLead::create(['nama' => 'Referral Kantor', 'is_referral' => true, 'is_active' => true]);
+        $this->a->update(['sumber_lead_id' => $lead->id, 'referral_keterangan' => 'Pak Haji']);
+
+        $this->ajukan(['baru' => ['npwp' => '123456789012345', 'email' => 'budi@contoh.id', 'alamat' => 'Jl. Mawar 7']])->assertSessionHas('success');
+
+        $b = Konsumen::where('nama', 'Budi')->firstOrFail();
+        $this->assertSame([$lead->id, 'Pak Haji'], [$b->sumber_lead_id, $b->referral_keterangan]);
+        $this->assertSame(['budi@contoh.id', 'Jl. Mawar 7', '123456789012345'], [$b->email, $b->alamat, $b->npwp]);
+    }
+
+    public function test_nik_yang_sudah_terdaftar_menyebut_pemiliknya_dan_mengarahkan_ke_tab_terdaftar(): void
+    {
+        Konsumen::create(['nama' => 'Pemilik NIK', 'nik' => '3201000000000002', 'no_hp' => '0877']);
+
+        $this->ajukan()->assertSessionHasErrors('baru.nik');
+        $this->assertStringContainsString('Pemilik NIK', session('errors')->first('baru.nik'));
+        $this->assertSame(2, Konsumen::count());
+    }
+
+    public function test_profil_konsumen_membawa_izin_tombol_alihkan_pembeli(): void
+    {
+        $this->actingAs($this->user('admin_sales'))->get(route('konsumens.show', $this->a))->assertOk()
+            ->assertInertia(fn ($page) => $page->where('transaksis.0.can_alih_pembeli', true));
+        $this->actingAs($this->user('admin_pemberkasan'))->get(route('konsumens.show', $this->a))->assertOk()
+            ->assertInertia(fn ($page) => $page->where('transaksis.0.can_alih_pembeli', false));
+
+        $this->ajukan();                                                                                      // setelah diajukan, tombol hilang
+        $this->actingAs($this->user('admin_sales'))->get(route('konsumens.show', $this->a))
+            ->assertInertia(fn ($page) => $page->where('transaksis.0.can_alih_pembeli', false));
+    }
 }

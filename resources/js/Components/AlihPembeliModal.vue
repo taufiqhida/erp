@@ -15,10 +15,10 @@ const HUBUNGAN = { pasangan: 'Pasangan (suami/istri)', orang_tua: 'Orang tua', a
 const PEKERJAAN = { karyawan_swasta: 'Karyawan Swasta', pns_asn_tni_polri_bumn: 'PNS / ASN / TNI / Polri / BUMN', wirausaha: 'Wirausaha', freelance: 'Freelance' };
 const PERNIKAHAN = { belum_menikah: 'Belum Menikah', menikah: 'Menikah', cerai_hidup: 'Cerai Hidup', cerai_mati: 'Cerai Mati' };
 
-const mode = ref('terdaftar');           // 'terdaftar' | 'baru'
+const mode = ref('baru');                 // 'baru' | 'terdaftar' — hampir selalu orang baru, jadi itu yang terbuka
 const form = useForm({
     konsumen_baru_id: null,
-    baru: { nama: '', nik: '', no_hp: '', alamat: '', pekerjaan: '', status_pernikahan: '' },
+    baru: { nama: '', nik: '', no_hp: '', npwp: '', email: '', alamat: '', pekerjaan: '', status_pernikahan: '' },
     hubungan: '',
     alasan: '',
 });
@@ -49,7 +49,8 @@ const kirim = () => {
         : { baru: d.baru, hubungan: d.hubungan, alasan: d.alasan }))
         .post(route('alih-pembeli.store', props.kkId), { preserveScroll: true, onSuccess: () => emit('selesai') });
 };
-const siap = () => form.hubungan && form.alasan.trim().length >= 10 && (mode.value === 'terdaftar' ? !!form.konsumen_baru_id : !!form.baru.nama.trim());
+const baruLengkap = () => ['nama', 'nik', 'no_hp', 'pekerjaan', 'status_pernikahan'].every(k => String(form.baru[k] ?? '').trim() !== '');
+const siap = () => form.hubungan && form.alasan.trim().length >= 10 && (mode.value === 'terdaftar' ? !!form.konsumen_baru_id : baruLengkap());
 const input = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500';
 </script>
 
@@ -77,8 +78,8 @@ const input = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg 
                     </div>
 
                     <div class="inline-flex rounded-lg overflow-hidden border border-slate-700 text-xs">
-                        <button type="button" @click="mode = 'terdaftar'" :class="mode === 'terdaftar' ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-300'" class="px-3 py-1.5">Konsumen terdaftar</button>
                         <button type="button" @click="mode = 'baru'" :class="mode === 'baru' ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-300'" class="px-3 py-1.5">Konsumen baru</button>
+                        <button type="button" @click="mode = 'terdaftar'" :class="mode === 'terdaftar' ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-300'" class="px-3 py-1.5">Konsumen terdaftar</button>
                     </div>
 
                     <!-- Pilih konsumen yang sudah terdaftar -->
@@ -102,17 +103,24 @@ const input = 'w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg 
 
                     <!-- Konsumen baru -->
                     <div v-else class="grid grid-cols-2 gap-3">
-                        <div class="col-span-2"><label class="block text-slate-400 text-xs mb-1">Nama lengkap *</label><input v-model="form.baru.nama" type="text" :class="input" />
+                        <div class="col-span-2"><label class="block text-slate-400 text-xs mb-1">Nama lengkap <span class="text-rose-400">*</span></label><input v-model="form.baru.nama" type="text" :class="input" />
                             <p v-if="form.errors['baru.nama']" class="text-rose-400 text-xs mt-1">{{ form.errors['baru.nama'] }}</p></div>
-                        <div><label class="block text-slate-400 text-xs mb-1">NIK</label><input v-model="form.baru.nik" type="text" :class="input" />
+                        <div><label class="block text-slate-400 text-xs mb-1">NIK <span class="text-rose-400">*</span></label><input v-model="form.baru.nik" type="text" :class="input" />
                             <p v-if="form.errors['baru.nik']" class="text-rose-400 text-xs mt-1">{{ form.errors['baru.nik'] }}</p></div>
-                        <div><label class="block text-slate-400 text-xs mb-1">No. HP</label><input v-model="form.baru.no_hp" type="text" :class="input" />
+                        <div><label class="block text-slate-400 text-xs mb-1">No. HP <span class="text-rose-400">*</span></label><input v-model="form.baru.no_hp" type="text" :class="input" />
                             <p v-if="form.errors['baru.no_hp']" class="text-rose-400 text-xs mt-1">{{ form.errors['baru.no_hp'] }}</p></div>
-                        <div><label class="block text-slate-400 text-xs mb-1">Pekerjaan</label>
-                            <select v-model="form.baru.pekerjaan" :class="input"><option value="">—</option><option v-for="(l, k) in PEKERJAAN" :key="k" :value="k">{{ l }}</option></select></div>
-                        <div><label class="block text-slate-400 text-xs mb-1">Status pernikahan</label>
-                            <select v-model="form.baru.status_pernikahan" :class="input"><option value="">—</option><option v-for="(l, k) in PERNIKAHAN" :key="k" :value="k">{{ l }}</option></select></div>
-                        <div class="col-span-2"><label class="block text-slate-400 text-xs mb-1">Alamat</label><textarea v-model="form.baru.alamat" rows="2" :class="input + ' resize-none'" /></div>
+                        <div><label class="block text-slate-400 text-xs mb-1">Pekerjaan <span class="text-rose-400">*</span></label>
+                            <select v-model="form.baru.pekerjaan" :class="input"><option value="">—</option><option v-for="(l, k) in PEKERJAAN" :key="k" :value="k">{{ l }}</option></select>
+                            <p v-if="form.errors['baru.pekerjaan']" class="text-rose-400 text-xs mt-1">{{ form.errors['baru.pekerjaan'] }}</p></div>
+                        <div><label class="block text-slate-400 text-xs mb-1">Status pernikahan <span class="text-rose-400">*</span></label>
+                            <select v-model="form.baru.status_pernikahan" :class="input"><option value="">—</option><option v-for="(l, k) in PERNIKAHAN" :key="k" :value="k">{{ l }}</option></select>
+                            <p v-if="form.errors['baru.status_pernikahan']" class="text-rose-400 text-xs mt-1">{{ form.errors['baru.status_pernikahan'] }}</p></div>
+                        <div><label class="block text-slate-400 text-xs mb-1">NPWP <span class="text-slate-600">(opsional)</span></label><input v-model="form.baru.npwp" type="text" placeholder="15/16 digit" :class="input" />
+                            <p v-if="form.errors['baru.npwp']" class="text-rose-400 text-xs mt-1">{{ form.errors['baru.npwp'] }}</p></div>
+                        <div><label class="block text-slate-400 text-xs mb-1">Email <span class="text-slate-600">(opsional)</span></label><input v-model="form.baru.email" type="email" :class="input" />
+                            <p v-if="form.errors['baru.email']" class="text-rose-400 text-xs mt-1">{{ form.errors['baru.email'] }}</p></div>
+                        <div class="col-span-2"><label class="block text-slate-400 text-xs mb-1">Alamat <span class="text-slate-600">(opsional)</span></label><textarea v-model="form.baru.alamat" rows="2" :class="input + ' resize-none'" /></div>
+                        <p class="col-span-2 text-slate-500 text-[0.6875rem]">Sumber lead dan sales mengikuti pembeli lama.</p>
                     </div>
 
                     <div>

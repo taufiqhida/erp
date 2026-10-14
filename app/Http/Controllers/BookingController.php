@@ -177,7 +177,17 @@ class BookingController extends Controller
             'konsumen_id'         => 'nullable|exists:konsumens,id',
             'konsumen_nama'       => 'nullable|required_without:konsumen_id|string|max:100',
             'konsumen_no_hp'      => 'nullable|required_without:konsumen_id|string|max:20',
-            'konsumen_nik'        => 'nullable|required_without:konsumen_id|string|max:20',
+            'konsumen_nik'        => ['nullable', 'required_without:konsumen_id', 'string', 'max:20', function ($attribute, $value, $fail) use ($request) {
+                // NIK harus unik (termasuk konsumen yang sudah dihapus). Tanpa pemeriksaan ini penyimpanan gagal dengan error 500.
+                if ($request->filled('konsumen_id') || blank($value)) return;
+                $ada = Konsumen::withTrashed()->where('nik', $value)->first();
+                if ($ada) {
+                    $fail($ada->trashed()
+                        ? "NIK ini pernah terdaftar atas nama {$ada->nama} (datanya sudah dihapus). Hubungi admin untuk memulihkannya."
+                        : "NIK ini sudah terdaftar atas nama {$ada->nama}. Pilih konsumen itu lewat mode \"Konsumen lama\" di atas.");
+                }
+            }],
+            'konsumen_alamat'     => 'nullable|string|max:500',
             'konsumen_npwp'       => Konsumen::npwpRules(),
             'konsumen_email'      => 'nullable|email|max:100',
             'konsumen_pekerjaan'         => 'nullable|required_without:konsumen_id|in:' . implode(',', array_keys(Konsumen::jenisPekerjaanLabel())),
@@ -255,6 +265,7 @@ class BookingController extends Controller
                     'nik'   => $validated['konsumen_nik'] ?? null,
                     'npwp'  => $validated['konsumen_npwp'] ?? null,
                     'email' => $validated['konsumen_email'] ?? null,
+                    'alamat' => $validated['konsumen_alamat'] ?? null,
                     'pekerjaan'         => $validated['konsumen_pekerjaan'] ?? null,
                     'status_pernikahan' => $validated['konsumen_status_pernikahan'] ?? null,
                     'sumber_lead_id'    => $validated['konsumen_sumber_lead_id'] ?? null,

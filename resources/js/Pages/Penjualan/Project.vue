@@ -174,6 +174,7 @@ const bookForm = useForm({
     konsumen_status_pernikahan: '',
     konsumen_sumber_lead_id:    '',
     konsumen_referral_keterangan: '',
+    konsumen_alamat: '',
     konsumen_mode:   'new', // 'existing' | 'new' — mayoritas konsumen kami baru, bukan lama
 
     program_all_in_preset_id: '',
@@ -848,6 +849,13 @@ const isBookable = (k) => k.status_jual === 'available';
                                             class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
                                             :class="{ 'border-rose-500': bookForm.errors.konsumen_referral_keterangan }" />
                                         <p v-if="bookForm.errors.konsumen_referral_keterangan" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.konsumen_referral_keterangan }}</p>
+                                    </div>
+                                    <div class="col-span-2">
+                                        <label class="block text-slate-400 text-xs mb-1.5">Alamat <span class="text-slate-600">(opsional)</span></label>
+                                        <textarea v-model="bookForm.konsumen_alamat" rows="2" maxlength="500" placeholder="Alamat sesuai KTP / domisili"
+                                            class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                            :class="{ 'border-rose-500': bookForm.errors.konsumen_alamat }" />
+                                        <p v-if="bookForm.errors.konsumen_alamat" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.konsumen_alamat }}</p>
                                     </div>
                                 </div>
                             </div>
