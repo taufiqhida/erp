@@ -21,6 +21,7 @@ class CancellationRequest extends Model
         'konsumen_baru_id',
         'hubungan',
         'payload',
+        'tahap_batal',
         'kavling_konsumen_id',
         'konsumen_id',
         'kavling_status_before',
@@ -124,6 +125,17 @@ class CancellationRequest extends Model
     public function isUnitSwap(): bool
     {
         return $this->type === CancellationRequestType::UnitSwap;
+    }
+
+    /** Label tahap transaksi (untuk tahap_batal dan tahap saat ini). */
+    public const TAHAP_LABEL = [
+        'booking' => 'Booking', 'pemberkasan' => 'Pemberkasan', 'proses_bank' => 'Proses Bank / SLIK', 'sp3k' => 'SP3K',
+        'rencana_akad' => 'Rencana Akad', 'akad' => 'Akad', 'bast' => 'BAST',
+    ];
+
+    public function getTahapBatalLabelAttribute(): ?string
+    {
+        return self::TAHAP_LABEL[$this->tahap_batal] ?? null;
     }
 
     public function isRincianChange(): bool

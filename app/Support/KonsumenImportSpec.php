@@ -135,6 +135,8 @@ class KonsumenImportSpec
             'Tahap (Cash)'        => self::tahapOptions('cash'),
             'Cara Bayar'          => array_values(self::CARA_BAYAR_SHEETS),
             'Skema (Semua)'       => SkemaDpPreset::orderBy('nama')->pluck('nama')->unique()->values()->all(),
+            'Tahap Batal'         => array_values(\App\Models\CancellationRequest::TAHAP_LABEL),
+            'Hubungan Peralihan'  => array_values(\App\Models\AlihPembeliRiwayat::hubunganLabel()),
         ];
     }
 
@@ -154,7 +156,7 @@ class KonsumenImportSpec
             'skema' => $skemaList, 'tahap' => $tahapList, 'sales' => 'Sales / Agent',
             'promo' => 'Promo', 'diskon_mode' => 'Mode Diskon', 'tanah_mode' => 'Mode Biaya Tanah',
             'all_in' => 'Program All In', 'bank' => 'Bank Rekanan', 'sp3k' => 'Status SP3K',
-            'notaris' => 'Notaris',
+            'notaris' => 'Notaris', 'alih_hubungan' => 'Hubungan Peralihan',
         ];
 
         if (isset($map[$key])) return $map[$key];
@@ -253,6 +255,8 @@ class KonsumenImportSpec
             $c[] = ["dok:{$d->nama_dokumen}", "* Dok: {$d->nama_dokumen}", 'o', "KRUSIAL. Sifat: {$d->sifat}. Kosong = Belum Ada."];
         }
         $c[] = ['catatan', 'Catatan', 'o', ''];
+        // Peralihan pembeli (opsional) di ujung kanan: transaksi ini hasil alih pembeli dari orang lain.
+        foreach (\App\Imports\Konsumen\ImportBantuan::kolomPeralihan() as $kolom) $c[] = $kolom;
 
         return $c;
     }
@@ -282,13 +286,20 @@ class KonsumenImportSpec
             ['tgl_bayar', 'Tanggal Bayar Terakhir', 'o', 'Kosong = pakai Tanggal Booking. Tidak boleh melewati Tanggal Batal.'],
             ['dikembalikan', 'Dikembalikan', 'o', 'Nominal yang dikembalikan ke konsumen. Kosong/0 = seluruhnya hangus. Tidak boleh melebihi Total Dibayar. Hangus = Total Dibayar - Dikembalikan (otomatis).'],
             ['alasan', 'Alasan Batal', 'o', 'Mis. "mundur sendiri", "KPR ditolak". Kosong = "Import data lama".'],
-            ['rincian', 'Rincian Pengembalian / Catatan', 'o', 'Rincian apa yang dikembalikan/hangus, tanggal pengembalian, dsb.'],
+            ['rincian', 'Rincian Pengembalian / Catatan', 'o', 'Rincian apa yang dikembalikan/hangus, tanggal pengembalian, dsb. Contoh: Dibayar: UTJ 1.000.000 + DP 5.000.000 = 6.000.000 | Dikembalikan 2.000.000 (dari DP) | Hangus 4.000.000'],
+            ['sales', 'Sales / Agent', 'o', 'Dropdown dari master Sales/Agent: yang memegang konsumen saat booking. Dipakai di Performa Sales. Kalau namanya tidak ada di master, baris TETAP masuk dan namanya dicatat di Rincian.'],
+            ['bank', 'Bank Rekanan KPR', 'o', 'Dropdown master Bank Rekanan: bank yang memproses/menolak berkas. Kosongkan kalau batal sebelum sampai bank atau cash. Kalau tidak ada di master, baris TETAP masuk dan namanya dicatat di Rincian.'],
+            ['tahap_batal', 'Tahap Terakhir Sebelum Batal', 'o', 'Dropdown: Booking, Pemberkasan, Proses Bank / SLIK, SP3K, Rencana Akad, Akad, BAST. Kosongkan kalau tidak diketahui.'],
+            ...\App\Imports\Konsumen\ImportBantuan::kolomPeralihan(),
         ];
     }
 
     /** Nama list (sheet "Daftar") untuk dropdown kolom sheet Batal. */
     public static function batalDropdownListFor(string $key): ?string
     {
-        return ['cara_bayar' => 'Cara Bayar', 'skema' => 'Skema (Semua)'][$key] ?? null;
+        return [
+            'cara_bayar' => 'Cara Bayar', 'skema' => 'Skema (Semua)', 'sales' => 'Sales / Agent', 'bank' => 'Bank Rekanan',
+            'tahap_batal' => 'Tahap Batal', 'alih_hubungan' => 'Hubungan Peralihan',
+        ][$key] ?? null;
     }
 }

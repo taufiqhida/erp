@@ -17,6 +17,14 @@ class KonsumenImportResult
     /** @var string[] */
     public array $errors = [];
 
+    /** @var string[] Peringatan yang TIDAK memblokir (baris tetap diimpor), mis. kemungkinan konsumen ganda. */
+    public array $warnings = [];
+
+    public function warn(string $sheet, int $rowNum, string $message): void
+    {
+        $this->warnings[] = "[{$sheet}] Baris {$rowNum} (peringatan): {$message}";
+    }
+
     public function skip(string $sheet, int $rowNum, string $message): void
     {
         $this->skipped++;

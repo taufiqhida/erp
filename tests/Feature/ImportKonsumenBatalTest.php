@@ -3,11 +3,14 @@
 namespace Tests\Feature;
 
 use App\Enums\StatusJual;
+use App\Models\AlihPembeliRiwayat;
+use App\Models\BankRekananPreset;
 use App\Models\CancellationRequest;
 use App\Models\Kavling;
 use App\Models\KavlingKonsumen;
 use App\Models\Konsumen;
 use App\Models\Project;
+use App\Models\SalesAgent;
 use App\Models\SkemaDpPreset;
 use App\Models\StatusBangunStage;
 use App\Models\TipeUnitPreset;
@@ -59,6 +62,8 @@ class ImportKonsumenBatalTest extends TestCase
             'nama' => 'Budi Santoso', 'nik' => '', 'hp' => '081200000001', 'kluster' => 'Melati', 'blok' => 'A1', 'unit' => '1',
             'tgl_booking' => '2026-03-01', 'tgl_batal' => '2026-04-15', 'cara_bayar' => '', 'skema' => '', 'harga_deal' => '',
             'total_bayar' => 10000000, 'tgl_bayar' => '2026-03-20', 'dikembalikan' => '', 'alasan' => '', 'rincian' => '',
+            'sales' => '', 'bank' => '', 'tahap_batal' => '',
+            'alih_nama' => '', 'alih_nik' => '', 'alih_hp' => '', 'alih_hubungan' => '', 'alih_tgl' => '', 'alih_alasan' => '',
         ];
         $m = array_merge($dasar, $override);
 
@@ -274,5 +279,141 @@ class ImportKonsumenBatalTest extends TestCase
         $this->actingAs($this->admin)->withSession($sesi)->get(route('keuangan.detail', $trx))->assertOk();
         $this->actingAs($this->admin)->withSession($sesi)->get(route('cancellation-requests.index'))->assertOk();
         $this->actingAs($this->admin)->withSession($sesi)->get(route('konsumens.show', $trx->konsumen_id))->assertOk();
+    }
+
+    // ───────────── Kolom tambahan: Sales, Bank, Tahap Terakhir, Peralihan, peringatan ─────────────
+
+    public function test_sales_bank_dan_tahap_terakhir_tersimpan(): void
+    {
+        $sales = SalesAgent::create(['nama' => 'Agen Satu', 'tipe' => 'sales', 'is_active' => true]);
+        $bank = BankRekananPreset::create(['nama' => 'BTN', 'is_active' => true]);
+
+        $this->impor($this->fileBatal($this->baris([
+            'nik' => '3201010101010002', 'sales' => 'agen satu', 'bank' => 'BTN', 'tahap_batal' => 'SP3K',
+        ])))->assertSessionHas('success');
+
+        $trx = KavlingKonsumen::firstOrFail();
+        $this->assertSame($sales->id, $trx->sales_agent_id);
+        $this->assertSame($bank->id, $trx->bank_rekanan_preset_id);
+        $c = CancellationRequest::firstOrFail();
+        $this->assertSame('sp3k', $c->tahap_batal);
+        $this->assertSame('SP3K', $c->tahap_batal_label);
+        $this->assertSame($trx->konsumen_id, $c->konsumen_id);   // salinan pembeli ikut tersimpan
+    }
+
+    public function test_sales_dan_bank_tak_dikenal_tidak_menggagalkan_baris_tapi_dicatat_dan_diperingatkan(): void
+    {
+        $r = $this->impor($this->fileBatal($this->baris(['sales' => 'Orang Asing', 'bank' => 'Bank Entah', 'rincian' => 'UTJ hangus'])));
+
+        $r->assertSessionHas('warning');
+        $r->assertSessionHas('importErrors', fn ($e) => str_contains(implode(' ', $e), 'Orang Asing') && str_contains(implode(' ', $e), 'Bank Entah'));
+        $trx = KavlingKonsumen::firstOrFail();
+        $this->assertNull($trx->sales_agent_id);
+        $this->assertNull($trx->bank_rekanan_preset_id);
+        $catatan = CancellationRequest::firstOrFail()->catatan_reviewer;
+        $this->assertStringContainsString('UTJ hangus', $catatan);
+        $this->assertStringContainsString('Sales/Agent: Orang Asing', $catatan);
+        $this->assertStringContainsString('Bank: Bank Entah', $catatan);
+    }
+
+    public function test_tahap_terakhir_tak_dikenal_menolak_baris(): void
+    {
+        $r = $this->impor($this->fileBatal($this->baris(['tahap_batal' => 'Tahap Ngarang'])));
+
+        $this->assertSame(0, KavlingKonsumen::count());
+        $r->assertSessionHas('importErrors', fn ($e) => str_contains(implode(' ', $e), 'Tahap Terakhir'));
+    }
+
+    public function test_peralihan_pembeli_di_sheet_batal_membuat_riwayat_dan_pengajuan_disetujui(): void
+    {
+        $this->impor($this->fileBatal($this->baris([
+            'nama' => 'Siti B', 'nik' => '3201010101010003', 'alih_nama' => 'Andi A', 'alih_nik' => '3201010101010004', 'alih_hp' => '081299999999',
+            'alih_hubungan' => 'Pasangan (suami/istri)', 'alih_tgl' => '2026-03-10', 'alih_alasan' => 'BI Checking A tidak lolos',
+        ])))->assertSessionHas('success');
+
+        $b = Konsumen::where('nik', '3201010101010003')->firstOrFail();
+        $a = Konsumen::where('nik', '3201010101010004')->firstOrFail();
+        $trx = KavlingKonsumen::where('konsumen_id', $b->id)->firstOrFail();
+
+        $alih = CancellationRequest::where('kavling_konsumen_id', $trx->id)->where('type', 'buyer_transfer')->firstOrFail();
+        $this->assertTrue($alih->isApproved());
+        $this->assertSame($a->id, $alih->konsumen_id);
+        $this->assertSame($b->id, $alih->konsumen_baru_id);
+        $this->assertSame('pasangan', $alih->hubungan);
+        $this->assertSame('2026-03-10', $alih->reviewed_at->toDateString());
+
+        $riwayat = AlihPembeliRiwayat::where('kavling_konsumen_id', $trx->id)->firstOrFail();
+        $this->assertSame($a->id, $riwayat->dari_konsumen_id);
+        $this->assertSame($b->id, $riwayat->ke_konsumen_id);
+        $this->assertSame('BI Checking A tidak lolos', $riwayat->alasan);
+        // Pembatalan tetap ada berdampingan dengan peralihan.
+        $this->assertSame(1, CancellationRequest::where('kavling_konsumen_id', $trx->id)->where('type', 'cancellation')->count());
+    }
+
+    public function test_peralihan_nik_dan_hp_sama_dengan_pembeli_sekarang_ditolak(): void
+    {
+        $r = $this->impor($this->fileBatal($this->baris([
+            'nik' => '3201010101010005', 'hp' => '081211111111',
+            'alih_nama' => 'Andi A', 'alih_nik' => '3201010101010005', 'alih_hp' => '081211111111',
+        ])));
+
+        $this->assertSame(0, KavlingKonsumen::count());
+        $r->assertSessionHas('importErrors', fn ($e) => str_contains(implode(' ', $e), 'NIK Pembeli Sebelumnya') && str_contains(implode(' ', $e), 'No. HP Pembeli Sebelumnya'));
+    }
+
+    public function test_peralihan_tanggal_di_luar_rentang_atau_tanpa_nama_ditolak(): void
+    {
+        $r = $this->impor($this->fileBatal(
+            $this->baris(['alih_nama' => 'Andi A', 'alih_tgl' => '2026-02-01']),    // sebelum tanggal booking
+            $this->baris(['nama' => 'Cici', 'alih_nama' => 'Andi A', 'alih_tgl' => '2026-05-01']),   // setelah tanggal batal
+            $this->baris(['nama' => 'Dedi', 'alih_alasan' => 'Tanpa nama pembeli sebelumnya']),
+        ));
+
+        $this->assertSame(0, KavlingKonsumen::count());
+        $teks = implode(' ', session('importErrors'));
+        $this->assertStringContainsString('lebih awal dari Tanggal Booking', $teks);
+        $this->assertStringContainsString('melewati Tanggal Batal', $teks);
+        $this->assertStringContainsString('isi namanya', $teks);
+    }
+
+    public function test_peringatan_kemungkinan_ganda_tidak_memblokir(): void
+    {
+        Konsumen::create(['nama' => 'Budi Santoso', 'nik' => '3201010101010009']);
+
+        $r = $this->impor($this->fileBatal($this->baris(['nik' => ''])));    // NIK kosong, nama sama dengan konsumen yang ada
+
+        $r->assertSessionHas('warning');
+        $r->assertSessionHas('importErrors', fn ($e) => str_contains(implode(' ', $e), 'cek kemungkinan ganda') && str_contains(implode(' ', $e), '(peringatan)'));
+        $this->assertSame(1, KavlingKonsumen::count());    // tetap masuk
+        $this->assertSame(2, Konsumen::where('nama', 'Budi Santoso')->count());
+    }
+
+    public function test_peringatan_nik_cocok_tapi_nama_jauh_berbeda(): void
+    {
+        Konsumen::create(['nama' => 'Xaviera Putri', 'nik' => '3201010101010010']);
+
+        $r = $this->impor($this->fileBatal($this->baris(['nama' => 'Budi Santoso', 'nik' => '3201010101010010'])));
+
+        $r->assertSessionHas('importErrors', fn ($e) => str_contains(implode(' ', $e), 'pastikan NIK-nya benar'));
+        $this->assertSame(1, KavlingKonsumen::count());
+    }
+
+    public function test_template_memuat_kolom_baru_dan_daftar_tahap(): void
+    {
+        $r = $this->actingAs($this->admin)->get(route('konsumens.import-template', $this->project));
+        $path = tempnam(sys_get_temp_dir(), 'tpl') . '.xlsx';
+        $this->tmp[] = $path;
+        file_put_contents($path, $r->streamedContent());
+        $ss = IOFactory::load($path);
+
+        $headers = fn (string $sheet, int $n) => array_map(fn ($c) => $ss->getSheetByName($sheet)->getCell([$c, 1])->getValue(), range(1, $n));
+        $batal = $headers('Batal', count(KonsumenImportSpec::batalColumns()));
+        $this->assertContains('Sales / Agent', $batal);
+        $this->assertContains('Tahap Terakhir Sebelum Batal', $batal);
+        $this->assertContains('Pembeli Sebelumnya - Nama', $batal);
+        foreach (KonsumenImportSpec::CARA_BAYAR_SHEETS as $caraBayar => $judul) {
+            $this->assertContains('Pembeli Sebelumnya - Nama', $headers($judul, count(KonsumenImportSpec::columns($caraBayar))));
+        }
+        $this->assertContains('SP3K', KonsumenImportSpec::lists()['Tahap Batal']);
     }
 }

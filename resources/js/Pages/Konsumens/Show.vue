@@ -423,6 +423,21 @@ onMounted(() => {
                         </template>
                     </div>
 
+                    <!-- Rincian pembatalan: tanggal, alasan, tahap terakhir, dan uang -->
+                    <div v-if="trx.pembatalan" class="bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2.5 text-xs space-y-1">
+                        <div class="text-rose-300 font-semibold text-sm">🚫 Dibatalkan pada {{ trx.pembatalan.tanggal ?? '-' }}</div>
+                        <div class="text-slate-300">Alasan: {{ trx.pembatalan.alasan }}</div>
+                        <div v-if="trx.pembatalan.tahap" class="text-slate-400">Tahap terakhir sebelum batal: <b class="text-slate-200">{{ trx.pembatalan.tahap }}</b></div>
+                        <div class="text-slate-400">
+                            Diterima {{ formatRp(trx.pembatalan.diterima) }} · Dikembalikan {{ formatRp(trx.pembatalan.dikembalikan) }} ·
+                            <span class="text-rose-300">Hangus {{ formatRp(trx.pembatalan.hangus) }}</span>
+                        </div>
+                        <div v-if="trx.pembatalan.catatan" class="text-slate-400 italic">↳ {{ trx.pembatalan.catatan }}</div>
+                        <div class="text-slate-500">
+                            Diajukan {{ trx.pembatalan.diajukan ?? '-' }}<span v-if="trx.pembatalan.diajukan_oleh"> oleh {{ trx.pembatalan.diajukan_oleh }}</span><span v-if="trx.pembatalan.disetujui_oleh"> · disetujui {{ trx.pembatalan.disetujui_oleh }}</span>
+                        </div>
+                    </div>
+
                     <!-- Riwayat peralihan pembeli pada transaksi ini -->
                     <div v-for="p in trx.peralihan" :key="p.id" class="text-xs bg-sky-500/10 border border-sky-500/20 rounded-lg px-3 py-2 text-sky-200">
                         👥 Pembeli dialihkan dari <b>{{ p.dari }}</b> ke <b>{{ p.ke }}</b> ({{ p.hubungan }}) pada {{ p.tanggal }}.

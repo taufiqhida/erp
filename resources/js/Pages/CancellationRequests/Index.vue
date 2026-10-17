@@ -123,6 +123,9 @@ const statusBadgeClass = {
                                 <td class="px-4 py-4">
                                     <div class="text-slate-300 text-sm">{{ req.konsumen }}<span v-if="req.konsumen_baru" class="text-sky-300"> → {{ req.konsumen_baru }}</span></div>
                                     <div v-if="req.hubungan" class="text-slate-500 text-xs">{{ req.hubungan }}</div>
+                                    <div v-if="req.tahap_batal" class="text-slate-500 text-xs">Tahap saat batal: {{ req.tahap_batal }}</div>
+                                    <div v-else-if="req.tahap_sekarang" class="text-slate-500 text-xs">Tahap sekarang: {{ req.tahap_sekarang }}</div>
+                                    <div v-if="req.peringatan?.length" class="text-rose-400 text-[0.6875rem] mt-0.5">⛔ {{ req.peringatan.length }} hal perlu diperiksa</div>
                                 </td>
                                 <td class="px-4 py-4 max-w-xs">
                                     <p class="text-slate-400 text-xs line-clamp-2">{{ req.alasan }}</p>
@@ -246,6 +249,10 @@ const statusBadgeClass = {
                         <template v-else>
                             <div v-if="reviewType === 'approve'" class="text-yellow-400 text-xs bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
                                 ⚠️ Kavling akan kembali ke status <strong>Tersedia</strong> dan transaksi akan dibatalkan.
+                                <span v-if="selectedRequest.tahap_sekarang"> Tahap transaksi saat ini: <strong>{{ selectedRequest.tahap_sekarang }}</strong> (dicatat sebagai tahap terakhir sebelum batal).</span>
+                            </div>
+                            <div v-if="reviewType === 'approve' && selectedRequest.peringatan?.length" class="text-rose-300 text-xs bg-rose-500/10 border border-rose-500/25 rounded-lg p-3 space-y-1">
+                                <p v-for="(w, i) in selectedRequest.peringatan" :key="i">⛔ {{ w }}</p>
                             </div>
                             <div v-if="reviewType === 'approve'" class="space-y-3">
                                 <div class="bg-slate-800/50 rounded-lg p-3 flex justify-between items-center text-sm">

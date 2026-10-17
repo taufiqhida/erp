@@ -4,11 +4,13 @@ namespace App\Imports\Konsumen;
 
 use App\Enums\CancellationRequestType;
 use App\Enums\CancellationStatus;
+use App\Models\BankRekananPreset;
 use App\Models\CancellationRequest;
 use App\Models\Kavling;
 use App\Models\KavlingKonsumen;
 use App\Models\Konsumen;
 use App\Models\Project;
+use App\Models\SalesAgent;
 use App\Models\SkemaDpPreset;
 use App\Support\KonsumenImportSpec;
 use Illuminate\Support\Collection;
@@ -144,6 +146,31 @@ class KonsumenBatalSheetImport implements ToCollection, SkipsEmptyRows
             }
         }
 
+        // ── Sales & bank (opsional): kalau tak cocok master, baris TETAP masuk; isiannya dicatat di rincian + peringatan ──
+        $catatanTambahan = [];
+        $tunda = [];   // peringatan baru dilaporkan kalau barisnya jadi diimpor
+        $sales = null;
+        if ($salesLabel = $str('sales')) {
+            $sales = SalesAgent::whereRaw('LOWER(nama) = ?', [mb_strtolower($salesLabel)])->first();
+            if (!$sales) {
+                $catatanTambahan[] = "Sales/Agent: {$salesLabel}";
+                $tunda[] = ("Sales/Agent '{$salesLabel}' tidak ada di master — baris tetap diimpor tanpa sales; namanya dicatat di Rincian.");
+            }
+        }
+        $bank = null;
+        if ($bankLabel = $str('bank')) {
+            $bank = BankRekananPreset::whereRaw('LOWER(nama) = ?', [mb_strtolower($bankLabel)])->first();
+            if (!$bank) {
+                $catatanTambahan[] = "Bank: {$bankLabel}";
+                $tunda[] = ("Bank '{$bankLabel}' tidak ada di master — baris tetap diimpor tanpa bank; namanya dicatat di Rincian.");
+            }
+        }
+        $tahapBatal = null;
+        if ($tahapLabel = $str('tahap_batal')) {
+            $tahapBatal = array_search(mb_strtolower($tahapLabel), array_map('mb_strtolower', CancellationRequest::TAHAP_LABEL), true) ?: null;
+            if (!$tahapBatal) $errors[] = "Tahap Terakhir '{$tahapLabel}' tidak dikenal.";
+        }
+
         // ── Unit: harus ada; statusnya sengaja TIDAK dicek ──
         $kavling = null;
         if ($blok && $unit) {
@@ -170,15 +197,24 @@ class KonsumenBatalSheetImport implements ToCollection, SkipsEmptyRows
 
         $nik = $str('nik');
         $alasan = $str('alasan') ?? 'Import data lama';
-        $rincian = $str('rincian');
+        $rincian = trim(implode(' | ', array_filter([$str('rincian'), ...$catatanTambahan]))) ?: null;
         $hangus = $total - $dikembalikan;
+
+        // Peralihan pembeli (opsional): batas atas tanggalnya adalah tanggal batal.
+        [$alih, $alihErr] = ImportBantuan::bacaPeralihan($v, $tglBooking, $tglBatal, $nik, $str('hp'), fn ($x) => $this->parseTanggal($x));
+        if ($alihErr) {
+            $this->result->skip($this->sheetLabel, $rowNum, implode(' | ', array_unique($alihErr)));
+            return;
+        }
 
         try {
             KavlingKonsumen::withoutFinanceRefresh(fn () => DB::transaction(function () use (
                 $nama, $nik, $str, $kavling, $tglBooking, $tglBatal, $tglBayar, $caraBayar, $skemaPreset,
-                $hargaDeal, $total, $dikembalikan, $hangus, $alasan, $rincian,
+                $hargaDeal, $total, $dikembalikan, $hangus, $alasan, $rincian, $sales, $bank, $tahapBatal, $alih, $rowNum, $tunda,
             ) {
+                foreach ($tunda as $pesan) $this->result->warn($this->sheetLabel, $rowNum, $pesan);
                 $konsumen = $nik ? Konsumen::where('nik', $nik)->first() : null;
+                if ($peringatan = ImportBantuan::peringatanKemiripan($nama, $nik, $konsumen)) $this->result->warn($this->sheetLabel, $rowNum, $peringatan);
                 if (!$konsumen) {
                     $konsumen = Konsumen::create([
                         'nama' => $nama,
@@ -196,6 +232,8 @@ class KonsumenBatalSheetImport implements ToCollection, SkipsEmptyRows
                     'harga_deal' => $hargaDeal,
                     'cara_bayar' => $caraBayar,
                     'skema_dp_preset_id' => $skemaPreset?->id,
+                    'sales_agent_id' => $sales?->id,
+                    'bank_rekanan_preset_id' => $bank?->id,
                     'created_by' => Auth::id(),
                 ]);
 
@@ -213,6 +251,8 @@ class KonsumenBatalSheetImport implements ToCollection, SkipsEmptyRows
                     'type' => CancellationRequestType::Cancellation,
                     'kavling_id' => $kavling->id,
                     'kavling_konsumen_id' => $trx->id,
+                    'konsumen_id' => $konsumen->id,
+                    'tahap_batal' => $tahapBatal,
                     'requested_by' => Auth::id(),
                     'reviewed_by' => Auth::id(),
                     'status' => CancellationStatus::Approved,
@@ -223,6 +263,8 @@ class KonsumenBatalSheetImport implements ToCollection, SkipsEmptyRows
                     'nominal_dikembalikan' => $dikembalikan,
                     'nominal_hangus' => $hangus,
                 ]);
+
+                if ($alih) ImportBantuan::terapkanPeralihan($trx, $konsumen, $alih, $this->result, $this->sheetLabel, $rowNum);
 
                 $this->result->importedBatal++;
             }));

@@ -316,8 +316,13 @@ class KonsumenController extends Controller
         $pendingRequestsByTrx = $semuaPending->filter(fn ($r) => $r->type->value !== 'rincian_change')->keyBy('kavling_konsumen_id');
         $pendingRincianIds = $semuaPending->filter(fn ($r) => $r->type->value === 'rincian_change')->pluck('kavling_konsumen_id')->all();
 
+        // Pembatalan yang disetujui per transaksi (tanggal, alasan, tahap saat batal, uang) untuk kartu "Dibatalkan" di profil.
+        $pembatalanByTrx = CancellationRequest::whereIn('kavling_konsumen_id', $transaksis->pluck('id'))
+            ->where('type', 'cancellation')->where('status', 'approved')
+            ->with(['requester:id,name', 'reviewer:id,name'])->orderByDesc('reviewed_at')->get()->groupBy('kavling_konsumen_id')->map->first();
+
         $transaksis = $transaksis
-            ->map(function ($trx) use ($pendingRequestsByTrx, $pendingRincianIds) {
+            ->map(function ($trx) use ($pendingRequestsByTrx, $pendingRincianIds, $pembatalanByTrx) {
                 $isKpr = in_array($trx->cara_bayar, ['kpr_subsidi', 'kpr_komersil']);
                 $isKprSubsidi = $trx->cara_bayar === 'kpr_subsidi';
                 $dpTotal = (float) $trx->jadwalTagihans->where('jenis', 'dp')->sum('jumlah');
@@ -330,6 +335,18 @@ class KonsumenController extends Controller
                     'kavling_id'       => $trx->kavling_id,
                     'project_id'       => $trx->kavling->project_id,
                     'status'           => $trx->status,
+                    'pembatalan'           => ($pb = $pembatalanByTrx->get($trx->id)) ? [
+                        'tanggal'        => $pb->reviewed_at?->format('d M Y'),
+                        'diajukan'       => $pb->created_at?->format('d M Y'),
+                        'diajukan_oleh'  => $pb->requester?->name,
+                        'disetujui_oleh' => $pb->reviewer?->name,
+                        'alasan'         => $pb->alasan,
+                        'tahap'          => $pb->tahap_batal_label,
+                        'catatan'        => $pb->catatan_reviewer,
+                        'diterima'       => $pb->nominal_diterima,
+                        'dikembalikan'   => $pb->nominal_dikembalikan,
+                        'hangus'         => $pb->nominal_hangus,
+                    ] : null,
                     'peralihan'            => \App\Support\AlihPembeli::riwayatTransaksi($trx),
                     'tanggal_booking_raw'  => $trx->tanggal_booking?->format('Y-m-d'),
                     // Rincian: SPV/Leader/Superadmin mengubah langsung; Admin Sales mengusulkan (hanya sebelum Akad, dan tidak saat transaksi terkunci).
@@ -787,7 +804,11 @@ class KonsumenController extends Controller
             ['Harga Dasar & Harga Deal', 'Harga Dasar kosong = pakai Harga di Stok Kavling (wajib diisi manual kalau harga unit itu juga kosong). Harga Deal TIDAK diinput — dihitung otomatis dari Harga Dasar + Biaya Tanah + Biaya Tambahan Lain − Diskon.'],
             ['Aturan skip', 'Nilai dropdown tak dikenal, kolom wajib kosong, atau unit tidak tersedia → baris DILEWATI dengan pesan error (bukan ditebak). Baris lain tetap masuk. Ringkasan error muncul setelah upload.'],
             ['Kavling', 'Kluster+Blok+Nomor harus sudah ada di Stok Kavling & berstatus Tersedia. Setelah import, status unit otomatis: sebelum Akad → Dipesan, Akad/BAST → Terjual.'],
-            ['Sheet Batal', 'Untuk konsumen yang SUDAH BATAL (riwayat & audit, termasuk uang UTJ/DP yang hangus). Cukup 1 angka Total Dibayar + Dikembalikan; Hangus dihitung otomatis; rincian ditulis di kolom Rincian Pengembalian. Hasilnya sama dengan pembatalan yang disetujui di tab Pembatalan. Status kavling TIDAK dicek/diubah (boleh sudah terisi konsumen lain). Baris yang sama tidak akan dobel kalau diimpor ulang. Hanya untuk pengguna dengan izin review pembatalan.'],
+            ['Sheet Batal', 'Untuk konsumen yang SUDAH BATAL (riwayat & audit, termasuk uang UTJ/DP yang hangus). Cukup 1 angka Total Dibayar + Dikembalikan; Hangus dihitung otomatis; rincian ditulis di kolom Rincian Pengembalian. Hasilnya sama dengan pembatalan yang disetujui di menu Pengajuan. Status kavling TIDAK dicek/diubah (boleh sudah terisi konsumen lain). Baris yang sama tidak akan dobel kalau diimpor ulang. Hanya untuk pengguna dengan izin review pembatalan.'],
+            ['Kolom tambahan Sheet Batal', 'Sales / Agent, Bank Rekanan KPR, dan Tahap Terakhir Sebelum Batal bersifat opsional (kosong = aman). Sales/Bank yang tidak ada di master TIDAK menggagalkan baris: baris tetap masuk dan namanya dicatat di Rincian + muncul sebagai peringatan. Tahap Terakhir harus dari dropdown; dipakai untuk analisis batal di tahap mana dan tampil di profil konsumen.'],
+            ['Tanggal Batal', 'Isi tanggal KEJADIAN batalnya (kapan konsumen menyatakan batal / uang dikembalikan), bukan tanggal Anda menginput data. Tanggal ini dipakai Dashboard untuk menghitung jumlah batal per periode. Kalau benar-benar tidak diketahui, perkirakan terdekat dan tulis di Rincian.'],
+            ['Pembeli Sebelumnya (alih pembeli)', 'Enam kolom opsional di ujung kanan SETIAP sheet (4 cara bayar + Batal). Isi hanya kalau transaksi di baris itu hasil ALIH PEMBELI: baris diisi data pembeli SEKARANG (B), kolom "Pembeli Sebelumnya" diisi data pembeli awal (A). Nama wajib bila kolom lain terisi; NIK/HP A tidak boleh sama dengan B; tanggal peralihan tidak boleh sebelum Tanggal Booking (dan tidak melewati Tanggal Batal di sheet Batal). Hasilnya muncul di menu Pengajuan dan riwayat peralihan profil konsumen. Kalau A sendiri pernah punya transaksi batal terpisah, isi NIK A yang sama supaya terhubung ke konsumen yang sama.'],
+            ['Peringatan (tidak memblokir)', 'Setelah import, laporan bisa memuat "(peringatan)" untuk: NIK kosong padahal sudah ada konsumen bernama sama (kemungkinan ganda), NIK cocok tetapi nama sangat berbeda, serta Sales/Bank yang tidak ada di master. Baris peringatan SUDAH masuk; cek manual dan perbaiki bila perlu.'],
             ['Selesai otomatis', 'Kalau semua piutang konsumen & bank pada baris itu sudah lunas (rekap Terbayar mencukupi), transaksi otomatis ditandai Selesai & terkunci — sama seperti tombol "Tandai Selesai" manual.'],
         ];
         $h->fromArray(['Bagian', 'Keterangan'], null, 'A3');
@@ -851,8 +872,10 @@ class KonsumenController extends Controller
         if ($result->importedBatal > 0) $msg .= ", {$result->importedBatal} konsumen batal dicatat";
         if ($result->skipped > 0) $msg .= ", {$result->skipped} baris dilewati";
 
-        if (!empty($result->errors)) {
-            return back()->with('warning', $msg)->with('importErrors', array_slice($result->errors, 0, 50));
+        $catatan = array_merge($result->errors, $result->warnings);
+        if (!empty($result->warnings)) $msg .= ', ' . count($result->warnings) . ' peringatan perlu dicek';
+        if (!empty($catatan)) {
+            return back()->with('warning', $msg)->with('importErrors', array_slice($catatan, 0, 50));
         }
 
         return back()->with('success', $msg . '.');

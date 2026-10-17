@@ -35,6 +35,7 @@ class CancellationRequestController extends Controller
             'konsumenBaru',
             'konsumenSaatPengajuan',
             'kavlingKonsumen.konsumen',
+            'kavlingKonsumen.pencairanKprTahaps',
             'requester:id,name',
             'reviewer:id,name',
         ])
@@ -78,6 +79,10 @@ class CancellationRequestController extends Controller
             'nominal_hangus'        => $r->nominal_hangus,
             'harga'                 => $r->isUnitSwap() && $r->isPending() ? $this->pratinjauHargaTukar($r) : null,
             // Usulan perubahan rincian: perbedaan sebelum/sesudah dihitung SEKARANG (bukan saat diajukan) supaya SPV melihat dampak yang sebenarnya.
+            'tahap_batal'           => $r->tahap_batal_label,
+            // Hanya untuk pembatalan yang masih menunggu: tahap transaksi sekarang dan hal yang perlu diperiksa SPV sebelum menyetujui.
+            'tahap_sekarang'        => $r->type === CancellationRequestType::Cancellation && $r->isPending() ? (CancellationRequest::TAHAP_LABEL[$r->kavlingKonsumen->status_penjualan] ?? null) : null,
+            'peringatan'            => $r->type === CancellationRequestType::Cancellation && $r->isPending() ? $this->peringatanBatal($r) : [],
             'perubahan'             => $r->isRincianChange() && $r->isPending() ? PerubahanRincian::pratinjau($r->kavlingKonsumen, $r->payload ?? [], $r->alasan) : null,
         ]);
 
@@ -87,6 +92,25 @@ class CancellationRequestController extends Controller
             'statusOptions' => array_map(fn($s) => ['value' => $s->value, 'label' => $s->label()], CancellationStatus::cases()),
             'typeOptions'   => array_map(fn($t) => ['value' => $t->value, 'label' => $t->label()], CancellationRequestType::cases()),
         ]);
+    }
+
+    /**
+     * Hal yang perlu diperiksa SPV sebelum menyetujui pembatalan: pembatalan hanya menghitung uang dari konsumen, jadi tahap lanjut dan
+     * pencairan bank tidak ikut ditangani oleh proses ini.
+     */
+    private function peringatanBatal(CancellationRequest $r): array
+    {
+        $kk = $r->kavlingKonsumen;
+        $peringatan = [];
+        if (in_array($kk->status_penjualan, ['akad', 'bast'], true)) {
+            $peringatan[] = 'Transaksi sudah di tahap ' . CancellationRequest::TAHAP_LABEL[$kk->status_penjualan] . '. Pastikan urusan notaris dan bank sudah dibereskan sebelum unit dilepas.';
+        }
+        $cair = (float) $kk->pencairanKprTahaps->sum('nominal');
+        if ($cair > 0) {
+            $peringatan[] = 'Bank sudah mencairkan Rp ' . number_format($cair, 0, ',', '.') . '. Pencairan ini tidak ikut dihitung atau dibalik oleh pembatalan; selesaikan pengembaliannya ke bank di luar sistem.';
+        }
+
+        return $peringatan;
     }
 
     /**
@@ -280,6 +304,7 @@ class CancellationRequestController extends Controller
 
         DB::transaction(function () use ($cancellationRequest, $validated, $nominalDiterima) {
             $cancellationRequest->update([
+                'tahap_batal'          => $cancellationRequest->kavlingKonsumen->status_penjualan,    // tahap terakhir sebelum status berubah jadi "batal"
                 'status'               => CancellationStatus::Approved,
                 'reviewed_by'          => Auth::id(),
                 'reviewed_at'          => now(),

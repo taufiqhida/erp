@@ -389,6 +389,10 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
         $catatan = $str('catatan');
         $nik = $str('nik');
 
+        // Peralihan pembeli (opsional): baris ini hasil alih pembeli dari orang lain.
+        [$alih, $alihErr] = ImportBantuan::bacaPeralihan($v, $tglBooking, null, $nik, $str('hp'), fn ($x) => $this->parseTanggal($x));
+        array_push($errors, ...$alihErr);
+
         if (!empty($errors)) {
             $this->result->skip($this->sheetLabel, $rowNum, implode(' | ', array_unique($errors)));
             return;
@@ -406,9 +410,10 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                 $titipanNominal, $titipanBayar, $titipanTgl,
                 $plafon, $tglAjuan, $sp3kKey, $tglSp3k, $tglExp, $sbumItems, $dajamItems,
                 $cairBayar, $cairTgl, $tumBayar, $tumTgl,
-                $tglRencana, $tglAkad, $tglBast, $docStatuses, $catatan,
+                $tglRencana, $tglAkad, $tglBast, $docStatuses, $catatan, $alih,
             ) {
                 $konsumen = $nik ? Konsumen::where('nik', $nik)->first() : null;
+                if ($peringatan = ImportBantuan::peringatanKemiripan($nama, $nik, $konsumen)) $this->result->warn($this->sheetLabel, $rowNum, $peringatan);
                 if (!$konsumen) {
                     $konsumen = Konsumen::create([
                         'nama' => $nama,
@@ -474,6 +479,7 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                 if (filled($catatan)) {
                     \App\Models\CatatanTransaksi::tulis($trx, 'booking', $catatan);
                 }
+                if ($alih) ImportBantuan::terapkanPeralihan($trx, $konsumen, $alih, $this->result, $this->sheetLabel, $rowNum);
 
                 // Biaya Tambahan Lain per-preset
                 $btRows = [];
