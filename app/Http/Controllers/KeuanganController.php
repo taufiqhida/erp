@@ -367,7 +367,7 @@ class KeuanganController extends Controller
         $this->authorizeProjectAccess($kk->kavling->project);
 
         $kk->load([
-            'konsumen:id,nama,no_hp', 'kavling.project:id,nama', 'skemaDpPreset', 'promoPreset:id,nama', 'programAllInPreset:id,nama', 'pembayarans',
+            'konsumen:id,nama,no_hp', 'kavling.project:id,nama', 'skemaDpPreset', 'salesAgent:id,nama', 'promoPreset:id,nama', 'programAllInPreset:id,nama', 'pembayarans',
             'jadwalTagihans' => fn($q) => $q->orderBy('jenis')->orderBy('nomor_cicilan'),
             'jadwalTagihans.pembayaran',
             'biayaTambahans.pembayarans',
@@ -397,6 +397,7 @@ class KeuanganController extends Controller
                 // seperti Rincian Pemesanan di tab Konsumen — supaya
                 // finance juga tahu Pelunasan/Plafon itu terdiri dari apa
                 // saja, bukan cuma angka akhir.
+                'sales_nama'       => $kk->salesAgent?->nama,
                 'harga_dasar'      => $kk->harga_dasar,
                 'booking_fee'      => $kk->booking_fee,
                 'dp_nominal'       => $dpTotal,

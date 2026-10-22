@@ -218,6 +218,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('konsumens.import-template')->middleware('throttle:heavy');
     Route::post('pemasaran/konsumen/{project}/import', [KonsumenController::class, 'importKonsumen'])
         ->name('konsumens.import')->middleware('throttle:heavy');
+    // Lengkapi rincian (harga dasar, booking fee, jadwal tagihan) transaksi BATAL hasil import dari Skema Pembayaran.
+    Route::post('pemasaran/konsumen/{project}/lengkapi-rincian', [KonsumenController::class, 'lengkapiRincian'])
+        ->name('konsumens.lengkapi-rincian')->middleware('throttle:heavy');
+    Route::post('pemasaran/transaksi/{kk}/lengkapi-rincian', [KonsumenController::class, 'lengkapiRincianSatu'])
+        ->name('konsumens.lengkapi-rincian-satu')->middleware('throttle:heavy');
 
     // ── Rincian Biaya Akad (Dajam/SBUM/Biaya Akad per transaksi) ────────
     Route::post('kavling-konsumen/{transaksi}/biaya-akad', [KonsumenController::class, 'storeRincianBiayaAkad'])

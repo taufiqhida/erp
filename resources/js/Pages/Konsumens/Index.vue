@@ -1,6 +1,7 @@
 <script setup>
 import Pagination from '@/Components/Pagination.vue';
 import EmptyState from '@/Components/EmptyState.vue';
+import LengkapiRincianModal from '@/Components/LengkapiRincianModal.vue';
 import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
@@ -8,6 +9,8 @@ import { ref, watch, computed } from 'vue';
 
 const page = usePage();
 const currentProject = computed(() => page.props.currentProject);
+const canLengkapiRincian = computed(() => page.props.auth.user?.permissions?.includes('review cancellation'));
+const showLengkapi = ref(false);
 
 // ── Import Konsumen (konsumen proyek berjalan, langsung ke tahap terakhirnya) ──
 // Sama seperti pola Import Excel Kavling — download template, browse file,
@@ -190,6 +193,11 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                     <button v-if="currentProject" @click="showImport = true"
                         class="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium rounded-lg transition-colors border border-slate-700 whitespace-nowrap">
                         📥 Import Konsumen
+                    </button>
+                    <button v-if="currentProject && canLengkapiRincian" @click="showLengkapi = true"
+                        class="inline-flex items-center gap-2 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-lg transition-colors border border-slate-700 whitespace-nowrap"
+                        title="Untuk konsumen batal hasil import: buat harga dasar & jadwal tagihan dari skema pembayaran">
+                        🧮 Lengkapi Rincian Batal
                     </button>
                     <div v-else class="text-slate-500 text-xs">Pilih proyek aktif dulu untuk Import Konsumen.</div>
                 </div>
@@ -464,6 +472,9 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
             <!-- Pagination -->
             <Pagination :paginator="rows" />
         </div>
+
+        <LengkapiRincianModal v-if="showLengkapi && currentProject" :url="route('konsumens.lengkapi-rincian', currentProject.id)"
+            @tutup="showLengkapi = false" @selesai="showLengkapi = false" />
 
         <!-- ── MODAL: Import Konsumen ───────────────────────────────── -->
         <Teleport to="body">

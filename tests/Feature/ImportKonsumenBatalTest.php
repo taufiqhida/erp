@@ -416,4 +416,25 @@ class ImportKonsumenBatalTest extends TestCase
         }
         $this->assertContains('SP3K', KonsumenImportSpec::lists()['Tahap Batal']);
     }
+
+    public function test_skema_terisi_membangun_rincian_dan_jadwal_otomatis_tetapi_uang_diterima_tetap_apa_adanya(): void
+    {
+        SkemaDpPreset::create([
+            'nama' => 'UTJ 1jt DP 1%', 'cara_bayar' => 'kpr_subsidi',
+            'booking_fee_aktif' => true, 'booking_fee_tipe' => 'nominal', 'booking_fee_nilai' => 1000000, 'booking_fee_tenor' => 1, 'booking_fee_masuk_harga_jual' => true,
+            'dp_aktif' => true, 'dp_tipe' => 'persen', 'dp_nilai' => 1, 'dp_tenor' => 1, 'dp_masuk_harga_jual' => true,
+            'booking_fee_basis' => 'harga_dasar', 'dp_basis' => 'harga_dasar',
+        ]);
+
+        $this->impor($this->fileBatal($this->baris(['cara_bayar' => 'KPR Subsidi', 'skema' => 'UTJ 1jt DP 1%', 'harga_deal' => 166000000, 'total_bayar' => 500000])))
+            ->assertSessionHas('success');
+
+        $trx = KavlingKonsumen::firstOrFail();
+        $this->assertEquals(166000000, $trx->harga_dasar);
+        $this->assertEquals(1000000, $trx->booking_fee);
+        $this->assertSame(2, $trx->jadwalTagihans()->count());
+        $this->assertSame(0, $trx->jadwalTagihans()->where('status', '!=', 'belum_bayar')->count());
+        $this->assertEquals(500000, $trx->pembayarans()->sum('jumlah'));   // uang yang diterima tidak dibagi ke tagihan
+        $this->assertEquals(500000, CancellationRequest::firstOrFail()->nominal_diterima);
+    }
 }

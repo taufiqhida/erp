@@ -265,6 +265,7 @@ class KonsumenBatalSheetImport implements ToCollection, SkipsEmptyRows
                 ]);
 
                 if ($alih) ImportBantuan::terapkanPeralihan($trx, $konsumen, $alih, $this->result, $this->sheetLabel, $rowNum);
+                if ($skemaPreset && $caraBayar) \App\Support\RincianDariSkema::terapkan($trx->fresh(['kavling', 'skemaDpPreset']));
 
                 $this->result->importedBatal++;
             }));

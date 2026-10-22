@@ -228,6 +228,10 @@ const deleteCicilanLain = async (c) => {
                         <div class="text-slate-200 text-sm mt-0.5">{{ transaksi.cara_bayar_label }}</div>
                     </div>
                     <div>
+                        <div class="text-slate-500 text-xs">Sales / Agent</div>
+                        <div class="text-slate-200 text-sm mt-0.5">{{ transaksi.sales_nama ?? '-' }}</div>
+                    </div>
+                    <div>
                         <div class="text-slate-500 text-xs">Bank</div>
                         <div class="text-slate-200 text-sm mt-0.5">{{ transaksi.bank_rekanan_kpr ?? '-' }}</div>
                     </div>

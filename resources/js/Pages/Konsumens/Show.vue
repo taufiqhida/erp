@@ -1,6 +1,7 @@
 <script setup>
 import CatatanTransaksi from '@/Components/CatatanTransaksi.vue';
 import AlihPembeliModal from '@/Components/AlihPembeliModal.vue';
+import LengkapiRincianModal from '@/Components/LengkapiRincianModal.vue';
 import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import CatatPembayaran from '@/Components/CatatPembayaran.vue';
@@ -35,6 +36,8 @@ const openPengajuan = (trx, type) => {
     pengajuanModal.show = true;
 };
 const closePengajuan = () => { pengajuanModal.show = false; };
+const lengkapiTrx = ref(null);  // transaksi batal yang rinciannya sedang dilengkapi dari skema
+const canLengkapiRincian = computed(() => usePage().props.auth.user?.permissions?.includes('review cancellation'));
 const alihTrx = ref(null);       // transaksi yang sedang diajukan Alih Pembeli
 const onPengajuanSuccess = () => { pengajuanModal.show = false; router.reload({ only: ['transaksis'] }); };
 const overrideLock = computed(() => usePage().props.auth.user?.permissions?.includes('override transaction lock'));
@@ -384,6 +387,10 @@ onMounted(() => {
                                 {{ trx.status_bangun_label }}
                             </span>
                         </div>
+                        <div>
+                            <div class="text-slate-500 text-[0.6875rem]">Sales / Agent</div>
+                            <div class="text-slate-200 text-sm mt-0.5">{{ trx.sales_nama ?? '-' }}</div>
+                        </div>
                         <div v-if="trx.is_kpr">
                             <div class="text-slate-500 text-[0.6875rem]">Bank Rekanan KPR</div>
                             <div class="text-slate-200 text-sm mt-0.5">{{ trx.bank_rekanan_kpr ?? '-' }}</div>
@@ -433,6 +440,10 @@ onMounted(() => {
                             <span class="text-rose-300">Hangus {{ formatRp(trx.pembatalan.hangus) }}</span>
                         </div>
                         <div v-if="trx.pembatalan.catatan" class="text-slate-400 italic">↳ {{ trx.pembatalan.catatan }}</div>
+                        <button v-if="trx.bisa_lengkapi_rincian && canLengkapiRincian" @click="lengkapiTrx = trx"
+                            class="mt-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-lg border border-slate-700">
+                            🧮 Lengkapi rincian dari skema
+                        </button>
                         <div class="text-slate-500">
                             Diajukan {{ trx.pembatalan.diajukan ?? '-' }}<span v-if="trx.pembatalan.diajukan_oleh"> oleh {{ trx.pembatalan.diajukan_oleh }}</span><span v-if="trx.pembatalan.disetujui_oleh"> · disetujui {{ trx.pembatalan.disetujui_oleh }}</span>
                         </div>
@@ -1053,6 +1064,9 @@ onMounted(() => {
                 Konsumen belum memiliki transaksi
             </div>
         </div>
+
+        <LengkapiRincianModal v-if="lengkapiTrx" :url="route('konsumens.lengkapi-rincian-satu', lengkapiTrx.id)"
+            @tutup="lengkapiTrx = null" @selesai="lengkapiTrx = null" />
 
         <AlihPembeliModal v-if="alihTrx" :kk-id="alihTrx.id" :pembeli-lama="konsumen.nama" :unit="alihTrx.kavling_nomor"
             @tutup="alihTrx = null" @selesai="alihTrx = null" />

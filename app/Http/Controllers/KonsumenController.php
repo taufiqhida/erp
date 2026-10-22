@@ -294,6 +294,54 @@ class KonsumenController extends Controller
         return $this->streamExcelExport('daftar-konsumen.xlsx', $headers, $mapped);
     }
 
+    /** Pratinjau (simulasi) atau penerapan massal rincian dari skema untuk transaksi batal hasil import di satu proyek. */
+    public function lengkapiRincian(Request $request, Project $project): \Illuminate\Http\JsonResponse|RedirectResponse
+    {
+        $this->authorizeProjectAccess($project);
+        abort_unless(Auth::user()->can('review cancellation'), 403);
+
+        if ($request->boolean('simulasi')) {
+            $p = \App\Support\RincianDariSkema::pratinjau($project->id);
+
+            return response()->json(['bisa' => count($p['bisa']), 'lewati' => count($p['lewati']), 'contoh' => array_slice($p['bisa'], 0, 30), 'dilewati' => array_slice($p['lewati'], 0, 30)]);
+        }
+
+        $jadwal = 0;
+        $ok = 0;
+        foreach (\App\Support\RincianDariSkema::kandidat($project->id)->with('skemaDpPreset')->get() as $kk) {
+            $n = \App\Support\RincianDariSkema::terapkan($kk);
+            if ($n !== null) {
+                $ok++;
+                $jadwal += $n;
+                activity('rincian_batal')->performedOn($kk)->causedBy(Auth::user())->log('Rincian dilengkapi dari skema pembayaran');
+            }
+        }
+
+        return back()->with('success', $ok ? "Rincian dilengkapi untuk {$ok} transaksi batal ({$jadwal} baris jadwal tagihan dibuat)." : 'Tidak ada transaksi batal yang perlu dilengkapi.');
+    }
+
+    public function lengkapiRincianSatu(Request $request, KavlingKonsumen $kk): \Illuminate\Http\JsonResponse|RedirectResponse
+    {
+        $this->authorizeProjectAccess($kk->kavling->project);
+        abort_unless(Auth::user()->can('review cancellation'), 403);
+
+        if ($alasan = \App\Support\RincianDariSkema::alasanTidakBisa($kk)) abort(422, $alasan);
+
+        if ($request->boolean('simulasi')) {
+            $h = \App\Support\RincianDariSkema::hitung($kk);
+
+            return response()->json(['bisa' => 1, 'lewati' => 0, 'contoh' => [[
+                'id' => $kk->id, 'konsumen' => $kk->konsumen?->nama, 'unit' => $kk->kavling->nomor_lengkap, 'harga_dasar' => $h['harga_dasar'],
+                'booking_fee' => $h['booking_fee'], 'dp' => $h['dp'], 'pelunasan' => $h['pelunasan'], 'jadwal' => count($h['jadwal']),
+            ]], 'dilewati' => []]);
+        }
+
+        $n = \App\Support\RincianDariSkema::terapkan($kk);
+        activity('rincian_batal')->performedOn($kk)->causedBy(Auth::user())->log('Rincian dilengkapi dari skema pembayaran');
+
+        return back()->with('success', "Rincian dilengkapi ({$n} baris jadwal tagihan dibuat).");
+    }
+
     public function show(Request $request, Konsumen $konsumen): Response
     {
         $this->authorize('view', $konsumen);
@@ -301,7 +349,7 @@ class KonsumenController extends Controller
         $transaksis = $konsumen->kavlingKonsumens()
             ->with([
                 'kavling.project:id,nama', 'kavling.tipeUnitPreset', 'kavling.statusBangunStage', 'dokumens', 'bastRecord', 'catatans.penyelesai', 'pembayarans', 'biayaTambahans.pembayarans',
-                'promoPreset:id,nama', 'programAllInPreset:id,nama', 'skemaDpPreset', 'bankRekananPreset:id,nama',
+                'promoPreset:id,nama', 'programAllInPreset:id,nama', 'skemaDpPreset', 'bankRekananPreset:id,nama', 'salesAgent:id,nama',
                 'jadwalTagihans' => fn($q) => $q->orderBy('jenis')->orderBy('nomor_cicilan'),
                 'jadwalTagihans.pembayaran',
                 'rincianBiayaAkad' => fn($q) => $q->orderBy('kategori')->orderBy('nama'),
@@ -373,6 +421,9 @@ class KonsumenController extends Controller
                     'cara_bayar'       => $trx->cara_bayar,
                     'cara_bayar_label' => $this->caraBayarLabel($trx->cara_bayar),
                     'bank_rekanan_kpr' => $trx->bank_rekanan_kpr,
+                    'sales_nama'       => $trx->salesAgent?->nama,
+                    // Tombol "Lengkapi rincian dari skema": hanya transaksi batal yang skemanya terisi dan belum punya jadwal.
+                    'bisa_lengkapi_rincian' => $trx->status === 'cancelled' && !\App\Support\RincianDariSkema::alasanTidakBisa($trx),
                     'is_kpr'           => $isKpr,
                     'is_kpr_subsidi'   => $isKprSubsidi,
                     'pencairan_kpr'    => $breakdown['pencairan_kpr'],
