@@ -98,6 +98,7 @@ class KonsumenController extends Controller
                 ->orderBy('nama')->get(['id', 'nama']),
             'status_jual'   => collect(StatusJual::cases())->mapWithKeys(fn($s) => [$s->value => $s->label()]),
             'status_bangun' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna']),
+            'sales' => \App\Models\SalesAgent::ordered()->get(['id', 'nama']),
             'status_penjualan' => collect([
                 'booking' => 'Booking', 'pemberkasan' => 'Pemberkasan', 'proses_bank' => 'Proses Bank / SLIK',
                 'sp3k' => 'SP3K', 'rencana_akad' => 'Rencana Akad', 'akad' => 'Akad', 'bast' => 'BAST', 'batal' => 'Batal',
@@ -115,8 +116,9 @@ class KonsumenController extends Controller
             $rows = KavlingKonsumen::query()
                 ->join('kavlings', 'kavlings.id', '=', 'kavling_konsumen.kavling_id')
                 ->select('kavling_konsumen.*')
-                ->with(['konsumen', 'kavling.project', 'kavling.tipeUnitPreset', 'kavling.statusBangunStage', 'dokumens', 'bankRekananPreset:id,nama', 'alihPembeliRiwayats.dari'])
+                ->with(['konsumen', 'kavling.project', 'kavling.tipeUnitPreset', 'kavling.statusBangunStage', 'dokumens', 'bankRekananPreset:id,nama', 'salesAgent:id,nama', 'alihPembeliRiwayats.dari'])
                 ->when(!$tampilkanNonaktif, fn ($q) => $q->where('kavling_konsumen.status_penjualan', '!=', 'batal'))
+                ->when($request->sales_agent_id, fn ($q) => $q->where('kavling_konsumen.sales_agent_id', $request->sales_agent_id))
                 ->whereHas('kavling', function ($q) use ($unitFilter, $isGlobal, $projectScope) {
                     $unitFilter($q);
                     if (!$isGlobal) $projectScope($q);
@@ -140,6 +142,7 @@ class KonsumenController extends Controller
                 ->through(fn($trx) => [
                     'id'                => $trx->id,
                     'tanggal_booking'   => $trx->tanggal_booking?->format('d M Y'),
+                    'sales_nama'        => $trx->salesAgent?->nama,
                     'konsumen_id'       => $trx->konsumen_id,
                     'konsumen_nama'     => $trx->konsumen->nama,
                     'peralihan_dari'    => $trx->alihPembeliRiwayats->last()?->dari?->nama,    // pembeli sebelumnya bila transaksi pernah dialihkan
@@ -231,7 +234,7 @@ class KonsumenController extends Controller
             'mode'          => $viewMode,
             'rows'          => $rows,
             'filterOptions' => $filterOptions,
-            'filters'       => $request->only(['search', 'kluster', 'blok', 'tipe_unit_preset_id', 'status_jual', 'status_bangun_stage_id', 'status_penjualan', 'tampilkan_nonaktif', 'view', 'sort', 'dir']),
+            'filters'       => $request->only(['search', 'kluster', 'blok', 'tipe_unit_preset_id', 'status_jual', 'status_bangun_stage_id', 'status_penjualan', 'sales_agent_id', 'tampilkan_nonaktif', 'view', 'sort', 'dir']),
         ]);
     }
 
@@ -260,11 +263,12 @@ class KonsumenController extends Controller
         $rows = KavlingKonsumen::query()
             ->join('kavlings', 'kavlings.id', '=', 'kavling_konsumen.kavling_id')
             ->select('kavling_konsumen.*')
-            ->with(['konsumen', 'kavling.project', 'kavling.statusBangunStage', 'bankRekananPreset:id,nama'])
+            ->with(['konsumen', 'kavling.project', 'kavling.statusBangunStage', 'bankRekananPreset:id,nama', 'salesAgent:id,nama'])
             ->whereHas('kavling', function ($q) use ($unitFilter, $isGlobal, $projectScope) {
                 $unitFilter($q);
                 if (!$isGlobal) $projectScope($q);
             })
+            ->when($request->sales_agent_id, fn ($q) => $q->where('kavling_konsumen.sales_agent_id', $request->sales_agent_id))
             ->when($request->status_penjualan, fn($q) => $q->where('status_penjualan', $request->status_penjualan))
             ->when($request->search, fn($q) =>
                 $q->whereHas('konsumen', fn($q2) => $q2->where(fn($q3) => $q3
@@ -276,13 +280,14 @@ class KonsumenController extends Controller
             ->tap(fn($q) => Kavling::applyUnitOrder($q, 'asc'))
             ->get();
 
-        $headers = ['Konsumen', 'No. HP', 'Unit', 'Proyek', 'Tgl Booking', 'Harga Deal', 'Cara Bayar', 'Bank', 'Status Bangun', 'ID Rumah', 'Tahap'];
+        $headers = ['Konsumen', 'No. HP', 'Unit', 'Proyek', 'Tgl Booking', 'Sales / Agent', 'Harga Deal', 'Cara Bayar', 'Bank', 'Status Bangun', 'ID Rumah', 'Tahap'];
         $mapped = $rows->map(fn($trx) => [
             $trx->konsumen->nama,
             $trx->konsumen->no_hp,
             $trx->kavling->nomor_lengkap,
             $trx->kavling->project->nama,
             $trx->tanggal_booking?->format('Y-m-d'),
+            $trx->salesAgent?->nama,
             (float) $trx->harga_deal,
             $this->caraBayarLabel($trx->cara_bayar),
             $trx->bank_rekanan_kpr,

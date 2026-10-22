@@ -38,6 +38,7 @@ const tipeUnit    = ref(props.filters?.tipe_unit_preset_id ?? '');
 const statusJual  = ref(props.filters?.status_jual ?? '');
 const statusBangun = ref(props.filters?.status_bangun_stage_id ?? '');
 const statusPenjualan = ref(props.filters?.status_penjualan ?? '');
+const salesAgent = ref(props.filters?.sales_agent_id ?? '');
 // Batal & dialihkan disembunyikan secara default; filter pipeline "Batal" otomatis menampilkannya.
 const tampilNonaktif = ref(!!props.filters?.tampilkan_nonaktif);
 
@@ -46,7 +47,7 @@ const exportKonsumenUrl = computed(() => {
     const params = new URLSearchParams(Object.fromEntries(Object.entries({
         search: search.value, kluster: kluster.value, blok: blok.value,
         tipe_unit_preset_id: tipeUnit.value, status_jual: statusJual.value,
-        status_bangun_stage_id: statusBangun.value, status_penjualan: statusPenjualan.value,
+        status_bangun_stage_id: statusBangun.value, status_penjualan: statusPenjualan.value, sales_agent_id: salesAgent.value,
     }).filter(([, v]) => v)));
     return route('konsumens.export') + '?' + params.toString();
 });
@@ -75,6 +76,7 @@ const applyFilter = (sortOverride = null) => {
             status_jual: statusJual.value || undefined,
             status_bangun_stage_id: statusBangun.value || undefined,
             status_penjualan: statusPenjualan.value || undefined,
+            sales_agent_id: salesAgent.value || undefined,
             tampilkan_nonaktif: tampilNonaktif.value ? 1 : undefined,
         },
         { preserveState: true, replace: true }
@@ -86,7 +88,7 @@ watch(search, () => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => applyFilter(), 400);
 });
-watch([kluster, blok, tipeUnit, statusJual, statusBangun, statusPenjualan, tampilNonaktif], () => applyFilter());
+watch([kluster, blok, tipeUnit, statusJual, statusBangun, statusPenjualan, salesAgent, tampilNonaktif], () => applyFilter());
 
 const resetFilters = () => {
     kluster.value = '';
@@ -95,6 +97,7 @@ const resetFilters = () => {
     statusJual.value = '';
     statusBangun.value = '';
     statusPenjualan.value = '';
+    salesAgent.value = '';
 };
 
 // "Hari berjalan" / countdown pipeline (dari KavlingKonsumen::pipeline_progress_info)
@@ -255,11 +258,15 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                         <option value="">Semua Pipeline</option>
                         <option v-for="s in filterOptions.status_penjualan" :key="s.key" :value="s.key">{{ s.label }}</option>
                     </select>
+                    <select v-if="mode === 'unit'" v-model="salesAgent" class="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">
+                        <option value="">Semua Sales</option>
+                        <option v-for="s in filterOptions.sales" :key="s.id" :value="s.id">{{ s.nama }}</option>
+                    </select>
                     <label class="inline-flex items-center gap-1.5 px-2 text-xs text-slate-400 cursor-pointer" title="Konsumen/transaksi yang batal atau dialihkan disembunyikan secara default">
                         <input type="checkbox" v-model="tampilNonaktif" class="rounded border-slate-600 bg-slate-800 text-violet-500" />
                         Tampilkan yang batal &amp; dialihkan
                     </label>
-                    <button v-if="kluster || blok || tipeUnit || statusJual || statusBangun || statusPenjualan" @click="resetFilters"
+                    <button v-if="kluster || blok || tipeUnit || statusJual || statusBangun || statusPenjualan || salesAgent" @click="resetFilters"
                         class="px-3 py-1.5 text-slate-500 hover:text-slate-300 text-xs transition-colors">
                         ✕ Reset filter unit
                     </button>
@@ -304,7 +311,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                     <button type="button" @click="setSort('unit')" class="uppercase tracking-wide hover:text-slate-300 transition-colors inline-flex items-center gap-1" :class="sortKey === 'unit' ? 'text-violet-400' : 'text-slate-500'">Unit <span :class="sortKey === 'unit' ? '' : 'text-slate-700'">{{ sortArrow('unit') }}</span></button>
                                 </th>
                                 <th class="px-4 py-3 text-left font-medium">
-                                    <button type="button" @click="setSort('booking')" class="uppercase tracking-wide hover:text-slate-300 transition-colors inline-flex items-center gap-1" :class="sortKey === 'booking' ? 'text-violet-400' : 'text-slate-500'">Tgl Booking <span :class="sortKey === 'booking' ? '' : 'text-slate-700'">{{ sortArrow('booking') }}</span></button>
+                                    <button type="button" @click="setSort('booking')" class="uppercase tracking-wide hover:text-slate-300 transition-colors inline-flex items-center gap-1" :class="sortKey === 'booking' ? 'text-violet-400' : 'text-slate-500'">Tgl Booking · Sales <span :class="sortKey === 'booking' ? '' : 'text-slate-700'">{{ sortArrow('booking') }}</span></button>
                                 </th>
                                 <th class="px-4 py-3 text-right font-medium">Harga</th>
                                 <th class="px-4 py-3 text-left font-medium">Cara Bayar</th>
@@ -327,7 +334,10 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                     {{ row.kavling_nomor }}
                                     <div class="text-slate-500 text-xs">{{ row.project_nama }}<span v-if="row.kluster"> · {{ row.kluster }}</span></div>
                                 </td>
-                                <td class="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{{ row.tanggal_booking ?? '-' }}</td>
+                                <td class="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
+                                    {{ row.tanggal_booking ?? '-' }}
+                                    <div v-if="row.sales_nama" class="text-slate-500 text-[0.6875rem] max-w-[9rem] truncate" :title="`Sales/Agent: ${row.sales_nama}`">{{ row.sales_nama }}</div>
+                                </td>
                                 <td class="px-4 py-3 text-slate-300 text-right font-medium">{{ formatRp(row.harga_deal) }}</td>
                                 <td class="px-4 py-3 text-slate-400">
                                     {{ row.cara_bayar_label }}
