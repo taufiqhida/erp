@@ -269,13 +269,19 @@ const totalBiayaTambahan = computed(() => biayaKelebihanTanahNominal.value + bia
 const subtotalSebelumDiskon = computed(() => hargaDasar.value + totalBiayaTambahan.value);
 
 const diskonNominal = computed(() => {
-    if (!bookForm.diskon_mode || !bookForm.diskon_nilai) return 0;
+    if (!promoTerpilih.value?.lawan_harga_jual || !bookForm.diskon_mode || !bookForm.diskon_nilai) return 0;
     return bookForm.diskon_mode === 'persen'
         ? subtotalSebelumDiskon.value * (Number(bookForm.diskon_nilai) / 100)
         : Number(bookForm.diskon_nilai);
 });
 
 const hargaJualNetto = computed(() => subtotalSebelumDiskon.value - diskonNominal.value);
+
+// Adaptor: potongan Harga Jual disimpan di kolom diskon (laporan lama tetap sama).
+const diskonModel = computed({
+    get: () => ({ mode: bookForm.diskon_mode || 'persen', nilai: bookForm.diskon_nilai }),
+    set: (v) => { bookForm.diskon_mode = v.mode; bookForm.diskon_nilai = v.nilai; },
+});
 
 // ── Section 3: Skema Pembayaran — dropdown difilter oleh cara bayar ──────
 const availableSkemaPresets = computed(() =>
@@ -329,7 +335,7 @@ const submitBooking = () => {
         booking_fee: preset?.booking_fee_aktif ? (Number(bookForm.booking_fee) || 0) : 0,
         biaya_tambahan: biayaTambahanPayload,
     };
-    if (!Number(payload.diskon_nilai)) { payload.diskon_mode = ''; payload.diskon_nilai = ''; }   // diskon kosong = tanpa diskon
+    if (!Number(payload.diskon_nilai) || !promoTerpilih.value?.lawan_harga_jual) { payload.diskon_mode = ''; payload.diskon_nilai = ''; }   // tanpa lawan Harga Jual / nilai kosong = tanpa diskon
     payload.potongan_tanah = lawanTanahAktif.value && bookForm.potongan_tanah.nilai !== '' ? bookForm.potongan_tanah : null;
     delete payload.potongan_biaya;
     delete payload.biaya_tambahan_selected;
@@ -996,31 +1002,18 @@ const isBookable = (k) => k.status_jual === 'available';
 
                         <!-- Diskon / Promo -->
                         <div class="space-y-3">
-                            <h4 class="text-slate-300 text-sm font-medium border-b border-slate-800 pb-2">Diskon / Promo</h4>
+                            <h4 class="text-slate-300 text-sm font-medium border-b border-slate-800 pb-2">Promo</h4>
                             <select v-model="bookForm.promo_preset_id"
                                 class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500">
                                 <option :value="null">Tanpa Promo</option>
                                 <option v-for="promo in promoPresets" :key="promo.id" :value="promo.id">{{ promo.nama }}</option>
                             </select>
-                            <div v-if="bookForm.promo_preset_id" class="space-y-2">
-                                <div class="flex gap-3">
-                                    <label class="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" v-model="bookForm.diskon_mode" value="persen" class="accent-violet-500" />
-                                        <span class="text-slate-300 text-sm">%</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" v-model="bookForm.diskon_mode" value="nominal" class="accent-violet-500" />
-                                        <span class="text-slate-300 text-sm">Nominal</span>
-                                    </label>
-                                </div>
-                                <MoneyInput :plain="bookForm.diskon_mode === 'persen'" v-model="bookForm.diskon_nilai" :placeholder="bookForm.diskon_mode === 'persen' ? '%' : 'Rp'"
-                                    class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                                <p v-if="bookForm.cara_bayar === 'kpr_subsidi' || bookForm.cara_bayar === 'kpr_komersil'" class="text-slate-500 text-[0.6875rem]">
-                                    Diskon harga hanya mengurangi harga jual; tagihan KPR tidak berubah. Untuk memotong biaya tertentu, pakai potongan promo di bawah.
-                                </p>
-                            </div>
-                            <!-- Potongan promo per biaya (lawan dari promo terpilih) -->
+                            <!-- Potongan promo per lawan: Harga Jual (diskon umum), Kelebihan Tanah, Biaya Tambahan -->
                             <div v-if="promoTerpilih" class="space-y-2">
+                                <PotonganPromoInput v-if="promoTerpilih.lawan_harga_jual" label="Harga Jual (diskon)" :bruto="subtotalSebelumDiskon" v-model="diskonModel" />
+                                <p v-if="promoTerpilih.lawan_harga_jual && (bookForm.cara_bayar === 'kpr_subsidi' || bookForm.cara_bayar === 'kpr_komersil')" class="text-slate-500 text-[0.6875rem]">
+                                    Potongan pada Harga Jual hanya mengurangi harga jual; tagihan KPR tidak berubah. Untuk memotong biaya tertentu, pakai lawan Kelebihan Tanah / Biaya Tambahan.
+                                </p>
                                 <PotonganPromoInput v-if="lawanTanahAktif" label="Kelebihan Tanah" :bruto="biayaKelebihanTanahBruto" v-model="bookForm.potongan_tanah" />
                                 <PotonganPromoInput v-for="id in lawanBiayaIds" :key="`pot-${id}`" :label="biayaPresetNama(id)"
                                     :bruto="Number(bookForm.biaya_tambahan_nominals[id]) || 0" v-model="bookForm.potongan_biaya[id]" />

@@ -28,6 +28,12 @@ class PromoPreset extends Model
         return $this->lawan->contains('jenis', PromoPresetLawan::TANAH);
     }
 
+    /** Apakah promo ini boleh mengurangi Harga Jual (diskon umum). */
+    public function lawanHargaJual(): bool
+    {
+        return $this->lawan->contains('jenis', PromoPresetLawan::HARGA_JUAL);
+    }
+
     /** @return int[] id preset Biaya Tambahan yang boleh dipotong promo ini. */
     public function lawanBiayaTambahanIds(): array
     {
@@ -41,6 +47,7 @@ class PromoPreset extends Model
             'id'                 => $p->id,
             'nama'               => $p->nama,
             'lawan_tanah'        => $p->lawanTanah(),
+            'lawan_harga_jual'   => $p->lawanHargaJual(),
             'lawan_biaya_tambahan' => $p->lawanBiayaTambahanIds(),
         ]);
     }

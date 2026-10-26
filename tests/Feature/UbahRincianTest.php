@@ -52,6 +52,7 @@ class UbahRincianTest extends TestCase
             'cara_bayar' => 'cash_bertahap', 'tanggal_booking' => '2026-10-10', 'harga_dasar' => 300000000, 'total_biaya_tambahan' => 0, 'harga_deal' => 300000000]);
         $this->hook = BiayaTambahanPreset::create(['nama' => 'Biaya Hook', 'is_active' => true]);
         $this->promo = PromoPreset::create(['nama' => 'Free Kanopi', 'is_active' => true]);
+        $this->promo->lawan()->create(['jenis' => \App\Models\PromoPresetLawan::HARGA_JUAL]);   // diskon = potongan pada lawan Harga Jual
 
         $this->utj = PembayaranKonsumen::create(['kavling_konsumen_id' => $this->trx->id, 'jenis' => 'booking_fee', 'jumlah' => 5000000, 'tanggal_bayar' => '2026-10-10',
             'keterangan' => KoreksiTanggalBooking::KETERANGAN_UTJ_OTOMATIS]);
@@ -79,6 +80,9 @@ class UbahRincianTest extends TestCase
     /** Isi form lengkap (frontend selalu mengirim semua kolom rincian). */
     private function form(array $ubah = []): array
     {
+        // Diskon hanya berlaku bila promo yang dipilih punya lawan Harga Jual.
+        if (!empty($ubah['diskon_mode']) && !array_key_exists('promo_preset_id', $ubah)) $ubah['promo_preset_id'] = $this->promo->id;
+
         return array_replace([
             'biaya_kelebihan_tanah_aktif' => false, 'biaya_kelebihan_tanah_mode' => 'per_m2', 'biaya_tambahan' => [], 'promo_preset_id' => null,
             'diskon_mode' => null, 'diskon_nilai' => null, 'program_all_in_preset_id' => null,

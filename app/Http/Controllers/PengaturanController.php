@@ -911,7 +911,7 @@ class PengaturanController extends Controller
         return Inertia::render('Pengaturan/Promo', [
             'presets' => PromoPreset::with('lawan')->orderBy('nama')->get()->map(fn ($p) => [
                 'id' => $p->id, 'nama' => $p->nama, 'keterangan' => $p->keterangan, 'is_active' => $p->is_active,
-                'lawan_tanah' => $p->lawanTanah(), 'lawan_biaya_tambahan' => $p->lawanBiayaTambahanIds(),
+                'lawan_tanah' => $p->lawanTanah(), 'lawan_harga_jual' => $p->lawanHargaJual(), 'lawan_biaya_tambahan' => $p->lawanBiayaTambahanIds(),
             ]),
             'biayaTambahanPresets' => BiayaTambahanPreset::ordered()->get(['id', 'nama']),
         ]);
@@ -925,6 +925,7 @@ class PengaturanController extends Controller
     {
         $validated = $request->validate([
             'tanah'                       => 'boolean',
+            'harga_jual'                  => 'boolean',
             'biaya_tambahan_preset_ids'   => 'nullable|array',
             'biaya_tambahan_preset_ids.*' => 'integer|exists:biaya_tambahan_presets,id',
         ]);
@@ -932,6 +933,7 @@ class PengaturanController extends Controller
         \Illuminate\Support\Facades\DB::transaction(function () use ($promo, $validated) {
             $promo->lawan()->delete();
             if ($validated['tanah'] ?? false) $promo->lawan()->create(['jenis' => \App\Models\PromoPresetLawan::TANAH]);
+            if ($validated['harga_jual'] ?? false) $promo->lawan()->create(['jenis' => \App\Models\PromoPresetLawan::HARGA_JUAL]);
             foreach (array_unique($validated['biaya_tambahan_preset_ids'] ?? []) as $id) {
                 $promo->lawan()->create(['jenis' => \App\Models\PromoPresetLawan::BIAYA_TAMBAHAN, 'biaya_tambahan_preset_id' => $id]);
             }

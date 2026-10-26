@@ -35,13 +35,14 @@ class PotonganPromo
         return ['potongan' => $potongan, 'mode' => $mode, 'nilai' => (float) $nilai];
     }
 
-    /** Lawan dari promo yang dipilih: ['tanah' => bool, 'biaya_tambahan' => int[]]. */
+    /** Lawan dari promo yang dipilih: ['tanah' => bool, 'biaya_tambahan' => int[], 'harga_jual' => bool]. */
     public static function lawan(?int $promoId): array
     {
-        if (!$promoId) return ['tanah' => false, 'biaya_tambahan' => []];
+        $kosong = ['tanah' => false, 'biaya_tambahan' => [], 'harga_jual' => false];
+        if (!$promoId) return $kosong;
         $promo = PromoPreset::with('lawan')->find($promoId);
 
-        return $promo ? ['tanah' => $promo->lawanTanah(), 'biaya_tambahan' => $promo->lawanBiayaTambahanIds()] : ['tanah' => false, 'biaya_tambahan' => []];
+        return $promo ? ['tanah' => $promo->lawanTanah(), 'biaya_tambahan' => $promo->lawanBiayaTambahanIds(), 'harga_jual' => $promo->lawanHargaJual()] : $kosong;
     }
 
     /** Aturan validasi tambahan untuk input potongan di form (booking dan ubah rincian). */

@@ -203,7 +203,9 @@ class PotonganPromoTest extends TestCase
     public function test_ubah_rincian_menambah_potongan_dan_menghapus_diskon_pengganti(): void
     {
         // Kasus nyata: tanah "digratiskan" lewat diskon pengganti -> KPR tetap menagih tanah.
-        $kk = $this->booking(['promo_preset_id' => $this->promoLawan->id, 'diskon_mode' => 'nominal', 'diskon_nilai' => 8400000, 'biaya_tambahan' => []]);
+        $kk = $this->booking(['promo_preset_id' => $this->promoLawan->id, 'biaya_tambahan' => []]);
+        // Data warisan: tanah dicatat penuh lalu "digratiskan" lewat diskon pengganti (dibuat sebelum ada potongan promo).
+        $kk->update(['diskon_mode' => 'nominal', 'diskon_nilai' => 8400000, 'diskon_nominal' => 8400000, 'total_biaya_tambahan' => 8400000, 'harga_deal' => 166000000]);
         $this->assertEquals(8400000, $this->baris($this->breakdown($kk), 'Biaya Penambahan Tanah')['nominal']);   // bug sebelum diperbaiki
 
         $this->actingAs($this->user('spv'))->patch(route('bookings.rincian-pesanan', $kk), [
@@ -257,5 +259,90 @@ class PotonganPromoTest extends TestCase
         $this->actingAs($this->user('admin_sales'))->put(route('pengaturan.promo.lawan', $this->promoLabel), ['tanah' => true])
             ->assertRedirect(route('dashboard'));    // izin kurang: dialihkan ke dashboard dengan pesan (bukan 403)
         $this->assertSame(0, $this->promoLabel->lawan()->count());
+    }
+
+    // ───────────── Promo dan Diskon dilebur: diskon = potongan pada lawan "Harga Jual" ─────────────
+
+    private function promoHargaJual(): PromoPreset
+    {
+        $p = PromoPreset::create(['nama' => 'Diskon Akhir Tahun', 'is_active' => true]);
+        $p->lawan()->create(['jenis' => PromoPresetLawan::HARGA_JUAL]);
+
+        return $p;
+    }
+
+    public function test_diskon_berlaku_hanya_bila_promo_punya_lawan_harga_jual(): void
+    {
+        $dengan = $this->booking(['promo_preset_id' => $this->promoHargaJual()->id, 'diskon_mode' => 'nominal', 'diskon_nilai' => 2000000]);
+        $this->assertEquals(2000000, $dengan->diskon_nominal);
+        $this->assertSame('nominal', $dengan->diskon_mode);
+        $this->assertEquals(166000000 + 8400000 + 5000000 - 2000000, $dengan->harga_deal);
+
+        // Promo tanpa lawan Harga Jual (dan tanpa promo): diskon yang terkirim dibuang.
+        $tanpaLawan = $this->booking(['promo_preset_id' => $this->promoLabel->id, 'diskon_mode' => 'persen', 'diskon_nilai' => 10]);
+        $this->assertEquals(0, $tanpaLawan->diskon_nominal);
+        $this->assertNull($tanpaLawan->diskon_mode);
+        $tanpaPromo = $this->booking(['diskon_mode' => 'nominal', 'diskon_nilai' => 5000000]);
+        $this->assertEquals(0, $tanpaPromo->diskon_nominal);
+        $this->assertEquals(166000000 + 8400000 + 5000000, $tanpaPromo->harga_deal);
+    }
+
+    public function test_diskon_persen_dihitung_dari_subtotal_bersih_setelah_potongan_lawan_lain(): void
+    {
+        $promo = $this->promoHargaJual();
+        $promo->lawan()->create(['jenis' => PromoPresetLawan::TANAH]);
+
+        $kk = $this->booking(['promo_preset_id' => $promo->id, 'potongan_tanah' => ['mode' => 'persen', 'nilai' => 100], 'diskon_mode' => 'persen', 'diskon_nilai' => 1]);
+
+        $subtotal = 166000000 + 5000000;                                       // tanah sudah gratis, tinggal Hook
+        $this->assertEquals(round($subtotal * 0.01, 2), $kk->diskon_nominal);
+        $this->assertEquals($subtotal - round($subtotal * 0.01, 2), $kk->harga_deal);
+    }
+
+    public function test_ubah_rincian_mengganti_promo_tanpa_lawan_harga_jual_membuang_diskon(): void
+    {
+        $kk = $this->booking(['promo_preset_id' => $this->promoHargaJual()->id, 'diskon_mode' => 'nominal', 'diskon_nilai' => 2000000]);
+        $payload = [
+            'biaya_kelebihan_tanah_aktif' => true, 'biaya_kelebihan_tanah_mode' => 'per_m2', 'biaya_kelebihan_tanah_luas' => 12, 'biaya_kelebihan_tanah_harga_per_m2' => 700000,
+            'biaya_tambahan' => [['id' => $kk->biayaTambahans()->firstOrFail()->id, 'preset_id' => $this->hook->id, 'nominal' => 5000000]],
+            'diskon_mode' => 'nominal', 'diskon_nilai' => 2000000,
+        ];
+
+        $this->actingAs($this->user('spv'))->patch(route('bookings.rincian-pesanan', $kk), $payload + ['promo_preset_id' => $this->promoLabel->id])->assertSessionHas('success');
+
+        $kk = $kk->fresh();
+        $this->assertEquals(0, $kk->diskon_nominal);
+        $this->assertNull($kk->diskon_mode);
+        $this->assertEquals(166000000 + 8400000 + 5000000, $kk->harga_deal);
+    }
+
+    public function test_migrasi_memberi_lawan_harga_jual_ke_promo_lama_dan_mengaitkan_diskon_tanpa_promo(): void
+    {
+        // Promo lama (tanpa lawan harga jual) dan transaksi lama: diskon tanpa promo.
+        $lama = $this->booking(['promo_preset_id' => $this->promoLabel->id]);
+        $yatim = $this->booking([]);
+        $yatim->forceFill(['promo_preset_id' => null, 'diskon_mode' => 'nominal', 'diskon_nilai' => 1000000, 'diskon_nominal' => 1000000])->save();
+        $this->assertFalse($this->promoLabel->fresh('lawan')->lawanHargaJual());
+
+        (require base_path('database/migrations/2026_10_26_000002_lawan_harga_jual_untuk_promo.php'))->up();
+
+        $this->assertTrue($this->promoLabel->fresh('lawan')->lawanHargaJual());                      // promo lama diberi lawan Harga Jual
+        $promoDiskon = PromoPreset::where('nama', 'Diskon Harga')->firstOrFail();
+        $this->assertTrue($promoDiskon->fresh('lawan')->lawanHargaJual());
+        $this->assertSame($promoDiskon->id, $yatim->fresh()->promo_preset_id);                       // diskon tanpa promo dikaitkan
+        $this->assertSame($this->promoLabel->id, $lama->fresh()->promo_preset_id);                   // yang sudah punya promo tidak diubah
+
+        (require base_path('database/migrations/2026_10_26_000002_lawan_harga_jual_untuk_promo.php'))->up();   // aman diulang
+        $this->assertSame(1, $promoDiskon->lawan()->where('jenis', PromoPresetLawan::HARGA_JUAL)->count());
+    }
+
+    public function test_pengaturan_menyimpan_lawan_harga_jual(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole('superadmin');
+
+        $this->actingAs($admin)->put(route('pengaturan.promo.lawan', $this->promoLabel), ['harga_jual' => true, 'tanah' => false, 'biaya_tambahan_preset_ids' => []])->assertSessionHas('success');
+
+        $this->assertTrue(PromoPreset::untukForm()->firstWhere('id', $this->promoLabel->id)['lawan_harga_jual']);
     }
 }

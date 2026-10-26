@@ -116,16 +116,18 @@ class PerubahanRincian
 
         // ── Diskon / Promo.
         $subtotal = (float) $kk->harga_dasar + $totalBiayaTambahan;
+        // Diskon = potongan promo pada lawan "Harga Jual": hanya berlaku bila promo yang dipilih memang punya lawan itu.
+        $diskonAktif = !empty($u['diskon_mode']) && $lawan['harga_jual'];
         $diskonNominal = 0;
-        if (!empty($u['diskon_mode'])) {
+        if ($diskonAktif) {
             $diskonNominal = $u['diskon_mode'] === 'persen'
                 ? round($subtotal * ((float) $u['diskon_nilai'] / 100), 2)
                 : (float) $u['diskon_nilai'];
         }
 
         $kk->promo_preset_id      = $u['promo_preset_id'] ?? null;
-        $kk->diskon_mode          = $u['diskon_mode'] ?? null;
-        $kk->diskon_nilai         = $u['diskon_nilai'] ?? null;
+        $kk->diskon_mode          = $diskonAktif ? $u['diskon_mode'] : null;
+        $kk->diskon_nilai         = $diskonAktif ? ($u['diskon_nilai'] ?? null) : null;
         $kk->diskon_nominal       = $diskonNominal;
         $kk->total_biaya_tambahan = $totalBiayaTambahan;
         $kk->harga_deal           = $subtotal - $diskonNominal;

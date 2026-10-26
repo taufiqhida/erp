@@ -12,7 +12,7 @@ const props = defineProps({
 // "Lawan" promo: biaya yang boleh dipotong promo ini (tanpa nominal — nominal/persen diisi per transaksi saat booking).
 const lawanForms = reactive({});
 const bukaLawan = (preset) => {
-    lawanForms[preset.id] = { tanah: preset.lawan_tanah, biaya_tambahan_preset_ids: [...preset.lawan_biaya_tambahan] };
+    lawanForms[preset.id] = { tanah: preset.lawan_tanah, harga_jual: preset.lawan_harga_jual, biaya_tambahan_preset_ids: [...preset.lawan_biaya_tambahan] };
 };
 const toggleLawanBt = (presetId, id) => {
     const arr = lawanForms[presetId].biaya_tambahan_preset_ids;
@@ -26,6 +26,7 @@ const simpanLawan = (preset) => {
     });
 };
 const namaLawan = (preset) => [
+    ...(preset.lawan_harga_jual ? ['Harga Jual (diskon)'] : []),
     ...(preset.lawan_tanah ? ['Kelebihan Tanah'] : []),
     ...preset.lawan_biaya_tambahan.map(id => props.biayaTambahanPresets.find(b => b.id === id)?.nama).filter(Boolean),
 ];
@@ -61,7 +62,7 @@ const destroy = async (preset) => {
     <PengaturanLayout title="Preset Promo">
             <div>
                 <h1 class="text-white font-bold text-xl">Preset Promo</h1>
-                <p class="text-slate-400 text-sm mt-0.5">Daftar nama promo/diskon yang bisa dipilih sales saat booking — persentase atau nominalnya diisi fleksibel per transaksi, bukan di sini</p>
+                <p class="text-slate-400 text-sm mt-0.5">Daftar promo yang bisa dipilih sales saat booking. Di sini hanya diatur biaya yang boleh dipotong (lawan), termasuk Harga Jual untuk diskon umum — nominal atau persennya diisi per transaksi, bukan di sini</p>
             </div>
 
             <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
@@ -79,6 +80,9 @@ const destroy = async (preset) => {
                             </div>
                             <div v-if="lawanForms[preset.id]" class="mt-2 p-3 bg-slate-800/60 border border-slate-700 rounded-lg space-y-2">
                                 <p class="text-slate-400 text-xs">Pilih biaya yang boleh dipotong promo ini. Nominal atau persen potongannya diisi per transaksi saat booking.</p>
+                                <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                                    <input type="checkbox" v-model="lawanForms[preset.id].harga_jual" class="rounded border-slate-600 bg-slate-800 text-violet-500" /> Harga Jual (diskon umum)
+                                </label>
                                 <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                                     <input type="checkbox" v-model="lawanForms[preset.id].tanah" class="rounded border-slate-600 bg-slate-800 text-violet-500" /> Kelebihan Tanah
                                 </label>

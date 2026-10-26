@@ -323,8 +323,10 @@ class BookingController extends Controller
             $hargaDasar = (float) $kavling->harga;
             $subtotal   = $hargaDasar + $totalBiayaTambahan;
 
+            // Diskon = potongan promo pada lawan "Harga Jual": hanya berlaku bila promo yang dipilih memang punya lawan itu.
+            $diskonAktif = !empty($validated['diskon_mode']) && $lawan['harga_jual'];
             $diskonNominal = 0;
-            if (!empty($validated['diskon_mode'])) {
+            if ($diskonAktif) {
                 $diskonNominal = $validated['diskon_mode'] === 'persen'
                     ? round($subtotal * ((float) $validated['diskon_nilai'] / 100), 2)
                     : (float) $validated['diskon_nilai'];
@@ -395,8 +397,8 @@ class BookingController extends Controller
                 'biaya_kelebihan_tanah_potongan_mode'  => $potTanah['mode'],
                 'biaya_kelebihan_tanah_potongan_nilai' => $potTanah['nilai'],
                 'promo_preset_id'  => $validated['promo_preset_id'] ?? null,
-                'diskon_mode'      => $validated['diskon_mode'] ?? null,
-                'diskon_nilai'     => $validated['diskon_nilai'] ?? null,
+                'diskon_mode'      => $diskonAktif ? $validated['diskon_mode'] : null,
+                'diskon_nilai'     => $diskonAktif ? $validated['diskon_nilai'] : null,
                 'diskon_nominal'   => $diskonNominal,
                 'total_biaya_tambahan' => $totalBiayaTambahan,
                 'program_all_in_preset_id'   => $allInPreset?->id,

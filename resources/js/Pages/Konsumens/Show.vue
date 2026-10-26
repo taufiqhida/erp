@@ -103,6 +103,17 @@ const brutoTanahForm = (form) => form.biaya_kelebihan_tanah_mode === 'per_m2'
     ? (Number(form.biaya_kelebihan_tanah_luas) || 0) * (Number(form.biaya_kelebihan_tanah_harga_per_m2) || 0)
     : (Number(form.biaya_kelebihan_tanah_nominal_input) || 0);
 const lawanTanahForm = (form, locked = false) => !!promoForm(form)?.lawan_tanah && form.biaya_kelebihan_tanah_aktif && !locked && brutoTanahForm(form) > 0;
+// Bruto untuk potongan Harga Jual = harga dasar + biaya bersih (setelah potongan lain), sama seperti dasar hitung diskon di server.
+const potonganNominalForm = (bruto, p) => {
+    const n = Number(p?.nilai);
+    if (!n || bruto <= 0) return 0;
+    return Math.max(0, Math.min(bruto, p.mode === 'nominal' ? n : bruto * (n / 100)));
+};
+const subtotalHargaJualForm = (trx, form) => {
+    const tanah = form.biaya_kelebihan_tanah_aktif ? brutoTanahForm(form) - (lawanTanahForm(form, biayaKelebihanLocked(trx)) ? potonganNominalForm(brutoTanahForm(form), form.potongan_tanah) : Number(biayaKelebihanLocked(trx) ? trx.biaya_kelebihan_tanah_potongan : 0)) : 0;
+    const lain = form.biaya_tambahan.reduce((s, bt) => s + (Number(bt.nominal) || 0) - (lawanBtForm(form, bt) ? potonganNominalForm(Number(bt.nominal) || 0, bt.potongan_input) : Number(bt.locked ? bt.potongan : 0)), 0);
+    return (Number(form.harga_dasar_ke_unit && trx.harga_unit_sekarang != null ? trx.harga_unit_sekarang : trx.harga_dasar) || 0) + tanah + lain;
+};
 const lawanBtForm = (form, bt) => !bt.locked && !!promoForm(form)?.lawan_biaya_tambahan?.includes(Number(bt.preset_id));
 
 const muatanRincian = (form, tambahan = {}) => ({
@@ -118,8 +129,8 @@ const muatanRincian = (form, tambahan = {}) => ({
     })),
     promo_preset_id: form.promo_preset_id || null,
     // Nilai kosong/0 berarti diskon dihapus: mode ikut dikosongkan (kalau tidak, server menolak "nilai diskon wajib diisi").
-    diskon_mode: Number(form.diskon_nilai) ? (form.diskon_mode || null) : null,
-    diskon_nilai: Number(form.diskon_nilai) || null,
+    diskon_mode: Number(form.diskon_nilai) && promoForm(form)?.lawan_harga_jual ? (form.diskon_mode || null) : null,
+    diskon_nilai: Number(form.diskon_nilai) && promoForm(form)?.lawan_harga_jual ? Number(form.diskon_nilai) : null,
     program_all_in_preset_id: form.program_all_in_preset_id || null,
     tanggal_booking: form.tanggal_booking || null,
     harga_dasar_ke_unit: form.harga_dasar_ke_unit,
@@ -680,25 +691,18 @@ onMounted(() => {
                             </div>
 
                             <div>
-                                <div class="text-slate-300 font-medium mb-2">Diskon / Promo</div>
+                                <div class="text-slate-300 font-medium mb-2">Promo</div>
                                 <select v-model="getRincianForm(trx).promo_preset_id" class="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-300 text-xs mb-2 focus:outline-none focus:ring-1 focus:ring-violet-500">
                                     <option value="">Tanpa promo</option>
                                     <option v-for="p in promoPresets" :key="p.id" :value="p.id">{{ p.nama }}</option>
                                 </select>
-                                <div class="flex gap-3 mb-2">
-                                    <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
-                                        <input type="radio" v-model="getRincianForm(trx).diskon_mode" value="persen" class="accent-violet-500" /> Persen
-                                    </label>
-                                    <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer">
-                                        <input type="radio" v-model="getRincianForm(trx).diskon_mode" value="nominal" class="accent-violet-500" /> Nominal
-                                    </label>
-                                </div>
-                                <MoneyInput :plain="getRincianForm(trx).diskon_mode === 'persen'" v-model="getRincianForm(trx).diskon_nilai"
-                                    :placeholder="getRincianForm(trx).diskon_mode === 'persen' ? '%' : 'Rp'"
-                                    class="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                                <p v-if="trx.is_kpr" class="text-slate-500 text-[0.6875rem] mt-1">Diskon harga hanya mengurangi harga jual; tagihan KPR tidak berubah. Untuk memotong biaya tertentu, pakai potongan promo.</p>
-                                <!-- Potongan promo per biaya (lawan dari promo terpilih) -->
+                                <!-- Potongan promo per lawan: Harga Jual (diskon umum), Kelebihan Tanah, Biaya Tambahan -->
                                 <div v-if="promoForm(getRincianForm(trx))" class="space-y-2 mt-2">
+                                    <PotonganPromoInput v-if="promoForm(getRincianForm(trx)).lawan_harga_jual" label="Harga Jual (diskon)"
+                                        :bruto="subtotalHargaJualForm(trx, getRincianForm(trx))"
+                                        :model-value="{ mode: getRincianForm(trx).diskon_mode || 'persen', nilai: getRincianForm(trx).diskon_nilai }"
+                                        @update:model-value="v => { getRincianForm(trx).diskon_mode = v.mode; getRincianForm(trx).diskon_nilai = v.nilai; }" />
+                                    <p v-if="trx.is_kpr && promoForm(getRincianForm(trx)).lawan_harga_jual" class="text-slate-500 text-[0.6875rem]">Potongan pada Harga Jual hanya mengurangi harga jual; tagihan KPR tidak berubah. Untuk memotong biaya tertentu, pakai lawan Kelebihan Tanah / Biaya Tambahan.</p>
                                     <PotonganPromoInput v-if="lawanTanahForm(getRincianForm(trx), biayaKelebihanLocked(trx))" label="Kelebihan Tanah"
                                         :bruto="brutoTanahForm(getRincianForm(trx))" v-model="getRincianForm(trx).potongan_tanah" />
                                     <template v-for="(bt, idx) in getRincianForm(trx).biaya_tambahan" :key="`pot-${idx}`">
