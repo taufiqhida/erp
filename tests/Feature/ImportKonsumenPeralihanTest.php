@@ -142,4 +142,23 @@ class ImportKonsumenPeralihanTest extends TestCase
         $r->assertSessionHas('importErrors', fn ($e) => str_contains(implode(' ', $e), '(peringatan)') && str_contains(implode(' ', $e), 'tanpa NIK'));
         $this->assertSame(1, KavlingKonsumen::count());
     }
+
+    public function test_pembeli_sebelumnya_tanpa_nik_tidak_dituduh_kembar_dengan_dirinya_sendiri(): void
+    {
+        $r = $this->impor($this->file($this->baris(['alih_nama' => 'Andi Tanpa NIK'])));
+
+        $r->assertSessionHas('success');
+        $r->assertSessionMissing('importErrors');    // tidak ada peringatan palsu
+        $this->assertSame(1, Konsumen::where('nama', 'Andi Tanpa NIK')->count());
+    }
+
+    public function test_pembeli_sebelumnya_tanpa_nik_diperingatkan_bila_nama_sudah_ada_sebelumnya(): void
+    {
+        Konsumen::create(['nama' => 'Andi Tanpa NIK', 'nik' => '3201010101010777']);
+
+        $r = $this->impor($this->file($this->baris(['alih_nama' => 'Andi Tanpa NIK'])));
+
+        $r->assertSessionHas('importErrors', fn ($e) => str_contains(implode(' ', $e), 'Pembeli Sebelumnya') && str_contains(implode(' ', $e), 'tanpa NIK'));
+        $this->assertSame(2, Konsumen::where('nama', 'Andi Tanpa NIK')->count());    // tetap dibuat, hanya diperingatkan
+    }
 }

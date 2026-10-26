@@ -77,8 +77,9 @@ class ImportBantuan
         if ($lama) {
             if ($pesan = self::peringatanNikBeda($d['nama'], $d['nik'], $lama)) $result->warn($sheet, $baris, 'Pembeli Sebelumnya: ' . $pesan);
         } else {
-            $lama = Konsumen::create(['nama' => $d['nama'], 'nik' => $d['nik'], 'no_hp' => $d['hp']]);
+            // Periksa nama kembar SEBELUM membuat konsumen baru, kalau tidak yang ditemukan justru konsumen yang baru dibuat ini.
             if (!$d['nik'] && ($pesan = self::peringatanTanpaNik($d['nama']))) $result->warn($sheet, $baris, 'Pembeli Sebelumnya: ' . $pesan);
+            $lama = Konsumen::create(['nama' => $d['nama'], 'nik' => $d['nik'], 'no_hp' => $d['hp']]);
         }
 
         $pengajuan = CancellationRequest::create([
