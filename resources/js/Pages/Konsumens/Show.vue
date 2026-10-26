@@ -2,6 +2,7 @@
 import CatatanTransaksi from '@/Components/CatatanTransaksi.vue';
 import AlihPembeliModal from '@/Components/AlihPembeliModal.vue';
 import LengkapiRincianModal from '@/Components/LengkapiRincianModal.vue';
+import PotonganPromoInput from '@/Components/PotonganPromoInput.vue';
 import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import CatatPembayaran from '@/Components/CatatPembayaran.vue';
@@ -64,7 +65,8 @@ const getRincianForm = (trx) => {
             biaya_kelebihan_tanah_mode: trx.biaya_kelebihan_tanah_mode ?? 'per_m2',
             biaya_kelebihan_tanah_harga_per_m2: trx.biaya_kelebihan_tanah_harga_per_m2 ?? '',
             biaya_kelebihan_tanah_nominal_input: trx.biaya_kelebihan_tanah_mode === 'nominal' ? (trx.biaya_kelebihan_tanah_nominal ?? '') : '',
-            biaya_tambahan: (trx.biaya_tambahan || []).map(bt => ({ ...bt })),
+            potongan_tanah: { mode: trx.biaya_kelebihan_tanah_potongan_mode ?? 'persen', nilai: trx.biaya_kelebihan_tanah_potongan_nilai ?? '' },
+            biaya_tambahan: (trx.biaya_tambahan || []).map(bt => ({ ...bt, potongan_input: { mode: bt.potongan_mode ?? 'persen', nilai: bt.potongan_nilai ?? '' } })),
             promo_preset_id: trx.promo_preset_id ?? '',
             diskon_mode: trx.diskon_mode ?? '',
             diskon_nilai: trx.diskon_nilai ?? '',
@@ -89,11 +91,19 @@ const openEditRincian = (trx) => {
 const cancelEditRincian = (trxId) => { editingRincian[trxId] = false; };
 
 const addRincianBiayaTambahan = (trx) => {
-    getRincianForm(trx).biaya_tambahan.push({ id: null, preset_id: '', nama: '', nominal: '', locked: false });
+    getRincianForm(trx).biaya_tambahan.push({ id: null, preset_id: '', nama: '', nominal: '', locked: false, potongan_input: { mode: 'persen', nilai: '' } });
 };
 const removeRincianBiayaTambahan = (trx, idx) => {
     getRincianForm(trx).biaya_tambahan.splice(idx, 1);
 };
+
+// Potongan promo: hanya baris yang menjadi "lawan" dari promo terpilih (diatur di Pengaturan > Promo) yang mendapat isian potongan.
+const promoForm = (form) => props.promoPresets.find(p => String(p.id) === String(form.promo_preset_id)) ?? null;
+const brutoTanahForm = (form) => form.biaya_kelebihan_tanah_mode === 'per_m2'
+    ? (Number(form.biaya_kelebihan_tanah_luas) || 0) * (Number(form.biaya_kelebihan_tanah_harga_per_m2) || 0)
+    : (Number(form.biaya_kelebihan_tanah_nominal_input) || 0);
+const lawanTanahForm = (form, locked = false) => !!promoForm(form)?.lawan_tanah && form.biaya_kelebihan_tanah_aktif && !locked && brutoTanahForm(form) > 0;
+const lawanBtForm = (form, bt) => !bt.locked && !!promoForm(form)?.lawan_biaya_tambahan?.includes(Number(bt.preset_id));
 
 const muatanRincian = (form, tambahan = {}) => ({
     biaya_kelebihan_tanah_aktif: form.biaya_kelebihan_tanah_aktif,
@@ -101,10 +111,15 @@ const muatanRincian = (form, tambahan = {}) => ({
     biaya_kelebihan_tanah_mode: form.biaya_kelebihan_tanah_mode,
     biaya_kelebihan_tanah_harga_per_m2: form.biaya_kelebihan_tanah_harga_per_m2 || null,
     biaya_kelebihan_tanah_nominal_input: form.biaya_kelebihan_tanah_nominal_input || null,
-    biaya_tambahan: form.biaya_tambahan.map(bt => ({ id: bt.id || null, preset_id: bt.preset_id, nominal: Number(bt.nominal) || 0 })),
+    potongan_tanah: lawanTanahForm(form) && form.potongan_tanah?.nilai !== '' && form.potongan_tanah?.nilai != null ? form.potongan_tanah : null,
+    biaya_tambahan: form.biaya_tambahan.map(bt => ({
+        id: bt.id || null, preset_id: bt.preset_id, nominal: Number(bt.nominal) || 0,
+        potongan: lawanBtForm(form, bt) && bt.potongan_input?.nilai !== '' && bt.potongan_input?.nilai != null ? bt.potongan_input : null,
+    })),
     promo_preset_id: form.promo_preset_id || null,
-    diskon_mode: form.diskon_mode || null,
-    diskon_nilai: form.diskon_nilai || null,
+    // Nilai kosong/0 berarti diskon dihapus: mode ikut dikosongkan (kalau tidak, server menolak "nilai diskon wajib diisi").
+    diskon_mode: Number(form.diskon_nilai) ? (form.diskon_mode || null) : null,
+    diskon_nilai: Number(form.diskon_nilai) || null,
     program_all_in_preset_id: form.program_all_in_preset_id || null,
     tanggal_booking: form.tanggal_booking || null,
     harga_dasar_ke_unit: form.harga_dasar_ke_unit,
@@ -528,10 +543,20 @@ onMounted(() => {
                                 <span>+ Biaya Kelebihan Tanah</span>
                                 <span class="text-slate-300">{{ formatRp(trx.biaya_kelebihan_tanah_nominal) }}</span>
                             </div>
-                            <div v-for="(bt, i) in trx.biaya_tambahan" :key="`bt-${i}`" class="flex justify-between text-slate-400">
-                                <span>+ {{ bt.nama }}</span>
-                                <span class="text-slate-300">{{ formatRp(bt.nominal) }}</span>
+                            <div v-if="trx.biaya_kelebihan_tanah_aktif && Number(trx.biaya_kelebihan_tanah_potongan) > 0" class="flex justify-between text-slate-400 pl-3">
+                                <span>− Potongan promo{{ trx.promo_nama ? ` (${trx.promo_nama})` : '' }}</span>
+                                <span class="text-emerald-300">{{ formatRp(trx.biaya_kelebihan_tanah_potongan) }}</span>
                             </div>
+                            <template v-for="(bt, i) in trx.biaya_tambahan" :key="`bt-${i}`">
+                                <div class="flex justify-between text-slate-400">
+                                    <span>+ {{ bt.nama }}</span>
+                                    <span class="text-slate-300">{{ formatRp(bt.nominal) }}</span>
+                                </div>
+                                <div v-if="Number(bt.potongan) > 0" class="flex justify-between text-slate-400 pl-3">
+                                    <span>− Potongan promo{{ trx.promo_nama ? ` (${trx.promo_nama})` : '' }}</span>
+                                    <span class="text-emerald-300">{{ formatRp(bt.potongan) }}</span>
+                                </div>
+                            </template>
                             <div v-if="trx.diskon_nominal > 0" class="flex justify-between text-slate-400">
                                 <span>− Diskon{{ trx.promo_nama ? ` (${trx.promo_nama})` : '' }}{{ trx.diskon_mode === 'persen' ? ` ${trx.diskon_nilai}%` : '' }}</span>
                                 <span class="text-rose-400">{{ formatRp(trx.diskon_nominal) }}</span>
@@ -671,6 +696,17 @@ onMounted(() => {
                                 <MoneyInput :plain="getRincianForm(trx).diskon_mode === 'persen'" v-model="getRincianForm(trx).diskon_nilai"
                                     :placeholder="getRincianForm(trx).diskon_mode === 'persen' ? '%' : 'Rp'"
                                     class="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                <p v-if="trx.is_kpr" class="text-slate-500 text-[0.6875rem] mt-1">Diskon harga hanya mengurangi harga jual; tagihan KPR tidak berubah. Untuk memotong biaya tertentu, pakai potongan promo.</p>
+                                <!-- Potongan promo per biaya (lawan dari promo terpilih) -->
+                                <div v-if="promoForm(getRincianForm(trx))" class="space-y-2 mt-2">
+                                    <PotonganPromoInput v-if="lawanTanahForm(getRincianForm(trx), biayaKelebihanLocked(trx))" label="Kelebihan Tanah"
+                                        :bruto="brutoTanahForm(getRincianForm(trx))" v-model="getRincianForm(trx).potongan_tanah" />
+                                    <template v-for="(bt, idx) in getRincianForm(trx).biaya_tambahan" :key="`pot-${idx}`">
+                                        <PotonganPromoInput v-if="lawanBtForm(getRincianForm(trx), bt)" :label="biayaTambahanPresets.find(p => p.id === Number(bt.preset_id))?.nama ?? bt.nama"
+                                            :bruto="Number(bt.nominal) || 0" v-model="bt.potongan_input" />
+                                    </template>
+                                    <p v-if="biayaKelebihanLocked(trx) || getRincianForm(trx).biaya_tambahan.some(b => b.locked)" class="text-slate-500 text-[0.6875rem]">Biaya yang sudah ada pembayarannya terkunci, termasuk potongan promonya.</p>
+                                </div>
                             </div>
 
                             <div>
@@ -833,6 +869,7 @@ onMounted(() => {
                                             <span class="text-slate-300">{{ row.nama }}</span>
                                             <span class="text-slate-500 text-xs ml-2">{{ row.subjek }}</span>
                                             <span v-if="row.progress" class="text-slate-500 text-xs ml-2">({{ row.progress }})</span>
+                                            <span v-if="Number(row.potongan) > 0" class="text-emerald-300 text-xs ml-2">biaya {{ formatRp(row.bruto) }} − potongan promo {{ formatRp(row.potongan) }}</span>
                                         </div>
                                         <div class="flex items-center gap-3 flex-shrink-0">
                                             <span class="text-slate-200 font-medium min-w-[110px] text-right">{{ nominalLabel(row.nominal, row.jumlah_dibayar, row.status) }}</span>

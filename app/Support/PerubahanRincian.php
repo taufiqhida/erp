@@ -28,6 +28,7 @@ class PerubahanRincian
     public const KOLOM = [
         'biaya_kelebihan_tanah_aktif', 'biaya_kelebihan_tanah_luas', 'biaya_kelebihan_tanah_mode', 'biaya_kelebihan_tanah_harga_per_m2',
         'biaya_kelebihan_tanah_nominal_input', 'biaya_tambahan', 'promo_preset_id', 'diskon_mode', 'diskon_nilai', 'program_all_in_preset_id',
+        'potongan_tanah',
     ];
 
     /** Ambil hanya kolom rincian dari data tervalidasi. */
@@ -50,10 +51,14 @@ class PerubahanRincian
             $kk->harga_dasar = (float) $kk->kavling->harga;
         }
 
-        // ── Biaya Kelebihan Tanah: terkunci bila sudah ada pembayaran jenis biaya_tanah (nilai lama dipertahankan).
+        // Lawan dari promo yang dipilih: hanya biaya ini yang boleh mendapat potongan promo.
+        $lawan = PotonganPromo::lawan(!empty($u['promo_preset_id']) ? (int) $u['promo_preset_id'] : null);
+
+        // ── Biaya Kelebihan Tanah: terkunci bila sudah ada pembayaran jenis biaya_tanah (nilai dan potongan lama dipertahankan).
         $biayaKelebihanLocked = $kk->pembayarans->where('jenis', 'biaya_tanah')->isNotEmpty();
         if ($biayaKelebihanLocked) {
             $biayaKelebihanNominal = (float) $kk->biaya_kelebihan_tanah_nominal;
+            $potonganTanah = (float) $kk->biaya_kelebihan_tanah_potongan;
         } else {
             $biayaKelebihanNominal = 0;
             if ($u['biaya_kelebihan_tanah_aktif'] ?? false) {
@@ -66,6 +71,12 @@ class PerubahanRincian
             $kk->biaya_kelebihan_tanah_mode         = $u['biaya_kelebihan_tanah_mode'] ?? null;
             $kk->biaya_kelebihan_tanah_harga_per_m2 = $u['biaya_kelebihan_tanah_harga_per_m2'] ?? null;
             $kk->biaya_kelebihan_tanah_nominal      = $biayaKelebihanNominal;
+
+            $pt = PotonganPromo::untukBaris((float) $biayaKelebihanNominal, $u['potongan_tanah'] ?? null, $lawan['tanah'] && ($u['biaya_kelebihan_tanah_aktif'] ?? false));
+            $potonganTanah = $pt['potongan'];
+            $kk->biaya_kelebihan_tanah_potongan        = $pt['potongan'];
+            $kk->biaya_kelebihan_tanah_potongan_mode   = $pt['mode'];
+            $kk->biaya_kelebihan_tanah_potongan_nilai  = $pt['nilai'];
         }
 
         // ── Biaya Tambahan: item yang sudah punya cicilan tercatat tidak boleh diubah/dihapus; yang belum boleh diubah/dihapus/ditambah.
@@ -81,25 +92,27 @@ class PerubahanRincian
 
         foreach ($submitted as $item) {
             $preset = BiayaTambahanPreset::find($item['preset_id']);
+            $bruto = (float) $item['nominal'];
+            $pot = PotonganPromo::untukBaris($bruto, $item['potongan'] ?? null, in_array((int) $item['preset_id'], $lawan['biaya_tambahan'], true));
+            $data = [
+                'biaya_tambahan_preset_id' => $item['preset_id'],
+                'nominal'                  => $bruto,
+                'potongan'                 => $pot['potongan'],
+                'potongan_mode'            => $pot['mode'],
+                'potongan_nilai'           => $pot['nilai'],
+            ];
             if (!empty($item['id'])) {
                 $row = $existingUnpaid->firstWhere('id', $item['id']);
                 abort_if(!$row, 422, 'Item Biaya Tambahan tidak valid.');
-                $row->update([
-                    'biaya_tambahan_preset_id' => $item['preset_id'],
-                    'nama'                     => $preset?->nama ?? $row->nama,
-                    'nominal'                  => (float) $item['nominal'],
-                ]);
+                $row->update($data + ['nama' => $preset?->nama ?? $row->nama]);
             } else {
-                $kk->biayaTambahans()->create([
-                    'biaya_tambahan_preset_id' => $item['preset_id'],
-                    'nama'                     => $preset?->nama ?? 'Biaya Tambahan',
-                    'nominal'                  => (float) $item['nominal'],
-                ]);
+                $kk->biayaTambahans()->create($data + ['nama' => $preset?->nama ?? 'Biaya Tambahan']);
             }
         }
 
-        $biayaTambahanTotal = (float) $kk->biayaTambahans()->sum('nominal');
-        $totalBiayaTambahan = $biayaKelebihanNominal + $biayaTambahanTotal;
+        // total_biaya_tambahan = nilai BERSIH (setelah potongan promo).
+        $biayaTambahanTotal = (float) $kk->biayaTambahans()->get()->sum(fn ($b) => $b->ditagih);
+        $totalBiayaTambahan = ($biayaKelebihanNominal - $potonganTanah) + $biayaTambahanTotal;
 
         // ── Diskon / Promo.
         $subtotal = (float) $kk->harga_dasar + $totalBiayaTambahan;
@@ -198,8 +211,10 @@ class PerubahanRincian
         return [
             'Tanggal booking' => $kk->tanggal_booking?->format('d M Y') ?? '-',
             'Harga dasar'     => $rp($kk->harga_dasar),
-            'Biaya kelebihan tanah' => $kk->biaya_kelebihan_tanah_aktif ? $rp($kk->biaya_kelebihan_tanah_nominal) : 'Tidak ada',
-            'Biaya tambahan'  => $kk->biayaTambahans->isEmpty() ? 'Tidak ada' : $kk->biayaTambahans->map(fn ($b) => "{$b->nama} {$rp($b->nominal)}")->implode(', '),
+            'Biaya kelebihan tanah' => $kk->biaya_kelebihan_tanah_aktif
+                ? $rp($kk->biaya_kelebihan_tanah_nominal) . ((float) $kk->biaya_kelebihan_tanah_potongan > 0 ? ' (potongan promo ' . $rp($kk->biaya_kelebihan_tanah_potongan) . ')' : '')
+                : 'Tidak ada',
+            'Biaya tambahan'  => $kk->biayaTambahans->isEmpty() ? 'Tidak ada' : $kk->biayaTambahans->map(fn ($b) => "{$b->nama} {$rp($b->nominal)}" . ((float) $b->potongan > 0 ? " (potongan promo {$rp($b->potongan)})" : ''))->implode(', '),
             'Promo'           => $kk->promoPreset?->nama ?? 'Tidak ada',
             'Diskon'          => $kk->diskon_mode ? ($kk->diskon_mode === 'persen' ? rtrim(rtrim(number_format((float) $kk->diskon_nilai, 2, ',', ''), '0'), ',') . '% (' . $rp($kk->diskon_nominal) . ')' : $rp($kk->diskon_nominal)) : 'Tidak ada',
             'Program All In'  => $kk->programAllInPreset?->nama ?? 'Tidak ada',

@@ -909,8 +909,35 @@ class PengaturanController extends Controller
     public function promo(): Response
     {
         return Inertia::render('Pengaturan/Promo', [
-            'presets' => PromoPreset::orderBy('nama')->get(),
+            'presets' => PromoPreset::with('lawan')->orderBy('nama')->get()->map(fn ($p) => [
+                'id' => $p->id, 'nama' => $p->nama, 'keterangan' => $p->keterangan, 'is_active' => $p->is_active,
+                'lawan_tanah' => $p->lawanTanah(), 'lawan_biaya_tambahan' => $p->lawanBiayaTambahanIds(),
+            ]),
+            'biayaTambahanPresets' => BiayaTambahanPreset::ordered()->get(['id', 'nama']),
         ]);
+    }
+
+    /**
+     * Atur "lawan" sebuah promo: biaya yang boleh dipotong promo itu (Kelebihan Tanah dan/atau preset Biaya Tambahan). Tanpa nominal —
+     * nominal atau persen potongan diisi per transaksi saat booking/ubah rincian.
+     */
+    public function updateLawanPromo(Request $request, PromoPreset $promo): RedirectResponse
+    {
+        $validated = $request->validate([
+            'tanah'                       => 'boolean',
+            'biaya_tambahan_preset_ids'   => 'nullable|array',
+            'biaya_tambahan_preset_ids.*' => 'integer|exists:biaya_tambahan_presets,id',
+        ]);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($promo, $validated) {
+            $promo->lawan()->delete();
+            if ($validated['tanah'] ?? false) $promo->lawan()->create(['jenis' => \App\Models\PromoPresetLawan::TANAH]);
+            foreach (array_unique($validated['biaya_tambahan_preset_ids'] ?? []) as $id) {
+                $promo->lawan()->create(['jenis' => \App\Models\PromoPresetLawan::BIAYA_TAMBAHAN, 'biaya_tambahan_preset_id' => $id]);
+            }
+        });
+
+        return back()->with('success', 'Lawan promo diperbarui. Transaksi yang sudah ada tidak berubah.');
     }
 
     public function storePromo(Request $request): RedirectResponse

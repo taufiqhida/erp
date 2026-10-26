@@ -11,6 +11,7 @@ use App\Models\DokumenKonsumen;
 use App\Models\CatatanTransaksi;
 use App\Support\KoreksiTanggalBooking;
 use App\Support\PerubahanRincian;
+use App\Support\PotonganPromo;
 use App\Models\DokumenTemplate;
 use App\Models\Kavling;
 use App\Models\KavlingKonsumenBiayaTambahan;
@@ -151,7 +152,7 @@ class BookingController extends Controller
                     'tipe_label'   => $a->tipe_label,
                 ]),
             'biayaTambahanPresets' => BiayaTambahanPreset::where('is_active', true)->ordered()->get(['id', 'nama']),
-            'promoPresets' => PromoPreset::where('is_active', true)->orderBy('nama')->get(['id', 'nama']),
+            'promoPresets' => PromoPreset::untukForm(),
             'skemaDpPresets' => SkemaDpPreset::where('is_active', true)->orderBy('nama')->get([
                 'id', 'nama', 'cara_bayar',
                 'booking_fee_aktif', 'booking_fee_tipe', 'booking_fee_nilai', 'booking_fee_basis',
@@ -241,6 +242,13 @@ class BookingController extends Controller
             'promo_preset_id'     => 'nullable|exists:promo_presets,id',
             'diskon_mode'         => 'nullable|in:persen,nominal',
             'diskon_nilai'        => 'required_with:diskon_mode|nullable|numeric|min:0',
+            // Potongan promo per biaya (hanya berlaku untuk lawan dari promo yang dipilih)
+            'potongan_tanah'                  => 'nullable|array',
+            'potongan_tanah.mode'             => 'nullable|in:persen,nominal',
+            'potongan_tanah.nilai'            => 'nullable|numeric|min:0',
+            'biaya_tambahan.*.potongan'       => 'nullable|array',
+            'biaya_tambahan.*.potongan.mode'  => 'nullable|in:persen,nominal',
+            'biaya_tambahan.*.potongan.nilai' => 'nullable|numeric|min:0',
         ]);
 
         // Total keuangan tersimpan dihitung sekali di akhir (bukan tiap baris cicilan/pembayaran dibuat).
@@ -284,19 +292,32 @@ class BookingController extends Controller
                     : (float) $validated['biaya_kelebihan_tanah_nominal_input'];
             }
 
+            // ── Potongan promo: hanya untuk biaya yang menjadi "lawan" dari promo yang dipilih ──
+            $lawan = PotonganPromo::lawan($validated['promo_preset_id'] ?? null);
+            $potTanah = PotonganPromo::untukBaris(
+                (float) $biayaKelebihanNominal, $validated['potongan_tanah'] ?? null,
+                $lawan['tanah'] && ($validated['biaya_kelebihan_tanah_aktif'] ?? false)
+            );
+
             // ── Biaya Tambahan Lain (multi-preset) ──
             $biayaTambahanItems = collect($validated['biaya_tambahan'] ?? [])
-                ->map(function ($item) {
+                ->map(function ($item) use ($lawan) {
                     $preset = BiayaTambahanPreset::find($item['preset_id']);
+                    $bruto = (float) $item['nominal'];
+                    $pot = PotonganPromo::untukBaris($bruto, $item['potongan'] ?? null, in_array((int) $item['preset_id'], $lawan['biaya_tambahan'], true));
                     return [
                         'biaya_tambahan_preset_id' => $item['preset_id'],
                         'nama'                     => $preset?->nama ?? 'Biaya Tambahan',
-                        'nominal'                  => (float) $item['nominal'],
+                        'nominal'                  => $bruto,
+                        'potongan'                 => $pot['potongan'],
+                        'potongan_mode'            => $pot['mode'],
+                        'potongan_nilai'           => $pot['nilai'],
                     ];
                 });
-            $biayaTambahanTotal = $biayaTambahanItems->sum('nominal');
+            $biayaTambahanTotal = $biayaTambahanItems->sum(fn ($i) => $i['nominal'] - $i['potongan']);
 
-            $totalBiayaTambahan = $biayaKelebihanNominal + $biayaTambahanTotal;
+            // total_biaya_tambahan = nilai BERSIH (setelah potongan promo), supaya rumus harga deal dan semua pembaca lama tetap benar.
+            $totalBiayaTambahan = ($biayaKelebihanNominal - $potTanah['potongan']) + $biayaTambahanTotal;
 
             // ── Diskon / Promo ──
             $hargaDasar = (float) $kavling->harga;
@@ -370,6 +391,9 @@ class BookingController extends Controller
                 'biaya_kelebihan_tanah_mode'         => $validated['biaya_kelebihan_tanah_mode'] ?? null,
                 'biaya_kelebihan_tanah_harga_per_m2' => $validated['biaya_kelebihan_tanah_harga_per_m2'] ?? null,
                 'biaya_kelebihan_tanah_nominal'      => $biayaKelebihanNominal,
+                'biaya_kelebihan_tanah_potongan'       => $potTanah['potongan'],
+                'biaya_kelebihan_tanah_potongan_mode'  => $potTanah['mode'],
+                'biaya_kelebihan_tanah_potongan_nilai' => $potTanah['nilai'],
                 'promo_preset_id'  => $validated['promo_preset_id'] ?? null,
                 'diskon_mode'      => $validated['diskon_mode'] ?? null,
                 'diskon_nilai'     => $validated['diskon_nilai'] ?? null,
@@ -852,6 +876,12 @@ class BookingController extends Controller
             'promo_preset_id'     => 'nullable|exists:promo_presets,id',
             'diskon_mode'         => 'nullable|in:persen,nominal',
             'diskon_nilai'        => 'required_with:diskon_mode|nullable|numeric|min:0',
+            'potongan_tanah'                  => 'nullable|array',
+            'potongan_tanah.mode'             => 'nullable|in:persen,nominal',
+            'potongan_tanah.nilai'            => 'nullable|numeric|min:0',
+            'biaya_tambahan.*.potongan'       => 'nullable|array',
+            'biaya_tambahan.*.potongan.mode'  => 'nullable|in:persen,nominal',
+            'biaya_tambahan.*.potongan.nilai' => 'nullable|numeric|min:0',
             'program_all_in_preset_id' => 'nullable|exists:program_all_in_presets,id',
         ], [
             'tanggal_booking.before_or_equal' => 'Tanggal booking tidak boleh di masa depan.',

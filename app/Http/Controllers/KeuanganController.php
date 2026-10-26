@@ -403,9 +403,11 @@ class KeuanganController extends Controller
                 'dp_nominal'       => $dpTotal,
                 'biaya_kelebihan_tanah_aktif'   => $kk->biaya_kelebihan_tanah_aktif,
                 'biaya_kelebihan_tanah_nominal' => $kk->biaya_kelebihan_tanah_nominal,
+                'biaya_kelebihan_tanah_potongan' => $kk->biaya_kelebihan_tanah_potongan,
                 'biaya_tambahan'   => $kk->biayaTambahans->map(fn($bt) => [
                     'nama'    => $bt->nama,
                     'nominal' => $bt->nominal,
+                    'potongan' => $bt->potongan,
                 ]),
                 'diskon_mode'    => $kk->diskon_mode,
                 'diskon_nilai'   => $kk->diskon_nilai,

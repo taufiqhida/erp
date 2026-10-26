@@ -373,6 +373,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('promo.store');
             Route::patch('promo/{promo}', [PengaturanController::class, 'updatePromo'])
                 ->name('promo.update');
+            Route::put('promo/{promo}/lawan', [PengaturanController::class, 'updateLawanPromo'])
+                ->name('promo.lawan');
             Route::delete('promo/{promo}', [PengaturanController::class, 'destroyPromo'])
                 ->name('promo.destroy');
 

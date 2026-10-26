@@ -2,10 +2,33 @@
 import { konfirmasi } from '@/Composables/useConfirm';
 import PengaturanLayout from '@/Layouts/PengaturanLayout.vue';
 import { useForm, router } from '@inertiajs/vue3';
+import { reactive } from 'vue';
 
 const props = defineProps({
     presets: Array,
+    biayaTambahanPresets: { type: Array, default: () => [] },
 });
+
+// "Lawan" promo: biaya yang boleh dipotong promo ini (tanpa nominal — nominal/persen diisi per transaksi saat booking).
+const lawanForms = reactive({});
+const bukaLawan = (preset) => {
+    lawanForms[preset.id] = { tanah: preset.lawan_tanah, biaya_tambahan_preset_ids: [...preset.lawan_biaya_tambahan] };
+};
+const toggleLawanBt = (presetId, id) => {
+    const arr = lawanForms[presetId].biaya_tambahan_preset_ids;
+    const i = arr.indexOf(id);
+    if (i === -1) arr.push(id); else arr.splice(i, 1);
+};
+const simpanLawan = (preset) => {
+    router.put(route('pengaturan.promo.lawan', preset.id), lawanForms[preset.id], {
+        preserveScroll: true,
+        onSuccess: () => { delete lawanForms[preset.id]; },
+    });
+};
+const namaLawan = (preset) => [
+    ...(preset.lawan_tanah ? ['Kelebihan Tanah'] : []),
+    ...preset.lawan_biaya_tambahan.map(id => props.biayaTambahanPresets.find(b => b.id === id)?.nama).filter(Boolean),
+];
 
 const addForm = useForm({
     nama: '',
@@ -49,6 +72,25 @@ const destroy = async (preset) => {
                         <div>
                             <div class="text-slate-200 text-sm font-medium">{{ preset.nama }}</div>
                             <div class="text-slate-500 text-xs mt-0.5">{{ preset.keterangan ?? '-' }}</div>
+                            <div class="mt-1 text-xs">
+                                <span v-if="namaLawan(preset).length" class="text-emerald-300">Memotong: {{ namaLawan(preset).join(', ') }}</span>
+                                <span v-else class="text-slate-600">Hanya label (tidak memotong biaya)</span>
+                                <button v-if="!lawanForms[preset.id]" @click="bukaLawan(preset)" class="ml-2 text-violet-400 hover:text-violet-300">Atur lawan</button>
+                            </div>
+                            <div v-if="lawanForms[preset.id]" class="mt-2 p-3 bg-slate-800/60 border border-slate-700 rounded-lg space-y-2">
+                                <p class="text-slate-400 text-xs">Pilih biaya yang boleh dipotong promo ini. Nominal atau persen potongannya diisi per transaksi saat booking.</p>
+                                <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                                    <input type="checkbox" v-model="lawanForms[preset.id].tanah" class="rounded border-slate-600 bg-slate-800 text-violet-500" /> Kelebihan Tanah
+                                </label>
+                                <label v-for="b in biayaTambahanPresets" :key="b.id" class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                                    <input type="checkbox" :checked="lawanForms[preset.id].biaya_tambahan_preset_ids.includes(b.id)" @change="toggleLawanBt(preset.id, b.id)"
+                                        class="rounded border-slate-600 bg-slate-800 text-violet-500" /> {{ b.nama }}
+                                </label>
+                                <div class="flex gap-2 pt-1">
+                                    <button @click="simpanLawan(preset)" class="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs rounded-lg">Simpan</button>
+                                    <button @click="delete lawanForms[preset.id]" class="px-3 py-1.5 text-slate-400 hover:text-slate-200 text-xs">Batal</button>
+                                </div>
+                            </div>
                         </div>
                         <div class="flex items-center gap-3">
                             <button @click="toggleActive(preset)"

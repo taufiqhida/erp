@@ -15,11 +15,22 @@ class KavlingKonsumenBiayaTambahan extends Model
         'biaya_tambahan_preset_id',
         'nama',
         'nominal',
+        'potongan',
+        'potongan_mode',
+        'potongan_nilai',
     ];
 
     protected $casts = [
         'nominal' => 'decimal:2',
+        'potongan' => 'decimal:2',
+        'potongan_nilai' => 'decimal:2',
     ];
+
+    /** Yang benar-benar ditagih = nominal bruto dikurangi potongan promo. */
+    public function getDitagihAttribute(): float
+    {
+        return max(0.0, (float) $this->nominal - (float) $this->potongan);
+    }
 
     public function kavlingKonsumen(): BelongsTo
     {

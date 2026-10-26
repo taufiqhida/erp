@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InlineSiteplanSvg from '@/Components/InlineSiteplanSvg.vue';
 import SiteplanLapis from '@/Components/SiteplanLapis.vue';
 import SearchSelect from '@/Components/SearchSelect.vue';
+import PotonganPromoInput from '@/Components/PotonganPromoInput.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
@@ -192,6 +193,9 @@ const bookForm = useForm({
     promo_preset_id: null,
     diskon_mode:     '', // '' | 'persen' | 'nominal'
     diskon_nilai:    '',
+    // Potongan promo per biaya (hanya untuk "lawan" dari promo yang dipilih)
+    potongan_tanah:  { mode: 'persen', nilai: '' },
+    potongan_biaya:  {},   // { [presetId]: { mode, nilai } }
     // Section 3 — Skema Pembayaran (baru terbuka setelah harga netto selesai dihitung)
     cara_bayar:      'kpr_subsidi',
     skema_dp_preset_id: null,
@@ -218,18 +222,20 @@ const biayaPresetNama = (id) => props.biayaTambahanPresets.find(p => p.id === id
 const addBiayaTambahan = (presetId) => {
     bookForm.biaya_tambahan_selected.push(presetId);
     bookForm.biaya_tambahan_nominals[presetId] = '';
+    bookForm.potongan_biaya[presetId] = { mode: 'persen', nilai: '' };
     showBiayaPicker.value = false;
 };
 const removeBiayaTambahan = (presetId) => {
     const idx = bookForm.biaya_tambahan_selected.indexOf(presetId);
     if (idx !== -1) bookForm.biaya_tambahan_selected.splice(idx, 1);
     delete bookForm.biaya_tambahan_nominals[presetId];
+    delete bookForm.potongan_biaya[presetId];
 };
 
 // ── Kalkulasi Harga Jual Netto (live preview — perhitungan final tetap di server) ──
 const hargaDasar = computed(() => Number(selectedKavling.value?.harga) || 0);
 
-const biayaKelebihanTanahNominal = computed(() => {
+const biayaKelebihanTanahBruto = computed(() => {
     if (!bookForm.biaya_kelebihan_tanah_aktif) return 0;
     if (bookForm.biaya_kelebihan_tanah_mode === 'per_m2') {
         return (Number(bookForm.biaya_kelebihan_tanah_luas) || 0) * (Number(bookForm.biaya_kelebihan_tanah_harga_per_m2) || 0);
@@ -237,8 +243,25 @@ const biayaKelebihanTanahNominal = computed(() => {
     return Number(bookForm.biaya_kelebihan_tanah_nominal_input) || 0;
 });
 
+// Potongan promo: hanya biaya yang menjadi "lawan" dari promo terpilih (diatur di Pengaturan > Promo).
+const promoTerpilih = computed(() => props.promoPresets.find(p => p.id === bookForm.promo_preset_id) ?? null);
+const lawanTanahAktif = computed(() => !!promoTerpilih.value?.lawan_tanah && bookForm.biaya_kelebihan_tanah_aktif && biayaKelebihanTanahBruto.value > 0);
+const lawanBiayaIds = computed(() => bookForm.biaya_tambahan_selected.filter(id => promoTerpilih.value?.lawan_biaya_tambahan?.includes(id)));
+const potonganNominal = (bruto, p) => {
+    const n = Number(p?.nilai);
+    if (!n || bruto <= 0) return 0;
+    return Math.max(0, Math.min(bruto, p.mode === 'nominal' ? n : bruto * (n / 100)));
+};
+const potonganTanah = computed(() => lawanTanahAktif.value ? potonganNominal(biayaKelebihanTanahBruto.value, bookForm.potongan_tanah) : 0);
+const potonganBiaya = (id) => lawanBiayaIds.value.includes(id) ? potonganNominal(Number(bookForm.biaya_tambahan_nominals[id]) || 0, bookForm.potongan_biaya[id]) : 0;
+const totalPotongan = computed(() => potonganTanah.value + bookForm.biaya_tambahan_selected.reduce((s, id) => s + potonganBiaya(id), 0));
+const adaLawanTapiKosong = computed(() => !!promoTerpilih.value && (promoTerpilih.value.lawan_tanah || promoTerpilih.value.lawan_biaya_tambahan?.length) && !lawanTanahAktif.value && !lawanBiayaIds.value.length);
+
+// Yang ditagih (setelah potongan promo)
+const biayaKelebihanTanahNominal = computed(() => biayaKelebihanTanahBruto.value - potonganTanah.value);
+
 const biayaTambahanLainTotal = computed(() =>
-    bookForm.biaya_tambahan_selected.reduce((sum, id) => sum + (Number(bookForm.biaya_tambahan_nominals[id]) || 0), 0)
+    bookForm.biaya_tambahan_selected.reduce((sum, id) => sum + (Number(bookForm.biaya_tambahan_nominals[id]) || 0) - potonganBiaya(id), 0)
 );
 
 const totalBiayaTambahan = computed(() => biayaKelebihanTanahNominal.value + biayaTambahanLainTotal.value);
@@ -298,6 +321,7 @@ const submitBooking = () => {
     const biayaTambahanPayload = bookForm.biaya_tambahan_selected.map(id => ({
         preset_id: id,
         nominal: Number(bookForm.biaya_tambahan_nominals[id]) || 0,
+        potongan: lawanBiayaIds.value.includes(id) && bookForm.potongan_biaya[id]?.nilai !== '' && bookForm.potongan_biaya[id]?.nilai != null ? bookForm.potongan_biaya[id] : null,
     }));
 
     const payload = {
@@ -305,6 +329,9 @@ const submitBooking = () => {
         booking_fee: preset?.booking_fee_aktif ? (Number(bookForm.booking_fee) || 0) : 0,
         biaya_tambahan: biayaTambahanPayload,
     };
+    if (!Number(payload.diskon_nilai)) { payload.diskon_mode = ''; payload.diskon_nilai = ''; }   // diskon kosong = tanpa diskon
+    payload.potongan_tanah = lawanTanahAktif.value && bookForm.potongan_tanah.nilai !== '' ? bookForm.potongan_tanah : null;
+    delete payload.potongan_biaya;
     delete payload.biaya_tambahan_selected;
     delete payload.biaya_tambahan_nominals;
     delete payload.dp_nominal;
@@ -928,7 +955,7 @@ const isBookable = (k) => k.status_jual === 'available';
                                     <MoneyInput v-model="bookForm.biaya_kelebihan_tanah_nominal_input" placeholder="0"
                                         class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                 </div>
-                                <div class="text-xs text-slate-500">Subtotal: <span class="text-slate-300 font-medium">{{ formatRupiah(biayaKelebihanTanahNominal) }}</span></div>
+                                <div class="text-xs text-slate-500">Subtotal: <span class="text-slate-300 font-medium">{{ formatRupiah(biayaKelebihanTanahBruto) }}</span></div>
                             </div>
                         </div>
 
@@ -988,6 +1015,16 @@ const isBookable = (k) => k.status_jual === 'available';
                                 </div>
                                 <MoneyInput :plain="bookForm.diskon_mode === 'persen'" v-model="bookForm.diskon_nilai" :placeholder="bookForm.diskon_mode === 'persen' ? '%' : 'Rp'"
                                     class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                <p v-if="bookForm.cara_bayar === 'kpr_subsidi' || bookForm.cara_bayar === 'kpr_komersil'" class="text-slate-500 text-[0.6875rem]">
+                                    Diskon harga hanya mengurangi harga jual; tagihan KPR tidak berubah. Untuk memotong biaya tertentu, pakai potongan promo di bawah.
+                                </p>
+                            </div>
+                            <!-- Potongan promo per biaya (lawan dari promo terpilih) -->
+                            <div v-if="promoTerpilih" class="space-y-2">
+                                <PotonganPromoInput v-if="lawanTanahAktif" label="Kelebihan Tanah" :bruto="biayaKelebihanTanahBruto" v-model="bookForm.potongan_tanah" />
+                                <PotonganPromoInput v-for="id in lawanBiayaIds" :key="`pot-${id}`" :label="biayaPresetNama(id)"
+                                    :bruto="Number(bookForm.biaya_tambahan_nominals[id]) || 0" v-model="bookForm.potongan_biaya[id]" />
+                                <p v-if="adaLawanTapiKosong" class="text-slate-500 text-xs">Promo ini memotong biaya tertentu, tetapi biaya itu belum ada di pemesanan ini.</p>
                             </div>
                         </div>
 
@@ -998,7 +1035,7 @@ const isBookable = (k) => k.status_jual === 'available';
                                 <span class="text-slate-300">{{ formatRupiah(hargaDasar) }}</span>
                             </div>
                             <div class="flex justify-between text-slate-400">
-                                <span>+ Total Biaya Tambahan</span>
+                                <span>+ Total Biaya Tambahan<span v-if="totalPotongan > 0" class="text-emerald-300 text-xs"> (sudah dipotong promo {{ formatRupiah(totalPotongan) }})</span></span>
                                 <span class="text-slate-300">{{ formatRupiah(totalBiayaTambahan) }}</span>
                             </div>
                             <div class="flex justify-between text-slate-400">

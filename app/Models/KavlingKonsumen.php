@@ -37,6 +37,9 @@ class KavlingKonsumen extends Model
         'biaya_kelebihan_tanah_mode',
         'biaya_kelebihan_tanah_harga_per_m2',
         'biaya_kelebihan_tanah_nominal',
+        'biaya_kelebihan_tanah_potongan',
+        'biaya_kelebihan_tanah_potongan_mode',
+        'biaya_kelebihan_tanah_potongan_nilai',
         'promo_preset_id',
         'diskon_mode',
         'diskon_nilai',
@@ -77,6 +80,8 @@ class KavlingKonsumen extends Model
         'biaya_kelebihan_tanah_luas'           => 'decimal:2',
         'biaya_kelebihan_tanah_harga_per_m2'   => 'decimal:2',
         'biaya_kelebihan_tanah_nominal'        => 'decimal:2',
+        'biaya_kelebihan_tanah_potongan'       => 'decimal:2',
+        'biaya_kelebihan_tanah_potongan_nilai' => 'decimal:2',
         'diskon_nilai'                         => 'decimal:2',
         'diskon_nominal'                       => 'decimal:2',
         'total_biaya_tambahan'                 => 'decimal:2',
@@ -129,6 +134,12 @@ class KavlingKonsumen extends Model
     public function promoPreset(): BelongsTo
     {
         return $this->belongsTo(PromoPreset::class);
+    }
+
+    /** Biaya Kelebihan Tanah yang benar-benar ditagih = bruto dikurangi potongan promo. */
+    public function getBiayaKelebihanTanahDitagihAttribute(): float
+    {
+        return max(0.0, (float) $this->biaya_kelebihan_tanah_nominal - (float) $this->biaya_kelebihan_tanah_potongan);
     }
 
     public function biayaTambahans(): HasMany
@@ -450,7 +461,7 @@ class KavlingKonsumen extends Model
         $cicilanLain = function (string $jenis, float $target) {
             $items = $this->pembayarans->where('jenis', $jenis)->values();
             $dibayar = (float) $items->sum('jumlah');
-            $status = $dibayar <= 0 ? 'belum_bayar' : ($dibayar >= $target ? 'lunas' : 'sebagian');
+            $status = $target <= 0 ? 'lunas' : ($dibayar <= 0 ? 'belum_bayar' : ($dibayar >= $target ? 'lunas' : 'sebagian'));
             $cicilanList = $items->map(fn($p) => [
                 'id'                => $p->id,
                 'jumlah'            => (float) $p->jumlah,
@@ -499,12 +510,14 @@ class KavlingKonsumen extends Model
         // dua kali (double) untuk komponen yang sama.
         if ($isKpr) {
             if ($this->biaya_kelebihan_tanah_aktif) {
-                [$cicilan, $dibayar, $status] = $cicilanLain('biaya_tanah', (float) $this->biaya_kelebihan_tanah_nominal);
+                [$cicilan, $dibayar, $status] = $cicilanLain('biaya_tanah', $this->biaya_kelebihan_tanah_ditagih);
                 $terbayarKonsumen += $dibayar;
                 $kartuPiutangStatic->push([
                     'type' => 'biaya_tanah_group', 'id' => null, 'status' => $status,
                     'nama' => 'Biaya Penambahan Tanah', 'subjek' => 'Konsumen',
-                    'nominal' => (float) $this->biaya_kelebihan_tanah_nominal,
+                    'nominal' => $this->biaya_kelebihan_tanah_ditagih,
+                    'bruto' => (float) $this->biaya_kelebihan_tanah_nominal,
+                    'potongan' => (float) $this->biaya_kelebihan_tanah_potongan,
                     'jumlah_dibayar' => $dibayar > 0 ? $dibayar : null,
                     'cicilan' => $cicilan,
                 ]);
@@ -517,12 +530,13 @@ class KavlingKonsumen extends Model
             foreach ($this->biayaTambahans as $bt) {
                 $items = $bt->pembayarans;
                 $dibayar = (float) $items->sum('jumlah');
-                $target = (float) $bt->nominal;
-                $status = $dibayar <= 0 ? 'belum_bayar' : ($dibayar >= $target ? 'lunas' : 'sebagian');
+                $target = $bt->ditagih;
+                $status = $target <= 0 ? 'lunas' : ($dibayar <= 0 ? 'belum_bayar' : ($dibayar >= $target ? 'lunas' : 'sebagian'));
                 $terbayarKonsumen += $dibayar;
                 $kartuPiutangStatic->push([
                     'type' => 'biaya_tambahan_group', 'id' => $bt->id, 'status' => $status,
                     'nama' => $bt->nama, 'subjek' => 'Konsumen', 'nominal' => $target,
+                    'bruto' => (float) $bt->nominal, 'potongan' => (float) $bt->potongan,
                     'jumlah_dibayar' => $dibayar > 0 ? $dibayar : null,
                     'cicilan' => $items->map(fn($p) => [
                         'id'                => $p->id,
@@ -714,8 +728,8 @@ class KavlingKonsumen extends Model
         ];
 
         $titipanRincian = [
-            'biaya_tanah'         => $this->biaya_kelebihan_tanah_aktif ? (float) $this->biaya_kelebihan_tanah_nominal : 0,
-            'biaya_tambahan_lain' => (float) $this->biayaTambahans->sum('nominal'),
+            'biaya_tanah'         => $this->biaya_kelebihan_tanah_aktif ? $this->biaya_kelebihan_tanah_ditagih : 0,
+            'biaya_tambahan_lain' => (float) $this->biayaTambahans->sum(fn ($b) => $b->ditagih),
             'titipan_biaya_akad'  => (float) $this->titipan_biaya_akad_nominal,
             'booking_fee'         => $bookingFeeResmi ? 0 : $bookingFee,
         ];
