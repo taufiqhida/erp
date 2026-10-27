@@ -91,7 +91,7 @@ const kavlingBangunMax = computed(() => Math.max(1, ...(props.kavlingBangunBreak
 const pct = (paid, total) => total > 0 ? Math.min(100, Math.round((Number(paid) / Number(total)) * 100)) : 0;
 
 // ── Ringkasan Finansial — expand/collapse rincian per kartu ─────────────
-const expandedFinansial = ref({ nilai: false, konsumen: false, bank: false });
+const expandedFinansial = ref({ nilai: false, promo: false, konsumen: false, bank: false });
 const toggleFinansial = (key) => { expandedFinansial.value[key] = !expandedFinansial.value[key]; };
 
 // Total per kategori (Kategori 1 Resmi / Kategori 2 Titipan) — jumlah dari
@@ -232,18 +232,20 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                     <h2 class="text-slate-200 font-semibold text-sm">💰 Ringkasan Finansial</h2>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-800/70">
-                    <!-- Total Nilai Transaksi Aktif -->
+                    <!-- Nilai Transaksi (berjalan + hangus dari pembatalan) -->
                     <div class="p-5">
                         <div class="flex items-center justify-between mb-1">
-                            <span class="text-slate-500 text-xs">Total Nilai Transaksi Aktif</span>
+                            <span class="text-slate-500 text-xs">Nilai Transaksi</span>
                             <button @click="toggleFinansial('nilai')" class="text-slate-500 hover:text-slate-300 text-[0.6875rem] transition-colors">{{ expandedFinansial.nilai ? '▲ Tutup' : '▼ Rincian' }}</button>
                         </div>
                         <div class="text-white font-bold text-xl">{{ formatRp(financials?.total_pendapatan) }}</div>
-                        <div class="text-slate-500 text-xs mt-1">Harga deal transaksi berjalan + hangus dari pembatalan</div>
+                        <div class="text-slate-500 text-xs mt-1">
+                            Berjalan {{ formatRp(financials?.nilai_transaksi_berjalan) }}<template v-if="financials?.hangus_dari_pembatalan > 0"> + Hangus pembatalan {{ formatRp(financials?.hangus_dari_pembatalan) }}</template>
+                        </div>
                         <div v-if="expandedFinansial.nilai" class="mt-3 pt-3 border-t border-slate-800 space-y-3">
                             <div>
                                 <div class="flex items-center justify-between text-[0.6875rem] text-slate-500 uppercase tracking-wide mb-1">
-                                    <span>Kategori 1 — Pendapatan Resmi</span>
+                                    <span>Kategori 1 — Pendapatan Penjualan</span>
                                     <span class="text-slate-400 normal-case">{{ formatRp(kategoriResmiTotal) }}</span>
                                 </div>
                                 <div class="space-y-1 pl-2">
@@ -256,14 +258,14 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                                         <span class="text-slate-300">{{ formatRp(financials?.nilai_transaksi_rincian?.resmi?.booking_fee) }}</span>
                                     </div>
                                     <div v-if="financials?.nilai_transaksi_rincian?.resmi?.diskon < 0" class="flex items-center justify-between text-xs">
-                                        <span class="text-slate-400">Diskon/Promo</span>
+                                        <span class="text-slate-400">Diskon/Promo (Harga Jual)</span>
                                         <span class="text-rose-400">{{ formatRp(financials?.nilai_transaksi_rincian?.resmi?.diskon) }}</span>
                                     </div>
                                 </div>
                             </div>
                             <div>
                                 <div class="flex items-center justify-between text-[0.6875rem] text-slate-500 uppercase tracking-wide mb-1">
-                                    <span>Kategori 2 — Dana Rekening Titipan</span>
+                                    <span>Kategori 2 — Pendapatan Lain-lain</span>
                                     <span class="text-slate-400 normal-case">{{ formatRp(kategoriTitipanTotal) }}</span>
                                 </div>
                                 <div class="space-y-1 pl-2">
@@ -290,12 +292,37 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                                     <span>Hangus dari Pembatalan</span>
                                     <span class="text-amber-400 normal-case">{{ formatRp(financials?.hangus_dari_pembatalan) }}</span>
                                 </div>
-                                <p class="text-slate-500 text-[0.6875rem] pl-2">Nominal yang dinyatakan hangus (tidak dikembalikan) saat menyetujui pengajuan pembatalan — lihat menu Pembatalan untuk rinciannya per transaksi.</p>
+                                <p class="text-slate-500 text-[0.6875rem] pl-2">Booking Fee/DP transaksi yang batal tidak lagi dihitung sebagai transaksi aktif; hanya bagian yang tidak dikembalikan (hangus) yang tampil di sini — lihat menu Pengajuan untuk rinciannya per transaksi.</p>
                             </div>
                         </div>
                     </div>
-                    <!-- Piutang Konsumen -->
+                    <!-- Nilai Promo/Diskon (transaksi aktif saja; keterangan, sudah dikurangkan di Nilai Transaksi) -->
                     <div class="p-5">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-slate-500 text-xs">Nilai Promo / Diskon</span>
+                            <button @click="toggleFinansial('promo')" class="text-slate-500 hover:text-slate-300 text-[0.6875rem] transition-colors">{{ expandedFinansial.promo ? '▲ Tutup' : '▼ Rincian' }}</button>
+                        </div>
+                        <div class="text-white font-bold text-xl">{{ formatRp(financials?.nilai_promo?.total) }}</div>
+                        <div class="text-slate-500 text-xs mt-1">{{ financials?.nilai_promo?.jumlah_transaksi ?? 0 }} transaksi aktif memakai promo · sudah dikurangkan di Nilai Transaksi</div>
+                        <div v-if="expandedFinansial.promo" class="mt-3 pt-3 border-t border-slate-800 space-y-1.5">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-slate-400">Harga Jual (diskon)</span>
+                                <span class="text-slate-300">{{ formatRp(financials?.nilai_promo?.harga_jual) }}</span>
+                            </div>
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-slate-400">Kelebihan Tanah</span>
+                                <span class="text-slate-300">{{ formatRp(financials?.nilai_promo?.tanah) }}</span>
+                            </div>
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-slate-400">Biaya Tambahan</span>
+                                <span class="text-slate-300">{{ formatRp(financials?.nilai_promo?.biaya_tambahan) }}</span>
+                            </div>
+                            <p class="text-slate-500 text-[0.6875rem] pt-1">Hanya transaksi yang masih aktif; promo pada transaksi yang batal tidak dihitung.</p>
+                        </div>
+                    </div>
+                    <!-- Piutang: Konsumen dan Bank dalam satu kolom -->
+                    <div class="p-5 space-y-5">
+                    <div>
                         <div class="flex items-center justify-between mb-1">
                             <span class="text-slate-500 text-xs">Piutang Konsumen</span>
                             <span class="text-slate-500 text-xs">{{ pct(financials?.terbayar_konsumen, financials?.piutang_konsumen) }}%</span>
@@ -318,7 +345,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                         </div>
                     </div>
                     <!-- Piutang Bank -->
-                    <div class="p-5">
+                    <div class="pt-5 border-t border-slate-800">
                         <div class="flex items-center justify-between mb-1">
                             <span class="text-slate-500 text-xs">Piutang Bank (Pencairan KPR)</span>
                             <span class="text-slate-500 text-xs">{{ pct(financials?.terbayar_bank, financials?.piutang_bank) }}%</span>
@@ -339,6 +366,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                             </div>
                             <div v-if="!financials?.piutang_bank_rincian?.length" class="text-slate-500 text-xs">Tidak ada rincian.</div>
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>

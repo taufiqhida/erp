@@ -117,7 +117,7 @@ class DashboardController extends Controller
         // jadi hasilnya di-cache per (cakupan user/proyek) dan otomatis kedaluwarsa begitu
         // ada perubahan keuangan — lihat FinanceCache::bump() yang dipanggil AppServiceProvider.
         $cacheScope = ($isGlobal ? 'all' : 'u' . $user->id) . ':p' . ($projectId ?: 'all');
-        $ringkasan = FinanceCache::remember('dashboard:ringkasan:' . $cacheScope, function () use ($activeBase) {
+        $ringkasan = FinanceCache::remember('dashboard:ringkasan:v2:' . $cacheScope, function () use ($activeBase) {
             $activeTransaksi = $activeBase()->with([
                 'konsumen:id,nama', 'kavling.project:id,nama', 'skemaDpPreset', 'pembayarans',
                 'jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans',
@@ -129,11 +129,22 @@ class DashboardController extends Controller
                 'resmi'   => ['harga_dasar' => 0.0, 'booking_fee' => 0.0, 'diskon' => 0.0],
                 'titipan' => ['biaya_tanah' => 0.0, 'biaya_tambahan_lain' => 0.0, 'titipan_biaya_akad' => 0.0, 'booking_fee' => 0.0],
             ];
+            // Nilai promo/diskon yang diberikan pada transaksi AKTIF saja (transaksi batal tidak dihitung). Hanya keterangan: sudah
+            // dikurangkan dari Nilai Transaksi, jadi tidak boleh dijumlahkan lagi ke total.
+            $nilaiPromo = ['harga_jual' => 0.0, 'tanah' => 0.0, 'biaya_tambahan' => 0.0, 'jumlah_transaksi' => 0];
             $piutangTotals = ['piutang_konsumen' => 0.0, 'terbayar_konsumen' => 0.0, 'piutang_bank' => 0.0, 'terbayar_bank' => 0.0];
             $piutangKonsumenByNama = [];
             $piutangBankByNama = [];
 
             foreach ($activeTransaksi as $kk) {
+                $promoHargaJual = (float) $kk->diskon_nominal;
+                $promoTanah = $kk->biaya_kelebihan_tanah_aktif ? (float) $kk->biaya_kelebihan_tanah_potongan : 0.0;
+                $promoLain = (float) $kk->biayaTambahans->sum('potongan');
+                $nilaiPromo['harga_jual'] += $promoHargaJual;
+                $nilaiPromo['tanah'] += $promoTanah;
+                $nilaiPromo['biaya_tambahan'] += $promoLain;
+                if ($promoHargaJual > 0 || $promoTanah > 0 || $promoLain > 0) $nilaiPromo['jumlah_transaksi']++;
+
                 $kategori = $kk->kategoriPendapatan();
                 $totalPendapatan += $kategori['resmi_total'] + $kategori['titipan_total'];
                 foreach ($kategori['resmi_rincian'] as $key => $val) {
@@ -171,7 +182,7 @@ class DashboardController extends Controller
                 }
             }
 
-            return compact('totalPendapatan', 'nilaiTransaksiBreakdown', 'piutangTotals', 'piutangKonsumenByNama', 'piutangBankByNama');
+            return compact('totalPendapatan', 'nilaiPromo', 'nilaiTransaksiBreakdown', 'piutangTotals', 'piutangKonsumenByNama', 'piutangBankByNama');
         });
         extract($ringkasan);
 
@@ -194,6 +205,8 @@ class DashboardController extends Controller
         $financials = [
             'total_pendapatan'       => $totalPendapatan,
             'hangus_dari_pembatalan' => $hangusDariPembatalan,
+            'nilai_transaksi_berjalan' => $totalPendapatan - $hangusDariPembatalan,
+            'nilai_promo'            => $nilaiPromo + ['total' => $nilaiPromo['harga_jual'] + $nilaiPromo['tanah'] + $nilaiPromo['biaya_tambahan']],
             'nilai_transaksi_rincian' => $nilaiTransaksiBreakdown,
             'piutang_konsumen'       => $piutangTotals['piutang_konsumen'],
             'terbayar_konsumen'      => $piutangTotals['terbayar_konsumen'],
