@@ -506,6 +506,7 @@ class KonsumenController extends Controller
                         'dihitung'     => $d->dihitung,
                         'tidak_berlaku' => $d->tidak_berlaku,
                         'syarat_label' => $d->template?->syaratLabel(),
+                        'menunggu_data' => $d->sifat === 'kondisional' && $d->template ? implode(' & ', $d->template->menungguData($trx->konsumen)) ?: null : null,
                         'status'       => $d->status,
                         'status_label' => $d->status_label,
                         'status_icon'  => $d->status_icon,

@@ -787,12 +787,13 @@ onMounted(() => {
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                                 <div v-for="dok in trx.dokumens" :key="dok.id"
-                                    :class="dok.tidak_berlaku ? 'opacity-50' : ''"
+                                    :class="dok.tidak_berlaku && !dok.menunggu_data ? 'opacity-50' : ''"
                                     class="flex items-center justify-between px-3 py-2 bg-slate-800/60 rounded-lg">
                                     <div class="flex items-center gap-2">
                                         <span class="text-base">{{ dok.status_icon }}</span>
                                         <span class="text-slate-300 text-sm">{{ dok.nama_dokumen }}</span>
-                                        <span v-if="dok.tidak_berlaku" class="text-slate-500 text-xs">(Tidak berlaku)</span>
+                                        <span v-if="dok.menunggu_data" class="text-amber-300 text-xs" :title="`Isi ${dok.menunggu_data} konsumen (Edit Konsumen) supaya berkas ini bisa dinilai wajib atau tidak`">(Menunggu data {{ dok.menunggu_data }})</span>
+                                        <span v-else-if="dok.tidak_berlaku" class="text-slate-500 text-xs">(Tidak berlaku)</span>
                                         <span v-else-if="dok.sifat === 'kondisional'" class="text-slate-500 text-xs">(Wajib{{ dok.syarat_label ? ' · ' + dok.syarat_label : '' }})</span>
                                         <span v-else-if="dok.sifat !== 'wajib'" class="text-slate-500 text-xs">({{ dok.sifat_label }})</span>
                                     </div>

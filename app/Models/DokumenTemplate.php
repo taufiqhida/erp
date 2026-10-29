@@ -90,19 +90,43 @@ class DokumenTemplate extends Model
     }
 
     /**
-     * Apakah berkas ini berlaku untuk konsumen tertentu. Hanya relevan untuk kondisional: berlaku bila konsumen memenuhi syarat
-     * (pernikahan dan pekerjaan — keduanya bila keduanya diisi). Kondisional TANPA syarat dianggap tidak berlaku (tidak dihitung);
-     * template seperti itu ditandai agar Superadmin memberinya syarat atau mengubahnya jadi Opsional. Data konsumen yang masih
-     * kosong dianggap memenuhi syarat — lebih baik berkas ditagih daripada terlewat karena data belum dilengkapi.
+     * Apakah berkas ini berlaku untuk konsumen tertentu. Hanya relevan untuk kondisional: berlaku bila konsumen memenuhi SEMUA syarat
+     * (pernikahan dan/atau pekerjaan). Kondisional TANPA syarat dianggap tidak berlaku (tidak dihitung); template seperti itu ditandai
+     * agar Superadmin memberinya syarat atau mengubahnya jadi Opsional. Data konsumen yang syaratnya bergantung padanya tetapi masih
+     * KOSONG (umum pada data lama hasil import) berarti "menunggu data": berkas belum dihitung dan baru menjadi wajib/tidak berlaku
+     * setelah data dilengkapi (lihat menungguData()).
      */
     public function berlakuUntuk(?Konsumen $konsumen): bool
     {
         if ($this->sifat !== 'kondisional') return true;
         if (!$this->punyaSyarat()) return false;
 
-        $cocok = fn (array $syarat, ?string $nilai) => !$syarat || $nilai === null || $nilai === '' || in_array($nilai, $syarat, true);
+        // Dimensi yang datanya diketahui dan tidak memenuhi syarat -> pasti tidak berlaku. Dimensi yang datanya kosong -> belum bisa dinilai.
+        $syarat = ['status pernikahan' => [$this->syaratPernikahan(), $konsumen?->status_pernikahan], 'pekerjaan' => [$this->syaratPekerjaan(), $konsumen?->pekerjaan]];
+        foreach ($syarat as [$daftar, $nilai]) {
+            if (!$daftar) continue;
+            if (blank($nilai)) return false;                       // menunggu data
+            if (!in_array($nilai, $daftar, true)) return false;
+        }
 
-        return $cocok($this->syaratPernikahan(), $konsumen?->status_pernikahan) && $cocok($this->syaratPekerjaan(), $konsumen?->pekerjaan);
+        return true;
+    }
+
+    /**
+     * Data konsumen yang dibutuhkan syarat berkas ini tetapi masih kosong, mis. ['status pernikahan', 'pekerjaan']. Kosong bila tidak ada
+     * yang ditunggu, atau bila berkas sudah pasti tidak berlaku karena data lain yang terisi tidak memenuhi syarat.
+     */
+    public function menungguData(?Konsumen $konsumen): array
+    {
+        if (!$this->punyaSyarat()) return [];
+        $kosong = [];
+        foreach (['status pernikahan' => [$this->syaratPernikahan(), $konsumen?->status_pernikahan], 'pekerjaan' => [$this->syaratPekerjaan(), $konsumen?->pekerjaan]] as $nama => [$daftar, $nilai]) {
+            if (!$daftar) continue;
+            if (blank($nilai)) $kosong[] = $nama;
+            elseif (!in_array($nilai, $daftar, true)) return [];   // sudah pasti tidak berlaku
+        }
+
+        return $kosong;
     }
 
     /** Teks ringkas syarat untuk tampilan, mis. "Menikah · Wirausaha". */

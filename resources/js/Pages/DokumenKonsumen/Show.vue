@@ -51,6 +51,8 @@ const badgeDok = (dok) => {
     if (dok.sifat !== 'kondisional') return { teks: dok.sifat_label, cls: sifatBadgeCls[dok.sifat], title: '' };
     if (dok.berlaku) return { teks: dok.syarat_label ? `Wajib · ${dok.syarat_label}` : 'Wajib', cls: sifatBadgeCls.wajib, title: `Wajib untuk konsumen ini karena memenuhi syarat: ${dok.syarat_label ?? '-'}` };
 
+    if (dok.menunggu_data) return { teks: 'Menunggu data', cls: 'bg-amber-500/15 text-amber-300', title: `Isi ${dok.menunggu_data} konsumen (Edit Konsumen) supaya berkas ini bisa dinilai wajib atau tidak. Sebelum itu belum dihitung.` };
+
     return { teks: 'Tidak berlaku', cls: 'bg-slate-700 text-slate-300', title: dok.syarat_label ? `Hanya berlaku jika: ${dok.syarat_label}` : 'Template ini belum diberi syarat, jadi tidak dihitung' };
 };
 const ringkasSifat = computed(() => {

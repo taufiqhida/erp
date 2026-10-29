@@ -111,6 +111,7 @@ class DokumenKonsumenController extends Controller
                 'berlaku'      => $d->berlaku,
                 'dihitung'     => $d->dihitung,
                 'syarat_label' => $d->template?->syaratLabel(),
+                'menunggu_data' => $d->sifat === 'kondisional' && $d->template ? implode(' & ', $d->template->menungguData($kk->konsumen)) ?: null : null,
                 'status'       => $d->status,
                 'status_label' => $d->status_label,
                 'status_icon'  => $d->status_icon,

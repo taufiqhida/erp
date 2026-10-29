@@ -72,11 +72,10 @@ class DokumenSinkronTest extends TestCase
         return DokumenKonsumen::where('kavling_konsumen_id', $this->trx->id)->where('nama_dokumen', $nama)->first();
     }
 
-    public function test_syarat_berlaku_mengikuti_data_konsumen_dan_data_kosong_dianggap_berlaku(): void
+    public function test_syarat_berlaku_mengikuti_data_konsumen(): void
     {
         $this->assertTrue($this->ktpPasangan->berlakuUntuk($this->konsumen));                                  // menikah
         $this->assertFalse($this->ktpPasangan->berlakuUntuk(new Konsumen(['status_pernikahan' => 'belum_menikah'])));
-        $this->assertTrue($this->ktpPasangan->berlakuUntuk(new Konsumen()));                                   // belum diisi: tetap ditagih
         $this->assertFalse($this->nibUsaha->berlakuUntuk($this->konsumen));                                    // karyawan, bukan wirausaha
         $this->assertTrue($this->nibUsaha->berlakuUntuk(new Konsumen(['pekerjaan' => 'wirausaha'])));
         $this->assertFalse($this->suratManual->berlakuUntuk($this->konsumen));                                 // kondisional tanpa syarat: tidak dihitung
@@ -261,5 +260,56 @@ class DokumenSinkronTest extends TestCase
         $this->assertSame([], $this->ktpPasangan->fresh()->syaratPernikahan());                                    // bukan kondisional: syarat dibersihkan
 
         $this->actingAs($this->admin)->patch($url, ['nama_dokumen' => 'X', 'sifat' => 'kondisional', 'syarat_pernikahan' => ['ngawur']])->assertSessionHasErrors('syarat_pernikahan.0');
+    }
+
+    public function test_data_kosong_berarti_menunggu_data_bukan_wajib(): void
+    {
+        $kosong = new Konsumen();
+        $this->assertFalse($this->ktpPasangan->berlakuUntuk($kosong));
+        $this->assertSame(['status pernikahan'], $this->ktpPasangan->menungguData($kosong));
+        $this->assertSame(['pekerjaan'], $this->nibUsaha->menungguData($kosong));
+        $this->assertSame([], $this->ktp->menungguData($kosong));                                              // bukan kondisional: tidak menunggu apa pun
+        $this->assertSame([], $this->suratManual->menungguData($kosong));                                      // tanpa syarat: tidak ada yang ditunggu
+
+        $dua = $this->template('Dua Syarat', 'kondisional', ['syarat_pernikahan' => ['menikah'], 'syarat_pekerjaan' => ['wirausaha']]);
+        $this->assertSame(['status pernikahan', 'pekerjaan'], $dua->menungguData($kosong));
+        $this->assertSame(['pekerjaan'], $dua->menungguData(new Konsumen(['status_pernikahan' => 'menikah'])));  // satu terisi, satu ditunggu
+        // Satu dimensi sudah pasti tidak memenuhi syarat -> pasti tidak berlaku, tidak perlu menunggu data lain.
+        $this->assertFalse($dua->berlakuUntuk(new Konsumen(['status_pernikahan' => 'belum_menikah'])));
+        $this->assertSame([], $dua->menungguData(new Konsumen(['status_pernikahan' => 'belum_menikah'])));
+    }
+
+    public function test_konsumen_data_kosong_tidak_menambah_berkas_wajib_dan_otomatis_dihitung_setelah_dilengkapi(): void
+    {
+        $this->konsumen->update(['status_pernikahan' => null, 'pekerjaan' => null]);
+        $this->booking();
+
+        // Berkas kondisional belum dihitung (menunggu data); hanya KTP yang wajib.
+        $this->assertFalse($this->berkas('KTP Pasangan')->berlaku);
+        $this->assertFalse($this->berkas('NIB Usaha')->berlaku);
+        $p = $this->trx->fresh()->progress_berkas;
+        $this->assertSame([0, 1], [$p['ada'], $p['total']]);
+        $this->berkas('KTP')->update(['status' => 'sudah_ada']);
+        $this->assertTrue($this->trx->fresh()->dokumen_wajib_lengkap);                                          // data lama tidak tertahan berkas kondisional
+
+        // Data dilengkapi lewat Edit Konsumen -> berkas langsung dinilai.
+        $this->actingAs($this->admin)->put(route('konsumens.update', $this->konsumen), ['nama' => 'Budi', 'status_pernikahan' => 'menikah', 'pekerjaan' => 'wirausaha'])->assertSessionDoesntHaveErrors();
+        $this->assertTrue($this->berkas('KTP Pasangan')->berlaku);
+        $this->assertTrue($this->berkas('NIB Usaha')->berlaku);
+        $this->assertFalse($this->trx->fresh()->dokumen_wajib_lengkap);                                         // kini KTP Pasangan dan NIB ikut dihitung
+    }
+
+    public function test_halaman_berkas_dan_profil_menampilkan_menunggu_data(): void
+    {
+        $this->konsumen->update(['status_pernikahan' => null, 'pekerjaan' => 'karyawan_swasta']);
+        $this->booking();
+
+        $html = $this->actingAs($this->admin)->get(route('dokumen.index', $this->trx))->assertOk()->getContent();
+        preg_match('/data-page="([^"]+)"/', $html, $m);
+        $dok = collect(json_decode(html_entity_decode($m[1], ENT_QUOTES), true)['props']['dokumens']);
+
+        $this->assertSame('status pernikahan', $dok->firstWhere('nama_dokumen', 'KTP Pasangan')['menunggu_data']);
+        $this->assertNull($dok->firstWhere('nama_dokumen', 'NIB Usaha')['menunggu_data']);                    // pekerjaan terisi & bukan wirausaha: pasti tidak berlaku
+        $this->assertNull($dok->firstWhere('nama_dokumen', 'KTP')['menunggu_data']);
     }
 }
