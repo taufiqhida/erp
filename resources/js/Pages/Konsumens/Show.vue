@@ -123,7 +123,7 @@ const muatanRincian = (form, tambahan = {}) => ({
     biaya_kelebihan_tanah_harga_per_m2: form.biaya_kelebihan_tanah_harga_per_m2 || null,
     biaya_kelebihan_tanah_nominal_input: form.biaya_kelebihan_tanah_nominal_input || null,
     potongan_tanah: lawanTanahForm(form) && form.potongan_tanah?.nilai !== '' && form.potongan_tanah?.nilai != null ? form.potongan_tanah : null,
-    biaya_tambahan: form.biaya_tambahan.map(bt => ({
+    biaya_tambahan: form.biaya_tambahan.filter(bt => !bt.locked).map(bt => ({
         id: bt.id || null, preset_id: bt.preset_id, nominal: Number(bt.nominal) || 0,
         potongan: lawanBtForm(form, bt) && bt.potongan_input?.nilai !== '' && bt.potongan_input?.nilai != null ? bt.potongan_input : null,
     })),

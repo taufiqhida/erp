@@ -84,9 +84,18 @@ class PerubahanRincian
         $existingLocked = $kk->biayaTambahans->filter(fn ($bt) => $bt->pembayarans->isNotEmpty());
         $existingUnpaid = $kk->biayaTambahans->filter(fn ($bt) => $bt->pembayarans->isEmpty());
 
+        // Form mengirim SEMUA baris, termasuk yang terkunci. Baris terkunci yang dikirim apa adanya (item dan nominal sama) diabaikan,
+        // sehingga item lain tetap bisa ditambah/diubah; hanya upaya MENGUBAH item yang sudah ada pembayarannya yang ditolak.
+        $lockedById = $existingLocked->keyBy('id');
+        foreach ($submitted as $item) {
+            $row = !empty($item['id']) ? $lockedById->get((int) $item['id']) : null;
+            if ($row) {
+                $berubah = (int) $item['preset_id'] !== (int) $row->biaya_tambahan_preset_id || abs((float) $item['nominal'] - (float) $row->nominal) > 0.004;
+                abort_if($berubah, 422, 'Ada item Biaya Tambahan yang sudah ada pembayaran — tidak bisa diubah.');
+            }
+        }
+        $submitted = $submitted->reject(fn ($item) => !empty($item['id']) && $lockedById->has((int) $item['id']))->values();
         $submittedIds = $submitted->pluck('id')->filter()->all();
-        $lockedTouched = $existingLocked->pluck('id')->intersect($submittedIds)->isNotEmpty();
-        abort_if($lockedTouched, 422, 'Ada item Biaya Tambahan yang sudah ada pembayaran — tidak bisa diubah.');
 
         $existingUnpaid->whereNotIn('id', $submittedIds)->each->delete();
 

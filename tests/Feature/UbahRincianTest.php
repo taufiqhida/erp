@@ -162,6 +162,35 @@ class UbahRincianTest extends TestCase
         $this->assertEquals(8000000, $item->fresh()->nominal);                                        // tidak berubah
     }
 
+    public function test_menambah_biaya_tambahan_baru_tetap_bisa_walau_ada_item_lain_yang_sudah_dibayar(): void
+    {
+        $hook = $this->trx->biayaTambahans()->create(['biaya_tambahan_preset_id' => $this->hook->id, 'nama' => 'Biaya Hook', 'nominal' => 5000000]);
+        PembayaranKonsumen::create(['kavling_konsumen_id' => $this->trx->id, 'kavling_konsumen_biaya_tambahan_id' => $hook->id, 'jenis' => 'biaya_tambahan', 'jumlah' => 1000000, 'tanggal_bayar' => '2026-10-12']);
+        $strategis = \App\Models\BiayaTambahanPreset::create(['nama' => 'Strategis', 'is_active' => true]);
+
+        // Form mengirim SEMUA baris, termasuk yang terkunci (tidak berubah), plus baris baru.
+        $this->kirim($this->form(['biaya_tambahan' => [
+            ['id' => $hook->id, 'preset_id' => $this->hook->id, 'nominal' => 5000000],
+            ['id' => null, 'preset_id' => $strategis->id, 'nominal' => 3000000],
+        ]]), $this->user('spv'))->assertSessionHas('success');
+
+        $this->assertEquals(5000000, $hook->fresh()->nominal);                                        // item terbayar tidak tersentuh
+        $this->assertSame(2, $this->trx->biayaTambahans()->count());
+        $this->assertEquals(8000000, $this->trx->fresh()->total_biaya_tambahan);                      // 5 jt + 3 jt
+        $this->assertEquals(300000000 + 8000000, $this->trx->fresh()->harga_deal);
+    }
+
+    public function test_item_terkunci_yang_tidak_dikirim_ulang_tetap_ada(): void
+    {
+        $hook = $this->trx->biayaTambahans()->create(['biaya_tambahan_preset_id' => $this->hook->id, 'nama' => 'Biaya Hook', 'nominal' => 5000000]);
+        PembayaranKonsumen::create(['kavling_konsumen_id' => $this->trx->id, 'kavling_konsumen_biaya_tambahan_id' => $hook->id, 'jenis' => 'biaya_tambahan', 'jumlah' => 1000000, 'tanggal_bayar' => '2026-10-12']);
+
+        $this->kirim($this->form(['biaya_tambahan' => []]), $this->user('spv'))->assertSessionHas('success');
+
+        $this->assertNotNull($hook->fresh());                                                          // item terbayar tidak pernah terhapus
+        $this->assertEquals(5000000, $this->trx->fresh()->total_biaya_tambahan);
+    }
+
     // ── Jalur usulan (Admin Sales) ───────────────────────────────────────
 
     public function test_admin_sales_mengirim_usulan_yang_belum_berlaku_sebelum_disetujui(): void
