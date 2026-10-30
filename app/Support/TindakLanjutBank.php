@@ -11,7 +11,7 @@ use App\Models\KavlingKonsumen;
  */
 class TindakLanjutBank
 {
-    /** @return array<int, array{perlu_sbum: bool, belum_dirinci: float, persen: float}> */
+    /** @return array<int, array{perlu_sbum: bool, belum_dirinci: float, persen: float, plafon: float}> */
     public static function peta(): array
     {
         return FinanceCache::remember('tindak-lanjut-bank', function () {
@@ -29,6 +29,7 @@ class TindakLanjutBank
                             'perlu_sbum'    => (bool) $pk['perlu_sbum'],
                             'belum_dirinci' => $pk['perlu_rincian_dajam'] ? round($pk['belum_dirinci'], 2) : 0.0,
                             'persen'        => (float) $pk['persen_pencairan'],
+                            'plafon'        => (float) $pk['plafon_disetujui'],   // plafon bank bila ada, kalau tidak hitungan aplikasi
                         ];
                     }
                 });

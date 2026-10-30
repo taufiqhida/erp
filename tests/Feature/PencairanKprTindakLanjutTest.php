@@ -106,6 +106,16 @@ class PencairanKprTindakLanjutTest extends TestCase
         $this->assertSame([$adaSisa->id], collect($dajam['rows']['data'])->pluck('id')->all());
     }
 
+    public function test_kolom_plafon_daftar_pencairan_memakai_hitungan_aplikasi_bila_tanpa_import(): void
+    {
+        $dariSistem = $this->trx();                                                       // plafon_kpr kosong -> hitungan: 166 jt - DP 1,66 jt - SBUM 4 jt
+        $dariImport = $this->trx(['plafon_kpr' => 150000000]);                            // angka bank menang
+
+        $semua = collect($this->props('keuangan.pencairan', ['tampil' => 'semua'])['rows']['data'])->keyBy('id');
+        $this->assertEquals(160340000, $semua[$dariSistem->id]['plafon_kpr']);
+        $this->assertEquals(150000000, $semua[$dariImport->id]['plafon_kpr']);
+    }
+
     public function test_dashboard_menghitung_kartu_peringatan_bank(): void
     {
         $this->trx([], denganSbum: false);

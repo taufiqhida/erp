@@ -300,7 +300,7 @@ class KeuanganController extends Controller
                     'perlu_sbum'             => $peta[$kk->id]['perlu_sbum'] ?? false,
                     'dajam_belum_dirinci'    => $peta[$kk->id]['belum_dirinci'] ?? 0,
                     'persen_pencairan'       => $peta[$kk->id]['persen'] ?? null,
-                    'plafon_kpr'             => $kk->plafon_kpr !== null ? (float) $kk->plafon_kpr : null,
+                    'plafon_kpr'             => $peta[$kk->id]['plafon'] ?? ($kk->plafon_kpr !== null ? (float) $kk->plafon_kpr : null),
                     'tanggal_akad'           => $kk->tanggal_akad?->format('d M Y'),
                     'hari_sejak_akad'        => $kk->tanggal_akad ? (int) $kk->tanggal_akad->diffInDays(now()->startOfDay()) : null,
                     'total_piutang'          => (float) $kk->fin_piutang_bank,
@@ -335,6 +335,7 @@ class KeuanganController extends Controller
             : ($request->search ? 'semua' : 'belum_cair');
         $sertakanBelumAkad = $request->boolean('belum_akad') || $request->search;
         $eps = self::SISA_EPS;
+        $peta = \App\Support\TindakLanjutBank::peta();
 
         $rows = $this->keuanganBaseQuery($request)
             ->whereIn('kavling_konsumen.cara_bayar', ['kpr_subsidi', 'kpr_komersil'])
@@ -357,7 +358,7 @@ class KeuanganController extends Controller
             $this->caraBayarLabel($kk->cara_bayar),
             $kk->bank_rekanan_kpr,
             $kk->tanggal_akad?->format('Y-m-d'),
-            $kk->plafon_kpr !== null ? (float) $kk->plafon_kpr : null,
+            $peta[$kk->id]['plafon'] ?? ($kk->plafon_kpr !== null ? (float) $kk->plafon_kpr : null),
             (float) $kk->fin_piutang_bank,
             (float) $kk->fin_terbayar_bank,
             (float) $kk->fin_sisa_bank,
