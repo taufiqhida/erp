@@ -19,6 +19,7 @@ const kluster   = ref(props.filters?.kluster ?? '');
 const blok      = ref(props.filters?.blok ?? '');
 const caraBayar = ref(props.filters?.cara_bayar ?? '');
 const bank      = ref(props.filters?.bank ?? '');
+const tindakLanjut = ref(props.filters?.tindak_lanjut ?? '');   // '' | 'perlu_sbum' | 'dajam_belum_dirinci'
 
 const tampil    = computed(() => props.filters?.tampil ?? 'belum_cair');
 const belumAkad = computed(() => props.filters?.belum_akad === '1');
@@ -32,6 +33,7 @@ const go = (override = {}) => {
         blok: blok.value || undefined,
         cara_bayar: caraBayar.value || undefined,
         bank: bank.value || undefined,
+        tindak_lanjut: tindakLanjut.value || undefined,
         tampil: tampil.value,
         belum_akad: belumAkad.value ? '1' : undefined,
         sort: sort.value,
@@ -58,12 +60,12 @@ watch(search, () => {
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(() => go({ tampil: search.value ? undefined : 'belum_cair' }), 300);
 });
-watch([kluster, blok, caraBayar, bank], () => go());
+watch([kluster, blok, caraBayar, bank, tindakLanjut], () => go());
 
 const resetFilters = () => {
-    search.value = ''; kluster.value = ''; blok.value = ''; caraBayar.value = ''; bank.value = '';
+    search.value = ''; kluster.value = ''; blok.value = ''; caraBayar.value = ''; bank.value = ''; tindakLanjut.value = '';
 };
-const hasFilter = computed(() => search.value || kluster.value || blok.value || caraBayar.value || bank.value);
+const hasFilter = computed(() => search.value || kluster.value || blok.value || caraBayar.value || bank.value || tindakLanjut.value);
 
 const chips = [
     { key: 'belum_cair', label: 'Belum cair penuh' },
@@ -162,6 +164,11 @@ const statusPenjualanConfig = computed(() => {
                         <option value="">Semua Bank</option>
                         <option v-for="b in filterOptions.bank" :key="b.id" :value="b.id">{{ b.nama }}</option>
                     </select>
+                    <select v-model="tindakLanjut" class="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">
+                        <option value="">Semua tindak lanjut</option>
+                        <option value="perlu_sbum">Perlu SBUM (KPR Subsidi sudah akad)</option>
+                        <option value="dajam_belum_dirinci">Dajam belum dirinci</option>
+                    </select>
                     <button v-if="hasFilter" @click="resetFilters" class="px-3 py-1.5 text-slate-500 hover:text-slate-300 text-xs transition-colors">✕ Reset filter</button>
                 </div>
             </div>
@@ -184,7 +191,13 @@ const statusPenjualanConfig = computed(() => {
                         </thead>
                         <tbody>
                             <tr v-for="row in rows.data" :key="row.id" class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                                <td class="px-4 py-3 text-slate-200 font-medium">{{ row.konsumen_nama }}</td>
+                                <td class="px-4 py-3 text-slate-200 font-medium">
+                                    <Link :href="route('keuangan.detail', row.id)" class="hover:text-violet-300 transition-colors">{{ row.konsumen_nama }}</Link>
+                                    <div class="flex flex-wrap gap-1 mt-0.5">
+                                        <span v-if="row.perlu_sbum" class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[0.625rem] font-medium" title="KPR Subsidi sudah akad, SBUM belum diinput">SBUM?</span>
+                                        <span v-if="row.dajam_belum_dirinci > 0.5" class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[0.625rem] font-medium" title="Retensi Dajam belum dirinci, perlu follow-up bank">Dajam belum dirinci {{ formatRp(row.dajam_belum_dirinci) }}</span>
+                                    </div>
+                                </td>
                                 <td class="px-4 py-3 text-slate-400">
                                     {{ row.kavling_nomor }}
                                     <div class="text-slate-500 text-xs">{{ row.project_nama }}</div>
@@ -209,7 +222,7 @@ const statusPenjualanConfig = computed(() => {
                                     <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden mt-1 w-32">
                                         <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full" :style="`width: ${pct(row.total_terbayar, row.total_piutang)}%`" />
                                     </div>
-                                    <div class="text-slate-500 text-[0.625rem] mt-0.5">{{ pct(row.total_terbayar, row.total_piutang) }}%</div>
+                                    <div class="text-slate-500 text-[0.625rem] mt-0.5">{{ pct(row.total_terbayar, row.total_piutang) }}%<span v-if="row.persen_pencairan !== null"> · pencairan {{ row.persen_pencairan }}% dari plafon</span></div>
                                 </td>
                                 <td class="px-4 py-3 text-right whitespace-nowrap">
                                     <div v-if="row.sisa > 0.009" class="text-amber-400 font-medium">{{ formatRp(row.sisa) }}</div>

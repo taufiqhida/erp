@@ -142,6 +142,17 @@ class KavlingKonsumen extends Model
         return max(0.0, (float) $this->biaya_kelebihan_tanah_nominal - (float) $this->biaya_kelebihan_tanah_potongan);
     }
 
+    /**
+     * Ringkasan Pencairan KPR/retensi Dajam untuk transaksi ini (null bila bukan KPR). Memuat ulang relasi yang diperlukan supaya
+     * angkanya segar (dipakai validasi rincian Dajam dan Tutup selisih).
+     */
+    public function ringkasPencairan(): ?array
+    {
+        $this->unsetRelations()->load(['jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans', 'rincianBiayaAkad.pembayaran', 'skemaDpPreset', 'pembayarans', 'pencairanKprTahaps']);
+
+        return $this->kartuPiutangBreakdown()['pencairan_kpr'];
+    }
+
     public function biayaTambahans(): HasMany
     {
         return $this->hasMany(KavlingKonsumenBiayaTambahan::class);
@@ -584,34 +595,68 @@ class KavlingKonsumen extends Model
             // utk KPR Subsidi, sudah dinolkan kalau bukan).
             $plafonKprHitung = max(0, (float) $this->harga_dasar - $bookingFeePengurang - $dpPengurang - $sbumTotal);
 
+            // KPR Subsidi tanpa satu pun item SBUM: plafon hitung belum final (SBUM biasanya Rp 4 jt), jadi selisih dengan plafon bank
+            // BELUM boleh dianggap "turun plafon".
+            $sbumKosong = $isKprSubsidi && !$this->rincianBiayaAkad->contains('kategori', 'sbum');
+
             // Tambahan Uang Muka: selisih kebutuhan plafon awal dengan plafon
             // yang benar-benar disetujui bank kalau turun plafon — konsumen
             // yang menutup selisihnya.
             $tambahanUm = 0;
-            if ($this->status_sp3k === 'turun_plafon' && $this->plafon_kpr !== null) {
+            if ($this->status_sp3k === 'turun_plafon' && $this->plafon_kpr !== null && !$sbumKosong) {
                 $tambahanUm = max(0, $plafonKprHitung - (float) $this->plafon_kpr);
             }
 
             $plafonDisetujui = $this->plafon_kpr !== null ? (float) $this->plafon_kpr : $plafonKprHitung;
-            $dajamTotal = (float) $this->rincianBiayaAkad->where('kategori', 'dajam')->sum('nominal');
-            $pencairanNominal = max(0, $plafonDisetujui - $dajamTotal);
 
             // Pencairan KPR (uang cair dari bank ke developer) dicatat manual
             // per tahap — bank tidak ikut skema/tenor apa pun, jadi baris-
             // barisnya murni ditambahkan admin tiap kali benar-benar cair
             // (bisa berkali-kali/bertahap), bukan digenerate otomatis.
             $pencairanTercatat = (float) $this->pencairanKprTahaps->sum('nominal');
+
+            // ── Retensi Dajam: bagian plafon yang ditahan bank. Sejak ada pencairan tercatat, retensi = plafon disetujui - total
+            // pencairan (otomatis, ikut berubah tiap tahap dicatat). Sebelum ada pencairan sama sekali retensi = jumlah item Dajam
+            // yang sudah dirinci (perilaku lama), supaya transaksi yang belum punya pencairan tidak dianggap punya retensi sebesar plafon.
+            // Retensi TIDAK berkurang saat item dirinci/dicairkan; yang berkurang adalah "belum dirinci" dan "belum cair".
+            $dajamItems = $this->rincianBiayaAkad->where('kategori', 'dajam');
+            $dajamDirinci = (float) $dajamItems->sum('nominal');
+            $dajamCair = (float) $dajamItems->filter(fn ($i) => $i->pembayaran)->sum(fn ($i) => $i->pembayaran->jumlah);
+            $retensiAktif = $pencairanTercatat > 0;
+            $retensiRule = $retensiAktif ? max(0, $plafonDisetujui - $pencairanTercatat) : $dajamDirinci;
+            $retensi = max($retensiRule, $dajamDirinci);                       // item yang melebihi retensi tetap terhitung sebagai piutang
+            $belumDirinci = max(0, $retensiRule - $dajamDirinci);
+            $dajamMelebihi = max(0, $dajamDirinci - $retensiRule);
+            $pencairanNominal = max(0, $plafonDisetujui - $retensi);
+
+            // Pencairan dianggap lunas bila yang diterima sudah menutup bagian netto DAN retensi sudah terurai habis ke item Dajam.
             $pencairanStatus = 'belum_bayar';
             if ($pencairanTercatat > 0) {
-                $pencairanStatus = $pencairanTercatat >= $pencairanNominal ? 'lunas' : 'sebagian';
+                $pencairanStatus = ($pencairanTercatat >= $pencairanNominal - 0.5 && $belumDirinci <= 0.5) ? 'lunas' : 'sebagian';
             }
+
+            $sudahAkad = $this->status === 'active' && in_array($this->status_penjualan, ['akad', 'bast'], true);
 
             $pencairanKpr = [
                 'plafon_hitung'      => $plafonKprHitung,
+                'plafon_disetujui'   => $plafonDisetujui,
+                'plafon_dari_import' => $this->plafon_kpr !== null,
+                'plafon_beda'        => $this->plafon_kpr !== null && abs($plafonKprHitung - (float) $this->plafon_kpr) > 0.5,
                 'tambahan_um'        => $tambahanUm,
                 'pencairan_nominal'  => $pencairanNominal,
                 'pencairan_tercatat' => $pencairanTercatat,
                 'pencairan_status'   => $pencairanStatus,
+                'persen_pencairan'   => $plafonDisetujui > 0 ? round($pencairanTercatat / $plafonDisetujui * 100, 1) : 0,
+                'retensi_aktif'      => $retensiAktif,
+                'retensi'            => $retensi,
+                'dajam_dirinci'      => $dajamDirinci,
+                'dajam_cair'         => $dajamCair,
+                'belum_dirinci'      => $belumDirinci,
+                'belum_cair'         => max(0, $retensi - $dajamCair),
+                'dajam_melebihi'     => $dajamMelebihi,
+                'sbum_kosong'        => $sbumKosong,
+                'perlu_sbum'         => $sbumKosong && $sudahAkad,
+                'perlu_rincian_dajam' => $retensiAktif && $belumDirinci > 0.5 && $sudahAkad,
             ];
 
             // Tambahan Uang Muka jadi baris Kartu Piutang sungguhan (subjek
@@ -686,7 +731,8 @@ class KavlingKonsumen extends Model
         $totalPiutangBank = (float) $bankItems->sum('nominal');
         $totalTerbayarBank = (float) $bankItems->filter(fn($item) => $item->pembayaran)->sum(fn($item) => $item->pembayaran->jumlah);
         if ($isKpr) {
-            $totalPiutangBank += $pencairanKpr['pencairan_nominal'];
+            // Dajam sebagai piutang bank = retensi (item yang sudah dirinci + sisa yang belum dirinci), bukan hanya jumlah item.
+            $totalPiutangBank = (float) $this->rincianBiayaAkad->where('kategori', 'sbum')->sum('nominal') + $pencairanKpr['retensi'] + $pencairanKpr['pencairan_nominal'];
             $totalTerbayarBank += $pencairanKpr['pencairan_tercatat'];
         }
 

@@ -249,6 +249,17 @@ class DashboardController extends Controller
             ]),
         ];
 
+        // ── Tindak lanjut bank: KPR Subsidi sudah akad tanpa SBUM, dan retensi Dajam yang belum dirinci ──
+        $peta = \App\Support\TindakLanjutBank::peta();
+        $idSbum = \App\Support\TindakLanjutBank::idPerluSbum();
+        $idDajam = \App\Support\TindakLanjutBank::idDajamBelumDirinci();
+        $terlihat = $scopeViaKavling(KavlingKonsumen::query())->whereIn('kavling_konsumen.id', array_merge($idSbum, $idDajam))->pluck('kavling_konsumen.id')->all();
+        $tindakLanjutBank = [
+            'perlu_sbum'              => count(array_intersect($idSbum, $terlihat)),
+            'dajam_belum_dirinci'     => count(array_intersect($idDajam, $terlihat)),
+            'dajam_belum_dirinci_rp'  => (float) collect(array_intersect($idDajam, $terlihat))->sum(fn ($id) => $peta[$id]['belum_dirinci']),
+        ];
+
         // ── BAST tertunda: sudah akad, bangunan siap serah terima, tapi
         // belum dikonfirmasi Selesai (BAST) ──────────────────────────────
         $finalStageId = StatusBangunStage::finalStage()?->id;
@@ -536,6 +547,7 @@ class DashboardController extends Controller
             'financials'             => $financials,
             'piutangJatuhTempo'      => $piutangJatuhTempo,
             'bastTertunda'           => $bastTertunda,
+            'tindakLanjutBank'       => $tindakLanjutBank,
             'recentActivities'       => $recentActivities,
             'projectsSummary'        => $projectsSummary,
             'sp3kMonitoring'         => $sp3kMonitoring,

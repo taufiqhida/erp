@@ -17,6 +17,7 @@ use App\Models\PencairanKprTahap;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -241,14 +242,20 @@ class KeuanganController extends Controller
     {
         abort_unless(Auth::user()->can('view keuangan'), 403);
 
+        // Filter tindak lanjut: transaksi KPR Subsidi sudah akad tanpa SBUM, atau yang retensi Dajam-nya belum dirinci.
+        $tindakLanjut = in_array($request->tindak_lanjut, ['perlu_sbum', 'dajam_belum_dirinci'], true) ? $request->tindak_lanjut : null;
+        $idTindakLanjut = $tindakLanjut === 'perlu_sbum' ? \App\Support\TindakLanjutBank::idPerluSbum() : ($tindakLanjut ? \App\Support\TindakLanjutBank::idDajamBelumDirinci() : null);
+
         $tampil = in_array($request->tampil, ['belum_cair', 'cair_penuh', 'semua'], true)
             ? $request->tampil
-            : ($request->search ? 'semua' : 'belum_cair');
+            : ($request->search || $tindakLanjut ? 'semua' : 'belum_cair');
         $sertakanBelumAkad = $request->boolean('belum_akad') || $request->search;
+        $peta = \App\Support\TindakLanjutBank::peta();
 
         $eps = self::SISA_EPS;
         $query = $this->keuanganBaseQuery($request)
             ->whereIn('kavling_konsumen.cara_bayar', ['kpr_subsidi', 'kpr_komersil'])
+            ->when($idTindakLanjut !== null, fn ($q) => $q->whereIn('kavling_konsumen.id', $idTindakLanjut ?: [0]))
             ->when(!$sertakanBelumAkad, fn ($q) => $q->whereIn('kavling_konsumen.status_penjualan', ['akad', 'bast']))
             ->when($request->bank, fn ($q) => $q->where('kavling_konsumen.bank_rekanan_preset_id', $request->bank))
             ->when($request->cara_bayar, fn ($q) => $q->where('kavling_konsumen.cara_bayar', $request->cara_bayar))
@@ -279,7 +286,7 @@ class KeuanganController extends Controller
             ->with(['konsumen:id,nama', 'kavling.project:id,nama', 'bankRekananPreset:id,nama'])
             ->paginate($this->perPage($request, 50))
             ->withQueryString()
-            ->through(function ($kk) {
+            ->through(function ($kk) use ($peta) {
                 return [
                     'id'                     => $kk->id,
                     'konsumen_nama'          => $kk->konsumen->nama,
@@ -290,6 +297,9 @@ class KeuanganController extends Controller
                     'status_penjualan_label' => $this->statusPenjualanLabelMap()[$kk->status_penjualan] ?? $kk->status_penjualan_label,
                     'cara_bayar_label'       => $this->caraBayarLabel($kk->cara_bayar),
                     'bank_rekanan_kpr'       => $kk->bank_rekanan_kpr,
+                    'perlu_sbum'             => $peta[$kk->id]['perlu_sbum'] ?? false,
+                    'dajam_belum_dirinci'    => $peta[$kk->id]['belum_dirinci'] ?? 0,
+                    'persen_pencairan'       => $peta[$kk->id]['persen'] ?? null,
                     'plafon_kpr'             => $kk->plafon_kpr !== null ? (float) $kk->plafon_kpr : null,
                     'tanggal_akad'           => $kk->tanggal_akad?->format('d M Y'),
                     'hari_sejak_akad'        => $kk->tanggal_akad ? (int) $kk->tanggal_akad->diffInDays(now()->startOfDay()) : null,
@@ -307,7 +317,7 @@ class KeuanganController extends Controller
                 'bank'       => BankRekananPreset::ordered()->get(['id', 'nama']),
             ],
             'filters'       => $request->only(['search', 'kluster', 'blok', 'cara_bayar', 'bank']) + [
-                'tampil' => $tampil, 'belum_akad' => $request->boolean('belum_akad') ? '1' : '', 'sort' => $sort, 'dir' => $dir,
+                'tampil' => $tampil, 'belum_akad' => $request->boolean('belum_akad') ? '1' : '', 'sort' => $sort, 'dir' => $dir, 'tindak_lanjut' => $tindakLanjut,
             ],
         ]);
     }
@@ -937,6 +947,31 @@ class KeuanganController extends Controller
         $pembayaran?->delete();
 
         return back()->with('success', 'Pencatatan pembayaran dibatalkan.');
+    }
+
+    /**
+     * Tutup sisa retensi Dajam yang tidak akan dirinci lagi (mis. biaya administrasi bank/pembulatan): dicatat sebagai satu item Dajam
+     * biasa bernama "Selisih / penyesuaian bank" sebesar sisa belum dirinci, dengan catatan alasan wajib. Tanpa kolom baru.
+     */
+    public function tutupSelisihDajam(Request $request, KavlingKonsumen $kk): RedirectResponse
+    {
+        $this->authorizeProjectAccess($kk->kavling->project);
+        $user = Auth::user();
+        abort_unless($user->can('manage kpr') || $user->can('manage rincian biaya akad'), 403);
+        $this->assertTransactionEditable($kk, 'Tutup selisih Dajam');
+
+        $validated = $request->validate(['catatan' => 'required|string|min:5|max:300']);
+        $pk = $kk->ringkasPencairan();
+        abort_if(!$pk || $pk['belum_dirinci'] <= 0.5, 422, 'Tidak ada sisa retensi Dajam yang belum dirinci.');
+
+        $sisa = round($pk['belum_dirinci'], 2);
+        DB::transaction(function () use ($kk, $sisa, $validated, $user) {
+            $kk->rincianBiayaAkad()->create(['dajam_sbum_preset_id' => null, 'nama' => 'Selisih / penyesuaian bank', 'kategori' => 'dajam', 'nominal' => $sisa]);
+            \App\Models\CatatanTransaksi::tulis($kk, 'booking', 'Selisih retensi Dajam Rp ' . number_format($sisa, 0, ',', '.') . ' ditutup sebagai penyesuaian bank. Alasan: ' . trim($validated['catatan']), 'Tutup selisih Dajam', $user);
+            activity('transaksi')->causedBy($user)->performedOn($kk)->withProperties(['nominal' => $sisa, 'alasan' => $validated['catatan']])->log('Selisih retensi Dajam ditutup');
+        });
+
+        return back()->with('success', 'Selisih retensi Dajam Rp ' . number_format($sisa, 0, ',', '.') . ' ditutup sebagai penyesuaian bank.');
     }
 
     /**

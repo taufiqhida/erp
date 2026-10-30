@@ -3,6 +3,7 @@ import CatatanTransaksi from '@/Components/CatatanTransaksi.vue';
 import AlihPembeliModal from '@/Components/AlihPembeliModal.vue';
 import LengkapiRincianModal from '@/Components/LengkapiRincianModal.vue';
 import PotonganPromoInput from '@/Components/PotonganPromoInput.vue';
+import TutupSelisihDajam from '@/Components/TutupSelisihDajam.vue';
 import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import CatatPembayaran from '@/Components/CatatPembayaran.vue';
@@ -946,6 +947,10 @@ onMounted(() => {
                                 </div>
                             </div>
 
+                            <div v-if="trx.pencairan_kpr?.perlu_sbum" class="text-amber-300 text-xs bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">
+                                ⚠ SBUM belum diinput. KPR Subsidi sudah akad, jadi plafon hitung belum final. Tambahkan item SBUM di bawah.
+                            </div>
+
                             <div class="rounded-lg border border-slate-800 overflow-hidden">
                                 <!-- 1. Sales input SBUM (khusus KPR Subsidi) -->
                                 <template v-if="trx.is_kpr_subsidi">
@@ -993,17 +998,61 @@ onMounted(() => {
                                     </div>
                                 </template>
 
-                                <!-- 2. Kalkulasi Pengajuan Plafon KPR -->
-                                <div class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60 bg-slate-800/30">
-                                    <span class="text-slate-300 font-medium">Plafon KPR (Pengajuan)</span>
-                                    <div class="text-right">
-                                        <span class="text-slate-500 text-xs mr-2">Bank</span>
-                                        <span class="text-violet-300 font-semibold">{{ formatRp(trx.pencairan_kpr?.plafon_hitung) }}</span>
+                                <!-- 2. Plafon KPR (aturan skema; plafon bank bila ada) -->
+                                <div class="px-3 py-2.5 border-t border-slate-800/60 bg-slate-800/30 space-y-0.5">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-slate-300 font-medium">Plafon KPR <span v-if="trx.pencairan_kpr?.plafon_dari_import" class="text-slate-500 text-xs font-normal">· disetujui bank</span><span v-else class="text-slate-500 text-xs font-normal">· hitungan aplikasi</span></span>
+                                        <div class="text-right">
+                                            <span class="text-slate-500 text-xs mr-2">Bank</span>
+                                            <span class="text-violet-300 font-semibold">{{ formatRp(trx.pencairan_kpr?.plafon_disetujui) }}</span>
+                                        </div>
+                                    </div>
+                                    <div v-if="trx.pencairan_kpr?.plafon_beda" class="text-amber-400 text-[0.6875rem] text-right">
+                                        Hitungan aplikasi {{ formatRp(trx.pencairan_kpr.plafon_hitung) }} (harga dasar − DP yang masuk harga jual − SBUM){{ trx.pencairan_kpr.sbum_kosong ? ' — SBUM belum diinput' : '' }}
                                     </div>
                                 </div>
 
+                                <!-- 5. Pencairan KPR bersih -->
+                                <div class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60 bg-emerald-500/10 cursor-pointer hover:bg-emerald-500/15 transition-colors"
+                                    @click="togglePencairanTahap(trx.id)">
+                                    <span class="text-emerald-300 font-semibold flex items-center gap-1.5">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
+                                            :class="['w-3 h-3 transition-transform flex-shrink-0', showPencairanTahap[trx.id] ? 'rotate-90' : '']">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                                        </svg>
+                                        Pencairan KPR
+                                    </span>
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-slate-500 text-xs">Bank</span>
+                                        <span class="text-emerald-300 font-bold text-right">{{ formatRp(trx.pencairan_kpr?.pencairan_tercatat) }}
+                                            <span class="text-slate-500 text-xs font-normal">dari {{ formatRp(trx.pencairan_kpr?.plafon_disetujui) }} ({{ trx.pencairan_kpr?.persen_pencairan ?? 0 }}%)</span></span>
+                                        <StatusPembayaranBadge :status="trx.pencairan_kpr?.pencairan_status" />
+                                    </div>
+                                </div>
+                                <div v-if="showPencairanTahap[trx.id]" class="bg-slate-950/40 border-t border-slate-800/60">
+                                    <div v-for="t in trx.pencairan_kpr_tahaps" :key="t.id"
+                                        class="pl-8 pr-3 py-2 text-sm border-b border-slate-800/40 last:border-b-0">
+                                        <span class="text-slate-300 font-medium">{{ formatRp(t.nominal) }}</span>
+                                        <span class="text-slate-500 text-xs ml-2">cair {{ t.tanggal_cair }}</span>
+                                        <span v-if="t.keterangan" class="text-slate-500 text-xs ml-2">· {{ t.keterangan }}</span>
+                                    </div>
+                                    <div v-if="!trx.pencairan_kpr_tahaps?.length" class="pl-8 pr-3 py-2 text-slate-500 text-xs">Belum ada pencairan tercatat.</div>
+                                </div>
+                                <!-- 4. (-) Turun Plafon — aksinya di baris Tambahan Uang Muka Kartu Piutang -->
+                                <div v-if="tambahanUmRow(trx)" class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60">
+                                    <span class="text-slate-400">(−) Turun Plafon <span class="text-slate-500 text-xs">— lihat baris Tambahan Uang Muka di Kartu Piutang</span></span>
+                                    <span class="text-amber-300 font-medium">{{ formatRp(tambahanUmRow(trx).nominal) }}</span>
+                                </div>
+
                                 <!-- 3. Sales input Dana Jaminan -->
-                                <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[0.6875rem] font-semibold uppercase tracking-wide">Dana Jaminan</div>
+                                <div v-if="trx.pencairan_kpr?.retensi > 0 || dajamItems(trx).length || canEditBiayaAkad(trx)" class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60 bg-amber-500/5">
+                                    <span class="text-amber-200 font-medium">Retensi Dajam <span class="text-slate-500 text-xs font-normal">ditahan bank<template v-if="trx.pencairan_kpr?.retensi_aktif"> · = plafon − pencairan</template></span></span>
+                                    <span class="text-amber-200 font-semibold">{{ formatRp(trx.pencairan_kpr?.retensi) }}</span>
+                                </div>
+                                <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[0.6875rem] font-semibold uppercase tracking-wide flex justify-between">
+                                    <span>Rincian Dajam</span>
+                                    <span class="normal-case font-normal">cair {{ formatRp(trx.pencairan_kpr?.dajam_cair) }} / dirinci {{ formatRp(trx.pencairan_kpr?.dajam_dirinci) }}</span>
+                                </div>
                                 <div v-for="item in dajamItems(trx)" :key="`dajam-${item.id}`"
                                     class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-slate-800/60 text-sm group">
                                     <div>
@@ -1047,36 +1096,15 @@ onMounted(() => {
                                     </button>
                                 </div>
 
-                                <!-- 4. (-) Turun Plafon — aksinya di baris Tambahan Uang Muka Kartu Piutang -->
-                                <div v-if="tambahanUmRow(trx)" class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60">
-                                    <span class="text-slate-400">(−) Turun Plafon <span class="text-slate-500 text-xs">— lihat baris Tambahan Uang Muka di Kartu Piutang</span></span>
-                                    <span class="text-amber-300 font-medium">{{ formatRp(tambahanUmRow(trx).nominal) }}</span>
-                                </div>
-
-                                <!-- 5. Pencairan KPR bersih -->
-                                <div class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60 bg-emerald-500/10 cursor-pointer hover:bg-emerald-500/15 transition-colors"
-                                    @click="togglePencairanTahap(trx.id)">
-                                    <span class="text-emerald-300 font-semibold flex items-center gap-1.5">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
-                                            :class="['w-3 h-3 transition-transform flex-shrink-0', showPencairanTahap[trx.id] ? 'rotate-90' : '']">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                                        </svg>
-                                        Pencairan KPR Netto
+                                <div v-if="trx.pencairan_kpr?.belum_dirinci > 0.5" class="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 border-t border-slate-800/60 bg-amber-500/10">
+                                    <span class="text-amber-300 text-sm">⚠ Belum dirinci <span class="text-amber-400/80 text-xs">— tanyakan rinciannya ke bank, lalu tambahkan item di atas</span></span>
+                                    <span class="flex items-center gap-3">
+                                        <span class="text-amber-300 font-semibold">{{ formatRp(trx.pencairan_kpr.belum_dirinci) }}</span>
+                                        <TutupSelisihDajam v-if="canEditBiayaAkad(trx)" :url="route('dajam.tutup-selisih', trx.id)" :sisa="Number(trx.pencairan_kpr.belum_dirinci)" />
                                     </span>
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-slate-500 text-xs">Bank</span>
-                                        <span class="text-emerald-300 font-bold min-w-[110px] text-right">{{ nominalLabel(trx.pencairan_kpr?.pencairan_nominal, trx.pencairan_kpr?.pencairan_tercatat, trx.pencairan_kpr?.pencairan_status) }}</span>
-                                        <StatusPembayaranBadge :status="trx.pencairan_kpr?.pencairan_status" />
-                                    </div>
                                 </div>
-                                <div v-if="showPencairanTahap[trx.id]" class="bg-slate-950/40 border-t border-slate-800/60">
-                                    <div v-for="t in trx.pencairan_kpr_tahaps" :key="t.id"
-                                        class="pl-8 pr-3 py-2 text-sm border-b border-slate-800/40 last:border-b-0">
-                                        <span class="text-slate-300 font-medium">{{ formatRp(t.nominal) }}</span>
-                                        <span class="text-slate-500 text-xs ml-2">cair {{ t.tanggal_cair }}</span>
-                                        <span v-if="t.keterangan" class="text-slate-500 text-xs ml-2">· {{ t.keterangan }}</span>
-                                    </div>
-                                    <div v-if="!trx.pencairan_kpr_tahaps?.length" class="pl-8 pr-3 py-2 text-slate-500 text-xs">Belum ada pencairan tercatat.</div>
+                                <div v-if="trx.pencairan_kpr?.dajam_melebihi > 0.5" class="px-3 py-2 border-t border-slate-800/60 bg-rose-500/10 text-rose-300 text-xs">
+                                    ⛔ Rincian Dajam melebihi retensi sebesar {{ formatRp(trx.pencairan_kpr.dajam_melebihi) }}. Periksa nominal item atau tahap pencairan (apakah Total Sudah Cair ikut menghitung Dajam?).
                                 </div>
                             </div>
                         </div>

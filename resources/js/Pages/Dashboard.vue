@@ -11,6 +11,7 @@ const props = defineProps({
     financials: Object,
     piutangJatuhTempo: Object,
     bastTertunda: Array,
+    tindakLanjutBank: { type: Object, default: () => ({ perlu_sbum: 0, dajam_belum_dirinci: 0, dajam_belum_dirinci_rp: 0 }) },
     recentActivities: Array,
     projectsSummary: Array,
     sp3kMonitoring: Array,
@@ -774,6 +775,22 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                         </div>
                     </Link>
                 </div>
+            </div>
+
+            <!-- Tindak lanjut bank: SBUM belum diinput & Dajam belum dirinci -->
+            <div v-if="tindakLanjutBank?.perlu_sbum || tindakLanjutBank?.dajam_belum_dirinci" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Link v-if="tindakLanjutBank.perlu_sbum" :href="route('keuangan.pencairan', { tindak_lanjut: 'perlu_sbum' })"
+                    class="bg-amber-500/10 border border-amber-500/25 rounded-xl px-5 py-4 hover:bg-amber-500/15 transition-colors">
+                    <div class="text-amber-300 font-semibold text-sm">⚠ SBUM belum diinput</div>
+                    <div class="text-slate-200 text-2xl font-bold mt-1">{{ tindakLanjutBank.perlu_sbum }} <span class="text-sm font-normal text-slate-400">transaksi KPR Subsidi sudah akad</span></div>
+                    <div class="text-slate-500 text-xs mt-1">Plafon hitung belum final tanpa SBUM. Klik untuk melihat daftarnya.</div>
+                </Link>
+                <Link v-if="tindakLanjutBank.dajam_belum_dirinci" :href="route('keuangan.pencairan', { tindak_lanjut: 'dajam_belum_dirinci' })"
+                    class="bg-amber-500/10 border border-amber-500/25 rounded-xl px-5 py-4 hover:bg-amber-500/15 transition-colors">
+                    <div class="text-amber-300 font-semibold text-sm">⚠ Dajam belum dirinci</div>
+                    <div class="text-slate-200 text-2xl font-bold mt-1">{{ tindakLanjutBank.dajam_belum_dirinci }} <span class="text-sm font-normal text-slate-400">transaksi · {{ formatRp(tindakLanjutBank.dajam_belum_dirinci_rp) }}</span></div>
+                    <div class="text-slate-500 text-xs mt-1">Retensi Dajam yang belum dirinci Admin Sales. Perlu follow-up ke bank.</div>
+                </Link>
             </div>
 
             <!-- BAST Tertunda -->

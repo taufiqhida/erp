@@ -229,7 +229,7 @@ class KonsumenImportSpec
         }
         if ($kpr) {
             $c[] = ['bank', 'Bank Rekanan KPR', 'w', 'Dropdown master Bank Rekanan.'];
-            $c[] = ['plafon', 'Plafon KPR', 'k', 'Wajib kalau tahap sudah Proses Bank atau lebih.'];
+            $c[] = ['plafon', 'Plafon KPR', 'k', 'Angka plafon dari BANK. Wajib kalau tahap sudah Proses Bank atau lebih. Idealnya sama dengan harga dasar - DP (bila masuk harga jual) - SBUM; kalau berbeda, laporan import memberi peringatan.'];
             $c[] = ['tgl_ajuan', 'Tanggal Pengajuan Bank', 'k', 'Wajib kalau tahap sudah Proses Bank atau lebih.'];
             $c[] = ['sp3k', 'Status SP3K', 'k', 'Wajib kalau tahap sudah SP3K atau lebih.'];
             $c[] = ['tgl_sp3k', 'Tanggal SP3K', 'k', 'Wajib kalau Status SP3K terisi.'];
@@ -237,14 +237,14 @@ class KonsumenImportSpec
             $c[] = ['tum_bayar', 'Tambahan Uang Muka - Terbayar', 'k', 'Isi kalau Plafon KPR turun & sudah dibayar sebagian/semua (Saldo Awal).'];
             $c[] = ['tum_tgl', 'Tambahan Uang Muka - Tgl Terakhir', 'k', 'Wajib kalau Terbayar terisi.'];
             foreach (self::sbumPresets() as $s) {
-                $c[] = ["sbum:{$s}:n", "* SBUM: {$s} - Nominal", 'k', 'KRUSIAL. Nominal kosong = tidak berlaku.'];
+                $c[] = ["sbum:{$s}:n", "* SBUM: {$s} - Nominal", 'k', 'KRUSIAL. Nominal kosong = tidak berlaku. Untuk KPR Subsidi yang sudah akad, isi SBUM (biasanya Rp 4 jt) agar perhitungan plafon lengkap.'];
                 $c[] = ["sbum:{$s}:d", "* SBUM: {$s} - Tgl Cair", 'k', 'Terisi = sudah cair.'];
             }
             foreach (self::dajamPresets() as $d) {
-                $c[] = ["dajam:{$d}:n", "* Dajam: {$d} - Nominal", 'k', 'KRUSIAL. Nominal kosong = tidak berlaku.'];
+                $c[] = ["dajam:{$d}:n", "* Dajam: {$d} - Nominal", 'k', 'KRUSIAL. Nominal kosong = tidak berlaku. Rincian Dajam yang sudah diketahui; sisa retensi yang belum dirinci dihitung otomatis dan ditandai untuk follow-up bank.'];
                 $c[] = ["dajam:{$d}:d", "* Dajam: {$d} - Tgl Cair", 'k', 'Terisi = sudah cair.'];
             }
-            $c[] = ['cair_bayar', 'Pencairan KPR - Total Sudah Cair', 'k', 'Total nominal yang sudah masuk dari bank ke developer (Saldo Awal).'];
+            $c[] = ['cair_bayar', 'Pencairan KPR - Total Sudah Cair', 'k', 'Uang yang SUDAH DITERIMA dari bank (pencairan + KYG), TANPA Dajam dan tanpa SBUM. Dajam yang sudah cair diisi di kolom Dajam (Tgl Cair); retensi Dajam dihitung otomatis = plafon - total pencairan. Total Sudah Cair + total Dajam tidak boleh melebihi Plafon KPR.'];
             $c[] = ['cair_tgl', 'Pencairan KPR - Tgl Terakhir', 'k', 'Wajib kalau Total Sudah Cair terisi.'];
         }
         $c[] = ['tgl_rencana', 'Tanggal Rencana Akad', 'k', 'Wajib kalau tahap sudah Rencana Akad atau lebih.'];

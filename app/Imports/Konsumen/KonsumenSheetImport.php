@@ -362,6 +362,16 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
             $cairBayar = $num('cair_bayar');
             $cairTgl = $dateOf('cair_tgl');
             if ($cairBayar !== null && $cairBayar > 0 && !$cairTgl) $errors[] = 'Pencairan KPR Tgl Terakhir wajib diisi karena Total Sudah Cair terisi.';
+
+            // Total Sudah Cair hanya uang yang diterima di luar Dajam. Kalau ditambah total Dajam melebihi plafon, hampir pasti Total Sudah Cair
+            // sudah ikut menghitung Dajam (terhitung dua kali).
+            if ($cairBayar !== null && $cairBayar > 0 && $plafon !== null) {
+                $totalDajam = (float) collect($dajamItems)->sum('nominal');
+                if ($cairBayar + $totalDajam > $plafon + 1) {
+                    $rp = fn ($n) => 'Rp ' . number_format($n, 0, ',', '.');
+                    $errors[] = "Total Sudah Cair ({$rp($cairBayar)}) + total Dajam ({$rp($totalDajam)}) melebihi Plafon KPR ({$rp($plafon)}). Kemungkinan Total Sudah Cair sudah ikut menghitung Dajam: isi hanya uang yang diterima di luar Dajam, dan Dajam yang sudah cair di kolom Dajam (Tgl Cair).";
+                }
+            }
         }
 
         // ── Rencana Akad / Akad / BAST ──
@@ -601,6 +611,14 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                 if ($breakdown['total_terbayar_konsumen'] >= $breakdown['total_piutang_konsumen']
                     && $breakdown['total_terbayar_bank'] >= $breakdown['total_piutang_bank']) {
                     $trx->update(['status' => 'completed']);
+                }
+
+                // Peringatan (tidak memblokir): plafon import berbeda dari hitungan aplikasi.
+                $pk = $breakdown['pencairan_kpr'] ?? null;
+                if ($pk && $pk['plafon_beda']) {
+                    $rp = fn ($n) => 'Rp ' . number_format($n, 0, ',', '.');
+                    $this->result->warn($this->sheetLabel, $rowNum, "Plafon KPR import {$rp($pk['plafon_disetujui'])} berbeda dari hitungan aplikasi {$rp($pk['plafon_hitung'])} (selisih {$rp(abs($pk['plafon_hitung'] - $pk['plafon_disetujui']))})."
+                        . ($pk['sbum_kosong'] ? ' Biasanya karena SBUM belum diinput.' : ' Periksa kembali angka plafon, harga dasar, DP, dan SBUM.'));
                 }
 
                 $this->result->imported++;

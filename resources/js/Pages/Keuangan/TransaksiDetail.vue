@@ -3,6 +3,7 @@ import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import CatatPembayaran from '@/Components/CatatPembayaran.vue';
 import StatusPembayaranBadge from '@/Components/StatusPembayaranBadge.vue';
+import TutupSelisihDajam from '@/Components/TutupSelisihDajam.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, reactive, computed } from 'vue';
 
@@ -12,6 +13,7 @@ const props = defineProps({
 
 const canManagePembayaran = computed(() => usePage().props.auth.user?.permissions?.includes('manage pembayaran'));
 const canManageKpr = computed(() => usePage().props.auth.user?.permissions?.includes('manage kpr'));
+const canManageRincian = computed(() => usePage().props.auth.user?.permissions?.includes('manage rincian biaya akad'));
 const overrideLock = computed(() => usePage().props.auth.user?.permissions?.includes('override transaction lock'));
 const canPayItem = computed(() => canManagePembayaran.value && (!props.transaksi.is_locked || overrideLock.value));
 const canPayDajamSbum = computed(() => canManageKpr.value && (!props.transaksi.is_locked || overrideLock.value));
@@ -497,6 +499,13 @@ const deleteCicilanLain = async (c) => {
                     <span class="text-slate-500 text-xs">Total: {{ formatRp(transaksi.total_piutang_bank) }}</span>
                 </div>
 
+                <div v-if="transaksi.pencairan_kpr?.perlu_sbum" class="text-amber-300 text-xs bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">
+                    ⚠ SBUM belum diinput. Plafon hitung belum final (KPR Subsidi sudah akad). Item SBUM ditambahkan di tab Konsumen oleh Admin Sales.
+                </div>
+                <div v-if="Number(transaksi.total_terbayar_bank) > Number(transaksi.total_piutang_bank) + 1" class="text-rose-300 text-xs bg-rose-500/10 border border-rose-500/25 rounded-lg px-3 py-2">
+                    ⛔ Uang bank tercatat {{ formatRp(Number(transaksi.total_terbayar_bank) - Number(transaksi.total_piutang_bank)) }} melebihi piutang bank. Biasanya Total Sudah Cair ikut menghitung Dajam; periksa tahap pencairan.
+                </div>
+
                 <div class="rounded-lg border border-slate-800 overflow-hidden">
                     <template v-if="transaksi.is_kpr_subsidi">
                         <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[0.6875rem] font-semibold uppercase tracking-wide">SBUM</div>
@@ -522,39 +531,17 @@ const deleteCicilanLain = async (c) => {
                         <div v-if="!sbumItems.length" class="px-3 py-3 text-center text-slate-500 text-xs">Belum ada item SBUM (dikelola di tab Konsumen).</div>
                     </template>
 
-                    <div class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60 bg-slate-800/30">
-                        <span class="text-slate-300 font-medium">Plafon KPR (Pengajuan)</span>
-                        <div class="text-right">
-                            <span class="text-slate-500 text-xs mr-2">Bank</span>
-                            <span class="text-violet-300 font-semibold">{{ formatRp(transaksi.pencairan_kpr?.plafon_hitung) }}</span>
+                    <div class="px-3 py-2.5 border-t border-slate-800/60 bg-slate-800/30 space-y-0.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-300 font-medium">Plafon KPR <span v-if="transaksi.pencairan_kpr?.plafon_dari_import" class="text-slate-500 text-xs font-normal">· disetujui bank</span><span v-else class="text-slate-500 text-xs font-normal">· hitungan aplikasi</span></span>
+                            <div class="text-right">
+                                <span class="text-slate-500 text-xs mr-2">Bank</span>
+                                <span class="text-violet-300 font-semibold">{{ formatRp(transaksi.pencairan_kpr?.plafon_disetujui) }}</span>
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[0.6875rem] font-semibold uppercase tracking-wide">Dana Jaminan</div>
-                    <div v-for="item in dajamItems" :key="`dajam-${item.id}`"
-                        class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-slate-800/60 text-sm">
-                        <div class="flex-1">
-                            <span class="text-slate-300">{{ item.nama }}</span>
-                            <span class="text-slate-500 text-xs ml-2">Bank</span>
+                        <div v-if="transaksi.pencairan_kpr?.plafon_beda" class="text-amber-400 text-[0.6875rem] text-right">
+                            Hitungan aplikasi {{ formatRp(transaksi.pencairan_kpr.plafon_hitung) }} (harga dasar − DP yang masuk harga jual − SBUM){{ transaksi.pencairan_kpr.sbum_kosong ? ' — SBUM belum diinput' : '' }}
                         </div>
-                        <div class="flex items-center gap-3 flex-shrink-0">
-                            <span class="text-slate-200 font-medium min-w-[110px] text-right">{{ nominalLabel(item.nominal, item.jumlah_dibayar, item.status) }}</span>
-                            <span class="w-20 flex justify-center"><StatusPembayaranBadge :status="item.status" /></span>
-                            <span class="w-36 flex justify-end">
-                                <CatatPembayaran
-                                    :url="route('rincian-biaya-akad.bayar', item.id)"
-                                    :delete-url="route('rincian-biaya-akad.bayar.destroy', item.id)"
-                                    :status="item.status" :tanggal-bayar="item.tanggal_bayar"
-                                    :default-jumlah="item.nominal" :paid-jumlah="item.jumlah_dibayar" :can-manage="canPayDajamSbum"
-                                    :require-note="pencairanBelumAkad && item.status === 'belum_bayar'" :warning-message="PENCAIRAN_WARNING" />
-                            </span>
-                        </div>
-                    </div>
-                    <div v-if="!dajamItems.length" class="px-3 py-3 text-center text-slate-500 text-xs">Belum ada item Dana Jaminan (dikelola di tab Konsumen).</div>
-
-                    <div v-if="tambahanUmRow" class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60">
-                        <span class="text-slate-400">(−) Turun Plafon <span class="text-slate-500 text-xs">— lihat baris Tambahan Uang Muka di Kartu Piutang</span></span>
-                        <span class="text-amber-300 font-medium">{{ formatRp(tambahanUmRow.nominal) }}</span>
                     </div>
 
                     <div class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60 bg-emerald-500/10 cursor-pointer hover:bg-emerald-500/15 transition-colors"
@@ -564,11 +551,12 @@ const deleteCicilanLain = async (c) => {
                                 :class="['w-3 h-3 transition-transform flex-shrink-0', showPencairanTahap ? 'rotate-90' : '']">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                             </svg>
-                            Pencairan KPR Netto
+                            Pencairan KPR
                         </span>
                         <div class="flex items-center gap-3">
                             <span class="text-slate-500 text-xs">Bank</span>
-                            <span class="text-emerald-300 font-bold min-w-[110px] text-right">{{ nominalLabel(transaksi.pencairan_kpr?.pencairan_nominal, transaksi.pencairan_kpr?.pencairan_tercatat, transaksi.pencairan_kpr?.pencairan_status) }}</span>
+                            <span class="text-emerald-300 font-bold text-right">{{ formatRp(transaksi.pencairan_kpr?.pencairan_tercatat) }}
+                                <span class="text-slate-500 text-xs font-normal">dari {{ formatRp(transaksi.pencairan_kpr?.plafon_disetujui) }} ({{ transaksi.pencairan_kpr?.persen_pencairan ?? 0 }}%)</span></span>
                             <span class="w-20 flex justify-center"><StatusPembayaranBadge :status="transaksi.pencairan_kpr?.pencairan_status" /></span>
                         </div>
                     </div>
@@ -633,6 +621,50 @@ const deleteCicilanLain = async (c) => {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    <div v-if="tambahanUmRow" class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60">
+                        <span class="text-slate-400">(−) Turun Plafon <span class="text-slate-500 text-xs">— lihat baris Tambahan Uang Muka di Kartu Piutang</span></span>
+                        <span class="text-amber-300 font-medium">{{ formatRp(tambahanUmRow.nominal) }}</span>
+                    </div>
+
+                    <div v-if="transaksi.pencairan_kpr?.retensi > 0 || dajamItems.length" class="flex items-center justify-between px-3 py-2.5 border-t border-slate-800/60 bg-amber-500/5">
+                        <span class="text-amber-200 font-medium">Retensi Dajam <span class="text-slate-500 text-xs font-normal">ditahan bank<template v-if="transaksi.pencairan_kpr?.retensi_aktif"> · = plafon − pencairan</template></span></span>
+                        <span class="text-amber-200 font-semibold">{{ formatRp(transaksi.pencairan_kpr?.retensi) }}</span>
+                    </div>
+                    <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[0.6875rem] font-semibold uppercase tracking-wide flex justify-between">
+                        <span>Rincian Dajam</span>
+                        <span class="normal-case font-normal">cair {{ formatRp(transaksi.pencairan_kpr?.dajam_cair) }} / dirinci {{ formatRp(transaksi.pencairan_kpr?.dajam_dirinci) }}</span>
+                    </div>
+                    <div v-for="item in dajamItems" :key="`dajam-${item.id}`"
+                        class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-slate-800/60 text-sm">
+                        <div class="flex-1">
+                            <span class="text-slate-300">{{ item.nama }}</span>
+                            <span class="text-slate-500 text-xs ml-2">Bank</span>
+                        </div>
+                        <div class="flex items-center gap-3 flex-shrink-0">
+                            <span class="text-slate-200 font-medium min-w-[110px] text-right">{{ nominalLabel(item.nominal, item.jumlah_dibayar, item.status) }}</span>
+                            <span class="w-20 flex justify-center"><StatusPembayaranBadge :status="item.status" /></span>
+                            <span class="w-36 flex justify-end">
+                                <CatatPembayaran
+                                    :url="route('rincian-biaya-akad.bayar', item.id)"
+                                    :delete-url="route('rincian-biaya-akad.bayar.destroy', item.id)"
+                                    :status="item.status" :tanggal-bayar="item.tanggal_bayar"
+                                    :default-jumlah="item.nominal" :paid-jumlah="item.jumlah_dibayar" :can-manage="canPayDajamSbum"
+                                    :require-note="pencairanBelumAkad && item.status === 'belum_bayar'" :warning-message="PENCAIRAN_WARNING" />
+                            </span>
+                        </div>
+                    </div>
+                    <div v-if="!dajamItems.length" class="px-3 py-3 text-center text-slate-500 text-xs">Belum ada item Dana Jaminan (dikelola di tab Konsumen).</div>
+
+                    <div v-if="transaksi.pencairan_kpr?.belum_dirinci > 0.5" class="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 border-t border-slate-800/60 bg-amber-500/10">
+                        <span class="text-amber-300 text-sm">⚠ Belum dirinci <span class="text-amber-400/80 text-xs">— perlu follow-up bank</span></span>
+                        <span class="flex items-center gap-3">
+                            <span class="text-amber-300 font-semibold">{{ formatRp(transaksi.pencairan_kpr.belum_dirinci) }}</span>
+                            <TutupSelisihDajam v-if="canPayDajamSbum || canManageRincian" :url="route('dajam.tutup-selisih', transaksi.id)" :sisa="Number(transaksi.pencairan_kpr.belum_dirinci)" />
+                        </span>
+                    </div>
+                    <div v-if="transaksi.pencairan_kpr?.dajam_melebihi > 0.5" class="px-3 py-2 border-t border-slate-800/60 bg-rose-500/10 text-rose-300 text-xs">
+                        ⛔ Rincian Dajam melebihi retensi sebesar {{ formatRp(transaksi.pencairan_kpr.dajam_melebihi) }}. Periksa nominal item atau tahap pencairan (apakah Total Sudah Cair ikut menghitung Dajam?).
                     </div>
                 </div>
             </div>

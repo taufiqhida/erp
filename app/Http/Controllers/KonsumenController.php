@@ -592,6 +592,7 @@ class KonsumenController extends Controller
         ]);
 
         $preset = DajamSbumPreset::findOrFail($validated['dajam_sbum_preset_id']);
+        if ($preset->kategori === 'dajam') $this->pastikanDajamMuat($transaksi, (float) $validated['nominal']);
 
         $transaksi->rincianBiayaAkad()->create([
             'dajam_sbum_preset_id' => $preset->id,
@@ -603,6 +604,24 @@ class KonsumenController extends Controller
         return back()->with('success', 'Item biaya akad berhasil ditambahkan.');
     }
 
+    /**
+     * Item Dajam tidak boleh melebihi retensi (plafon - pencairan) yang belum dirinci. Berlaku sejak ada pencairan tercatat; sebelum itu
+     * retensi belum diketahui sehingga item bebas diinput (perilaku lama).
+     */
+    private function pastikanDajamMuat(KavlingKonsumen $kk, float $tambahan): void
+    {
+        if ($tambahan <= 0) return;
+        $pk = $kk->ringkasPencairan();
+        if (!$pk || !$pk['retensi_aktif']) return;
+
+        abort_if(
+            $tambahan > $pk['belum_dirinci'] + 0.5,
+            422,
+            'Rincian Dajam melebihi retensi: sisa yang belum dirinci hanya Rp ' . number_format($pk['belum_dirinci'], 0, ',', '.')
+                . ' (retensi Rp ' . number_format($pk['retensi'], 0, ',', '.') . '). Periksa nominal item atau tahap pencairan yang tercatat.'
+        );
+    }
+
     public function updateRincianBiayaAkad(Request $request, KavlingKonsumenDajamSbum $rincian): RedirectResponse
     {
         $this->authorizeProjectAccess($rincian->kavlingKonsumen->kavling->project);
@@ -612,6 +631,8 @@ class KonsumenController extends Controller
         $validated = $request->validate([
             'nominal' => 'required|numeric|min:0',
         ]);
+
+        if ($rincian->kategori === 'dajam') $this->pastikanDajamMuat($rincian->kavlingKonsumen, (float) $validated['nominal'] - (float) $rincian->nominal);
 
         $rincian->update($validated);
 

@@ -269,6 +269,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('cicilan-pembayaran.update');
     Route::delete('cicilan-pembayaran/{pembayaran}', [KeuanganController::class, 'destroyCicilanKonsumen'])
         ->name('cicilan-pembayaran.destroy');
+    Route::post('kavling-konsumen/{kk}/dajam/tutup-selisih', [KeuanganController::class, 'tutupSelisihDajam'])
+        ->name('dajam.tutup-selisih');
     Route::post('kavling-konsumen/{kk}/pencairan-kpr/tahap', [KeuanganController::class, 'storePencairanKprTahap'])
         ->name('pencairan-kpr.tahap.store');
     Route::patch('pencairan-kpr/tahap/{tahap}', [KeuanganController::class, 'updatePencairanKprTahap'])
