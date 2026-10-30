@@ -234,13 +234,33 @@ class RetensiDajamTest extends TestCase
         $this->assertSame(0.0, (float) $this->pk()['belum_dirinci']);
     }
 
-    public function test_item_dajam_bebas_sebelum_ada_pencairan(): void
+    public function test_sebelum_pencairan_dajam_boleh_diinput_tapi_tidak_boleh_melebihi_plafon(): void
+    {
+        $this->sbum();                                                  // plafon 160.340.000
+        $sales = $this->user('admin_sales');
+
+        $this->actingAs($sales)->post(route('konsumens.biaya-akad.store', $this->trx), ['dajam_sbum_preset_id' => $this->sertifikat->id, 'nominal' => 5000000])
+            ->assertSessionHasNoErrors()->assertSessionMissing('warning');
+        $this->assertSame(5000000.0, (float) $this->pk()['retensi']);
+
+        $this->actingAs($sales)->post(route('konsumens.biaya-akad.store', $this->trx), ['dajam_sbum_preset_id' => $this->air->id, 'nominal' => 160000000])->assertStatus(422);
+        $this->assertSame(1, $this->trx->rincianBiayaAkad()->where('kategori', 'dajam')->count());
+    }
+
+    public function test_sebelum_pencairan_dajam_di_atas_sepuluh_persen_plafon_diberi_peringatan_bukan_ditolak(): void
     {
         $this->sbum();
+        $sales = $this->user('admin_sales');
 
-        $this->actingAs($this->user('admin_sales'))->post(route('konsumens.biaya-akad.store', $this->trx), ['dajam_sbum_preset_id' => $this->sertifikat->id, 'nominal' => 999000000])->assertSessionHasNoErrors();
+        $this->actingAs($sales)->post(route('konsumens.biaya-akad.store', $this->trx), ['dajam_sbum_preset_id' => $this->sertifikat->id, 'nominal' => 50000000])
+            ->assertSessionHasNoErrors()->assertSessionHas('success')->assertSessionHas('warning');
+        $this->assertSame(110340000.0, (float) $this->pk()['pencairan_nominal']);
 
-        $this->assertSame(1, $this->trx->rincianBiayaAkad()->count() - 1);
+        // ubah nominal ke angka wajar: peringatan hilang
+        $item = $this->trx->rincianBiayaAkad()->where('kategori', 'dajam')->first();
+        $this->actingAs($sales)->patch(route('konsumens.biaya-akad.update', $item), ['nominal' => 5000000])->assertSessionHasNoErrors()->assertSessionMissing('warning');
+        // ubah melebihi plafon: ditolak
+        $this->actingAs($sales)->patch(route('konsumens.biaya-akad.update', $item), ['nominal' => 170000000])->assertStatus(422);
     }
 
     public function test_tutup_selisih_membuat_item_penyesuaian_dan_menutup_sisa(): void

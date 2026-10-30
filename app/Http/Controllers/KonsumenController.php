@@ -592,7 +592,7 @@ class KonsumenController extends Controller
         ]);
 
         $preset = DajamSbumPreset::findOrFail($validated['dajam_sbum_preset_id']);
-        if ($preset->kategori === 'dajam') $this->pastikanDajamMuat($transaksi, (float) $validated['nominal']);
+        $peringatan = $preset->kategori === 'dajam' ? $this->pastikanDajamMuat($transaksi, (float) $validated['nominal']) : null;
 
         $transaksi->rincianBiayaAkad()->create([
             'dajam_sbum_preset_id' => $preset->id,
@@ -601,18 +601,36 @@ class KonsumenController extends Controller
             'nominal'              => $validated['nominal'],
         ]);
 
-        return back()->with('success', 'Item biaya akad berhasil ditambahkan.');
+        return back()->with('success', 'Item biaya akad berhasil ditambahkan.')->with('warning', $peringatan);
     }
 
+    /** Batas kewajaran total Dajam terhadap plafon sebelum pencairan masuk; di atasnya hanya diberi peringatan (bank biasanya menahan jauh lebih kecil). */
+    private const DAJAM_WAJAR_PERSEN = 10;
+
     /**
-     * Item Dajam tidak boleh melebihi retensi (plafon - pencairan) yang belum dirinci. Berlaku sejak ada pencairan tercatat; sebelum itu
-     * retensi belum diketahui sehingga item bebas diinput (perilaku lama).
+     * Item Dajam tidak boleh melebihi retensi (plafon - pencairan) yang belum dirinci. Berlaku sejak ada pencairan tercatat. Sebelum itu
+     * retensi belum diketahui bank: total Dajam hanya ditolak bila melebihi plafon, dan diberi peringatan bila di atas DAJAM_WAJAR_PERSEN
+     * plafon (dikembalikan sebagai teks peringatan).
      */
-    private function pastikanDajamMuat(KavlingKonsumen $kk, float $tambahan): void
+    private function pastikanDajamMuat(KavlingKonsumen $kk, float $tambahan): ?string
     {
-        if ($tambahan <= 0) return;
+        if ($tambahan <= 0) return null;
         $pk = $kk->ringkasPencairan();
-        if (!$pk || !$pk['retensi_aktif']) return;
+        if (!$pk) return null;
+
+        if (!$pk['retensi_aktif']) {
+            $total = $pk['dajam_dirinci'] + $tambahan;
+            $plafon = $pk['plafon_disetujui'];
+            abort_if(
+                $total > $plafon + 0.5,
+                422,
+                'Total Dajam Rp ' . number_format($total, 0, ',', '.') . ' melebihi plafon KPR Rp ' . number_format($plafon, 0, ',', '.') . '. Periksa nominal yang diinput.'
+            );
+
+            return $plafon > 0 && $total > $plafon * self::DAJAM_WAJAR_PERSEN / 100
+                ? 'Total Dajam Rp ' . number_format($total, 0, ',', '.') . ' lebih dari ' . self::DAJAM_WAJAR_PERSEN . '% plafon KPR. Pastikan nominalnya benar: sisa pencairan yang diharapkan ikut mengecil.'
+                : null;
+        }
 
         abort_if(
             $tambahan > $pk['belum_dirinci'] + 0.5,
@@ -620,6 +638,8 @@ class KonsumenController extends Controller
             'Rincian Dajam melebihi retensi: sisa yang belum dirinci hanya Rp ' . number_format($pk['belum_dirinci'], 0, ',', '.')
                 . ' (retensi Rp ' . number_format($pk['retensi'], 0, ',', '.') . '). Periksa nominal item atau tahap pencairan yang tercatat.'
         );
+
+        return null;
     }
 
     public function updateRincianBiayaAkad(Request $request, KavlingKonsumenDajamSbum $rincian): RedirectResponse
@@ -632,11 +652,11 @@ class KonsumenController extends Controller
             'nominal' => 'required|numeric|min:0',
         ]);
 
-        if ($rincian->kategori === 'dajam') $this->pastikanDajamMuat($rincian->kavlingKonsumen, (float) $validated['nominal'] - (float) $rincian->nominal);
+        $peringatan = $rincian->kategori === 'dajam' ? $this->pastikanDajamMuat($rincian->kavlingKonsumen, (float) $validated['nominal'] - (float) $rincian->nominal) : null;
 
         $rincian->update($validated);
 
-        return back()->with('success', 'Nominal biaya akad berhasil diperbarui.');
+        return back()->with('success', 'Nominal biaya akad berhasil diperbarui.')->with('warning', $peringatan);
     }
 
     public function destroyRincianBiayaAkad(KavlingKonsumenDajamSbum $rincian): RedirectResponse
