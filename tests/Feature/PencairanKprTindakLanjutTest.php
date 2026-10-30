@@ -132,6 +132,23 @@ class PencairanKprTindakLanjutTest extends TestCase
         $this->assertEquals(8000000, $t['dajam_belum_dirinci_rp']);                       // 5 jt + 3 jt
     }
 
+    public function test_dashboard_menampilkan_selisih_bank_terpisah_dan_tidak_menghitungnya_sebagai_piutang(): void
+    {
+        $a = $this->trx();
+        $this->tahap($a, 155340000);
+        $this->dajam($a, 4995000, 4995000);
+        $before = $this->props('dashboard')['financials'];
+        $this->assertEquals(0, $before['penyesuaian_bank']);
+
+        $this->actingAs($this->admin)->withSession(['current_project_id' => $this->project->id])
+            ->post(route('dajam.tutup-selisih', $a), ['catatan' => 'Pembulatan bank'])->assertSessionHas('success');
+
+        $after = $this->props('dashboard')['financials'];
+        $this->assertEquals(5000, $after['penyesuaian_bank']);
+        $this->assertEquals($before['piutang_bank'] - 5000, $after['piutang_bank']);
+        $this->assertEquals(4000000, $after['sisa_piutang_bank']);                        // tinggal SBUM
+    }
+
     public function test_transaksi_selesai_atau_belum_akad_tidak_memicu_peringatan(): void
     {
         $belumAkad = $this->trx(['status_penjualan' => 'pemberkasan'], denganSbum: false);

@@ -622,11 +622,15 @@ class KavlingKonsumen extends Model
             $dajamItems = $this->rincianBiayaAkad->where('kategori', 'dajam');
             $dajamDirinci = (float) $dajamItems->sum('nominal');
             $dajamCair = (float) $dajamItems->filter(fn ($i) => $i->pembayaran)->sum(fn ($i) => $i->pembayaran->jumlah);
+            // "Selisih / penyesuaian bank": sisa retensi yang ditutup (tidak akan dirinci/ditagih lagi). Dihitung sebagai sudah dirinci, tetapi
+            // BUKAN piutang bank dan bukan uang masuk.
+            $selisihBank = (float) $this->rincianBiayaAkad->where('kategori', 'penyesuaian')->sum('nominal');
+            $terurai = $dajamDirinci + $selisihBank;
             $retensiAktif = $pencairanTercatat > 0;
-            $retensiRule = $retensiAktif ? max(0, $plafonDisetujui - $pencairanTercatat) : $dajamDirinci;
-            $retensi = max($retensiRule, $dajamDirinci);                       // item yang melebihi retensi tetap terhitung sebagai piutang
-            $belumDirinci = max(0, $retensiRule - $dajamDirinci);
-            $dajamMelebihi = max(0, $dajamDirinci - $retensiRule);
+            $retensiRule = $retensiAktif ? max(0, $plafonDisetujui - $pencairanTercatat) : $terurai;
+            $retensi = max($retensiRule, $terurai);                            // item yang melebihi retensi tetap terhitung sebagai piutang
+            $belumDirinci = max(0, $retensiRule - $terurai);
+            $dajamMelebihi = max(0, $terurai - $retensiRule);
             $pencairanNominal = max(0, $plafonDisetujui - $retensi);
 
             // Pencairan dianggap lunas bila yang diterima sudah menutup bagian netto DAN retensi sudah terurai habis ke item Dajam.
@@ -650,9 +654,10 @@ class KavlingKonsumen extends Model
                 'retensi_aktif'      => $retensiAktif,
                 'retensi'            => $retensi,
                 'dajam_dirinci'      => $dajamDirinci,
+                'selisih_bank'       => $selisihBank,
                 'dajam_cair'         => $dajamCair,
                 'belum_dirinci'      => $belumDirinci,
-                'belum_cair'         => max(0, $retensi - $dajamCair),
+                'belum_cair'         => max(0, $retensi - $selisihBank - $dajamCair),
                 'dajam_melebihi'     => $dajamMelebihi,
                 'sbum_kosong'        => $sbumKosong,
                 'perlu_sbum'         => $sbumKosong && $sudahAkad,
@@ -732,7 +737,8 @@ class KavlingKonsumen extends Model
         $totalTerbayarBank = (float) $bankItems->filter(fn($item) => $item->pembayaran)->sum(fn($item) => $item->pembayaran->jumlah);
         if ($isKpr) {
             // Dajam sebagai piutang bank = retensi (item yang sudah dirinci + sisa yang belum dirinci), bukan hanya jumlah item.
-            $totalPiutangBank = (float) $this->rincianBiayaAkad->where('kategori', 'sbum')->sum('nominal') + $pencairanKpr['retensi'] + $pencairanKpr['pencairan_nominal'];
+            // Selisih bank yang sudah ditutup bukan lagi tagihan ke bank.
+            $totalPiutangBank = (float) $this->rincianBiayaAkad->where('kategori', 'sbum')->sum('nominal') + $pencairanKpr['retensi'] - $pencairanKpr['selisih_bank'] + $pencairanKpr['pencairan_nominal'];
             $totalTerbayarBank += $pencairanKpr['pencairan_tercatat'];
         }
 

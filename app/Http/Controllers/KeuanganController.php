@@ -890,6 +890,7 @@ class KeuanganController extends Controller
         $kk = $item->kavlingKonsumen;
         $this->authorizeProjectAccess($kk->kavling->project);
         abort_unless(Auth::user()->can('manage kpr'), 403);
+        abort_unless(in_array($item->kategori, ['sbum', 'dajam'], true), 422, 'Selisih / penyesuaian bank bukan tagihan, tidak bisa dicatat pembayarannya.');
         $this->assertTransactionEditable($kk, 'Catat pembayaran ' . $item->kategori);
 
         // Soft gate: pencairan SBUM/Dana Jaminan (uang dari bank/pemerintah) normalnya
@@ -967,7 +968,7 @@ class KeuanganController extends Controller
 
         $sisa = round($pk['belum_dirinci'], 2);
         DB::transaction(function () use ($kk, $sisa, $validated, $user) {
-            $kk->rincianBiayaAkad()->create(['dajam_sbum_preset_id' => null, 'nama' => 'Selisih / penyesuaian bank', 'kategori' => 'dajam', 'nominal' => $sisa]);
+            $kk->rincianBiayaAkad()->create(['dajam_sbum_preset_id' => null, 'nama' => 'Selisih / penyesuaian bank', 'kategori' => 'penyesuaian', 'nominal' => $sisa, 'status' => 'lunas']);
             \App\Models\CatatanTransaksi::tulis($kk, 'booking', 'Selisih retensi Dajam Rp ' . number_format($sisa, 0, ',', '.') . ' ditutup sebagai penyesuaian bank. Alasan: ' . trim($validated['catatan']), 'Tutup selisih Dajam', $user);
             activity('transaksi')->causedBy($user)->performedOn($kk)->withProperties(['nominal' => $sisa, 'alasan' => $validated['catatan']])->log('Selisih retensi Dajam ditutup');
         });

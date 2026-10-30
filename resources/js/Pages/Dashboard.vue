@@ -365,6 +365,10 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                                 <span class="text-slate-400">{{ item.nama }}</span>
                                 <span class="text-slate-300">{{ formatRp(item.terbayar) }} / {{ formatRp(item.nominal) }}</span>
                             </div>
+                            <div v-if="financials?.penyesuaian_bank > 0" class="flex items-center justify-between text-xs pt-1.5 border-t border-slate-800/70" title="Sisa retensi Dajam yang ditutup (tidak ditagih lagi). Tidak termasuk piutang bank.">
+                                <span class="text-slate-500">Selisih / penyesuaian bank <span class="text-slate-600">(dihapuskan)</span></span>
+                                <span class="text-slate-400">{{ formatRp(financials.penyesuaian_bank) }}</span>
+                            </div>
                             <div v-if="!financials?.piutang_bank_rincian?.length" class="text-slate-500 text-xs">Tidak ada rincian.</div>
                         </div>
                     </div>

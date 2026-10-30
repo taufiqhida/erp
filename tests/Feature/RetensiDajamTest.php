@@ -273,11 +273,49 @@ class RetensiDajamTest extends TestCase
 
         $item = $this->trx->rincianBiayaAkad()->where('nama', 'Selisih / penyesuaian bank')->firstOrFail();
         $this->assertEquals(1000, $item->nominal);
-        $this->assertNull($item->dajam_sbum_preset_id);                  // tanpa kolom/preset baru
+        $this->assertNull($item->dajam_sbum_preset_id);                  // tanpa preset
+        $this->assertSame('penyesuaian', $item->kategori);               // kategori sendiri, bukan Dajam
         $pk = $this->pk();
         $this->assertEquals(0, $pk['belum_dirinci']);
         $this->assertEquals(5000000, $pk['retensi']);
+        $this->assertEquals(1000, $pk['selisih_bank']);
+        $this->assertEquals(4999000, $pk['dajam_dirinci']);              // Dajam asli tidak tercampur selisih
         $this->assertSame('lunas', $pk['pencairan_status']);
+    }
+
+    public function test_selisih_bank_dihapuskan_dari_piutang_bank_dan_bukan_uang_masuk(): void
+    {
+        $this->sbum();
+        $this->tahap(155340000);
+        $this->dajam($this->sertifikat, 4995000, 4995000);              // Dajam cair penuh, sisa Rp 5.000 tidak akan dirinci
+        $sebelum = $this->trx->fresh()->kartuPiutangBreakdown();
+        $this->assertEquals(164340000, $sebelum['total_piutang_bank']);  // SBUM 4 jt + plafon 160,34 jt
+        $this->assertEquals(5000, $sebelum['pencairan_kpr']['belum_dirinci']);
+
+        $this->actingAs($this->user('admin_sales'))->post(route('dajam.tutup-selisih', $this->trx), ['catatan' => 'Pembulatan bank'])->assertSessionHas('success');
+
+        $sesudah = $this->trx->fresh()->kartuPiutangBreakdown();
+        $this->assertEquals(164335000, $sesudah['total_piutang_bank']);  // selisih tidak lagi ditagih
+        $this->assertEquals(155340000 + 4995000, $sesudah['total_terbayar_bank']);
+        $this->assertEquals(4000000, $sesudah['total_piutang_bank'] - $sesudah['total_terbayar_bank']);   // tinggal SBUM
+        $this->assertEquals(0, $sesudah['pencairan_kpr']['belum_cair']);
+    }
+
+    public function test_selisih_bank_tidak_bisa_dibayar_atau_diubah_nominalnya(): void
+    {
+        $this->sbum();
+        $this->tahap(155340000);
+        $this->dajam($this->sertifikat, 4999000);
+        $sales = $this->user('admin_sales');
+        $this->actingAs($sales)->post(route('dajam.tutup-selisih', $this->trx), ['catatan' => 'Biaya administrasi bank']);
+        $item = $this->trx->rincianBiayaAkad()->where('kategori', 'penyesuaian')->firstOrFail();
+
+        $this->actingAs($this->user('admin_keuangan'))->post(route('rincian-biaya-akad.bayar', $item), ['jumlah' => 1000, 'tanggal_bayar' => '2026-10-20'])->assertStatus(422);
+        $this->actingAs($sales)->patch(route('konsumens.biaya-akad.update', $item), ['nominal' => 500])->assertStatus(422);
+
+        // dihapus = selisih dibuka kembali
+        $this->actingAs($sales)->delete(route('konsumens.biaya-akad.destroy', $item));
+        $this->assertEquals(1000, $this->pk()['belum_dirinci']);
     }
 
     public function test_tutup_selisih_wajib_catatan_dan_ditolak_bila_tidak_ada_sisa(): void

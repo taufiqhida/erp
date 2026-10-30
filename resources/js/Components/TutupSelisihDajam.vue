@@ -31,7 +31,7 @@ const kirim = () => {
     <span class="inline-flex flex-col items-end gap-1.5">
         <button v-if="!buka" type="button" class="px-2 py-1 text-xs text-slate-400 hover:text-slate-200 border border-slate-700 rounded-lg" @click="buka = true">Tutup selisih</button>
         <span v-else class="flex flex-col items-end gap-1.5">
-            <span class="text-slate-400 text-[0.6875rem] max-w-xs text-right">Sisa {{ rp(sisa) }} dicatat sebagai item "Selisih / penyesuaian bank".</span>
+            <span class="text-slate-400 text-[0.6875rem] max-w-xs text-right">Sisa {{ rp(sisa) }} ditutup sebagai "Selisih / penyesuaian bank": dihapuskan dari piutang bank, bukan uang masuk.</span>
             <input v-model="catatan" type="text" placeholder="Alasan (wajib), mis. biaya administrasi bank"
                 class="w-64 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
             <span v-if="galat" class="text-rose-400 text-[0.6875rem]">{{ galat }}</span>

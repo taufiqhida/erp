@@ -117,7 +117,7 @@ class DashboardController extends Controller
         // jadi hasilnya di-cache per (cakupan user/proyek) dan otomatis kedaluwarsa begitu
         // ada perubahan keuangan — lihat FinanceCache::bump() yang dipanggil AppServiceProvider.
         $cacheScope = ($isGlobal ? 'all' : 'u' . $user->id) . ':p' . ($projectId ?: 'all');
-        $ringkasan = FinanceCache::remember('dashboard:ringkasan:v2:' . $cacheScope, function () use ($activeBase) {
+        $ringkasan = FinanceCache::remember('dashboard:ringkasan:v3:' . $cacheScope, function () use ($activeBase) {
             $activeTransaksi = $activeBase()->with([
                 'konsumen:id,nama', 'kavling.project:id,nama', 'skemaDpPreset', 'pembayarans',
                 'jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans',
@@ -135,6 +135,7 @@ class DashboardController extends Controller
             $piutangTotals = ['piutang_konsumen' => 0.0, 'terbayar_konsumen' => 0.0, 'piutang_bank' => 0.0, 'terbayar_bank' => 0.0];
             $piutangKonsumenByNama = [];
             $piutangBankByNama = [];
+            $penyesuaianBank = 0.0;
 
             foreach ($activeTransaksi as $kk) {
                 $promoHargaJual = (float) $kk->diskon_nominal;
@@ -174,6 +175,7 @@ class DashboardController extends Controller
                         $piutangBankByNama[$label]['nominal']  += (float) $items->sum('nominal');
                         $piutangBankByNama[$label]['terbayar'] += (float) $items->filter(fn($i) => $i->pembayaran)->sum(fn($i) => $i->pembayaran->jumlah);
                     }
+                    $penyesuaianBank += (float) $kk->rincianBiayaAkad->where('kategori', 'penyesuaian')->sum('nominal');
                     if ($breakdown['pencairan_kpr']) {
                         $piutangBankByNama['Pencairan KPR'] ??= ['nominal' => 0.0, 'terbayar' => 0.0];
                         $piutangBankByNama['Pencairan KPR']['nominal']  += $breakdown['pencairan_kpr']['pencairan_nominal'];
@@ -182,7 +184,7 @@ class DashboardController extends Controller
                 }
             }
 
-            return compact('totalPendapatan', 'nilaiPromo', 'nilaiTransaksiBreakdown', 'piutangTotals', 'piutangKonsumenByNama', 'piutangBankByNama');
+            return compact('totalPendapatan', 'nilaiPromo', 'nilaiTransaksiBreakdown', 'piutangTotals', 'piutangKonsumenByNama', 'piutangBankByNama', 'penyesuaianBank');
         });
         extract($ringkasan);
 
@@ -216,6 +218,7 @@ class DashboardController extends Controller
             'terbayar_bank'          => $piutangTotals['terbayar_bank'],
             'sisa_piutang_bank'      => max(0, $piutangTotals['piutang_bank'] - $piutangTotals['terbayar_bank']),
             'piutang_bank_rincian'   => $toBreakdownList($piutangBankByNama),
+            'penyesuaian_bank'       => $penyesuaianBank,
         ];
 
         // ── Piutang jatuh tempo (cicilan lewat tanggal jatuh tempo, belum lunas) ──

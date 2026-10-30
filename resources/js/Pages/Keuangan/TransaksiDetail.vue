@@ -39,6 +39,7 @@ const nominalLabel = (nominal, dibayar, status) => status === 'sebagian' && diba
 
 const sbumItems = computed(() => (props.transaksi.rincian_biaya_akad || []).filter(i => i.kategori === 'sbum'));
 const dajamItems = computed(() => (props.transaksi.rincian_biaya_akad || []).filter(i => i.kategori === 'dajam'));
+const selisihItems = computed(() => (props.transaksi.rincian_biaya_akad || []).filter(i => i.kategori === 'penyesuaian'));
 
 // Soft gate: pencairan bank (SBUM/Dana Jaminan/tahap KPR) normalnya baru terjadi
 // setelah akad. Belum akad tetap bisa dicatat, tapi CatatPembayaran & form tahap
@@ -633,7 +634,7 @@ const deleteCicilanLain = async (c) => {
                     </div>
                     <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[0.6875rem] font-semibold uppercase tracking-wide flex justify-between">
                         <span>Rincian Dajam</span>
-                        <span class="normal-case font-normal">cair {{ formatRp(transaksi.pencairan_kpr?.dajam_cair) }} / dirinci {{ formatRp(transaksi.pencairan_kpr?.dajam_dirinci) }}</span>
+                        <span class="normal-case font-normal">cair {{ formatRp(transaksi.pencairan_kpr?.dajam_cair) }} / dirinci {{ formatRp((transaksi.pencairan_kpr?.dajam_dirinci ?? 0) + (transaksi.pencairan_kpr?.selisih_bank ?? 0)) }}</span>
                     </div>
                     <div v-for="item in dajamItems" :key="`dajam-${item.id}`"
                         class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-slate-800/60 text-sm">
@@ -654,7 +655,14 @@ const deleteCicilanLain = async (c) => {
                             </span>
                         </div>
                     </div>
-                    <div v-if="!dajamItems.length" class="px-3 py-3 text-center text-slate-500 text-xs">Belum ada item Dana Jaminan (dikelola di tab Konsumen).</div>
+                    <div v-if="!dajamItems.length && !selisihItems.length" class="px-3 py-3 text-center text-slate-500 text-xs">Belum ada item Dana Jaminan (dikelola di tab Konsumen).</div>
+                    <div v-for="item in selisihItems" :key="`selisih-${item.id}`" class="flex items-center justify-between gap-2 px-3 py-2 border-t border-slate-800/60 text-sm">
+                        <div class="flex-1">
+                            <span class="text-slate-400">{{ item.nama }}</span>
+                            <span class="text-slate-500 text-xs ml-2">dihapuskan, bukan piutang bank</span>
+                        </div>
+                        <span class="text-slate-400 font-medium">{{ formatRp(item.nominal) }}</span>
+                    </div>
 
                     <div v-if="transaksi.pencairan_kpr?.belum_dirinci > 0.5" class="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 border-t border-slate-800/60 bg-amber-500/10">
                         <span class="text-amber-300 text-sm">⚠ Belum dirinci <span class="text-amber-400/80 text-xs">— perlu follow-up bank</span></span>

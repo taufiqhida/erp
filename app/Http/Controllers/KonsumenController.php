@@ -647,6 +647,7 @@ class KonsumenController extends Controller
         $this->authorizeProjectAccess($rincian->kavlingKonsumen->kavling->project);
         abort_unless(Auth::user()->can('manage rincian biaya akad'), 403);
         $this->assertTransactionEditable($rincian->kavlingKonsumen, 'Update nominal biaya akad');
+        abort_if($rincian->kategori === 'penyesuaian', 422, 'Selisih / penyesuaian bank tidak bisa diubah nominalnya. Hapus, lalu tutup selisih lagi bila perlu.');
 
         $validated = $request->validate([
             'nominal' => 'required|numeric|min:0',

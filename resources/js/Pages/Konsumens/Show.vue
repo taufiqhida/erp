@@ -184,6 +184,7 @@ const getBiayaAkadForm = (trxId, section) => {
 
 const sbumItems = (trx) => (trx.rincian_biaya_akad || []).filter(i => i.kategori === 'sbum');
 const dajamItems = (trx) => (trx.rincian_biaya_akad || []).filter(i => i.kategori === 'dajam');
+const selisihItems = (trx) => (trx.rincian_biaya_akad || []).filter(i => i.kategori === 'penyesuaian');
 
 // SBUM cuma relevan untuk KPR Subsidi — di luar itu opsi tambah SBUM
 // disembunyikan (tapi item SBUM lama yang sudah ada tetap ditampilkan apa adanya).
@@ -1051,7 +1052,7 @@ onMounted(() => {
                                 </div>
                                 <div class="px-3 py-1.5 bg-slate-800/80 text-slate-500 text-[0.6875rem] font-semibold uppercase tracking-wide flex justify-between">
                                     <span>Rincian Dajam</span>
-                                    <span class="normal-case font-normal">cair {{ formatRp(trx.pencairan_kpr?.dajam_cair) }} / dirinci {{ formatRp(trx.pencairan_kpr?.dajam_dirinci) }}</span>
+                                    <span class="normal-case font-normal">cair {{ formatRp(trx.pencairan_kpr?.dajam_cair) }} / dirinci {{ formatRp((trx.pencairan_kpr?.dajam_dirinci ?? 0) + (trx.pencairan_kpr?.selisih_bank ?? 0)) }}</span>
                                 </div>
                                 <div v-for="item in dajamItems(trx)" :key="`dajam-${item.id}`"
                                     class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-slate-800/60 text-sm group">
@@ -1077,6 +1078,21 @@ onMounted(() => {
                                             :url="route('rincian-biaya-akad.bayar', item.id)"
                                             :status="item.status" :tanggal-bayar="item.tanggal_bayar"
                                             :default-jumlah="item.nominal" :can-manage="canPayDajamSbum(trx)" />
+                                    </div>
+                                </div>
+                                <div v-for="item in selisihItems(trx)" :key="`selisih-${item.id}`" class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-slate-800/60 text-sm group">
+                                    <div>
+                                        <span class="text-slate-400">{{ item.nama }}</span>
+                                        <span class="text-slate-500 text-xs ml-2">dihapuskan, bukan piutang bank</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-slate-400 font-medium">{{ formatRp(item.nominal) }}</span>
+                                        <button v-if="canEditBiayaAkad(trx)" @click="removeBiayaAkad(item)"
+                                            class="opacity-0 group-hover:opacity-100 text-rose-400 hover:bg-rose-500/10 rounded p-1 transition-all flex-shrink-0" aria-label="Hapus selisih">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
                                     </div>
                                 </div>
                                 <div v-if="canEditBiayaAkad(trx)" class="flex gap-2 px-3 py-2 border-t border-slate-800/60">
