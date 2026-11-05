@@ -6,12 +6,18 @@ use App\Models\KavlingKonsumen;
 use Illuminate\Support\Collection;
 
 /**
- * Bahan tab "Rekap Kekurangan Pencairan": per transaksi KPR yang sudah akad, status tiap komponen dana bank — item Dajam (per nama),
- * SBUM, Pencairan netto, dan retensi yang belum dirinci. Tiap komponen berupa "sel":
- *   nominal (tagihan), cair (yang sudah diterima), sisa (nominal - cair), status belum|sebagian|lunas, tanggal (terakhir cair).
+ * Bahan tab "Rekap Kekurangan" dengan tiga tampilan:
+ *   - Piutang Konsumen KPR : Booking Fee, DP, biaya tanah, biaya tambahan (per nama), Tambahan UM, Titipan Biaya Akad
+ *   - Pencairan Bank       : item Dajam (per nama), SBUM, Pencairan netto, retensi belum dirinci (hanya yang sudah akad/BAST)
+ *   - Piutang Konsumen Cash: Booking Fee, DP, Pelunasan, Titipan Biaya Akad
  *
- * Dihitung di PHP per transaksi (kartuPiutangBreakdown), di-cache dan kedaluwarsa otomatis bersama data keuangan (FinanceCache).
- * Mode & kolom terpilih diterapkan di susun(), jadi isi sel, kolom Total, dan baris yang tampil selalu konsisten dengan yang terlihat.
+ * Tiap komponen berupa "sel": nominal (tagihan), cair (yang sudah masuk), sisa, status belum|sebagian|lunas, tanggal (terakhir masuk),
+ * dan jatuh_tempo (tanggal mentah cicilan terdekat yang belum lunas; hanya Booking Fee/DP/Pelunasan). Terlambat tidak disimpan di cache,
+ * dihitung saat susun() supaya tidak basi saat lewat tengah malam.
+ *
+ * Dataset dihitung di PHP per transaksi (kartuPiutangBreakdown), dipecah per kelompok (kpr / cash), di-cache dan kedaluwarsa otomatis
+ * bersama data keuangan (FinanceCache). Status & kolom terpilih diterapkan di susun(), jadi isi sel, Total, dan baris yang tampil
+ * selalu konsisten dengan yang terlihat.
  */
 class RekapKekuranganBank
 {
@@ -20,31 +26,88 @@ class RekapKekuranganBank
     public const MODE_SEMUA = 'semua';
     public const MODE = [self::MODE_BELUM, self::MODE_SUDAH, self::MODE_SEMUA];
 
+    public const TAMPILAN_KPR = 'piutang_kpr';
+    public const TAMPILAN_BANK = 'pencairan_bank';
+    public const TAMPILAN_CASH = 'piutang_cash';
+    public const TAMPILAN = [self::TAMPILAN_KPR, self::TAMPILAN_BANK, self::TAMPILAN_CASH];
+
+    /** Urutan pipeline penjualan (tanpa batal). */
+    public const TAHAP = ['booking', 'pemberkasan', 'proses_bank', 'sp3k', 'rencana_akad', 'akad', 'bast'];
+    public const TAHAP_TERSEDIA = [
+        self::TAMPILAN_KPR  => self::TAHAP,
+        self::TAMPILAN_BANK => ['akad', 'bast'],
+        self::TAMPILAN_CASH => self::TAHAP,
+    ];
+    public const TAHAP_DEFAULT = [
+        self::TAMPILAN_KPR  => ['sp3k', 'rencana_akad', 'akad', 'bast'],
+        self::TAMPILAN_BANK => ['akad', 'bast'],
+        self::TAMPILAN_CASH => self::TAHAP,
+    ];
+    public const CARA_BAYAR = [
+        self::TAMPILAN_KPR  => ['kpr_subsidi', 'kpr_komersil'],
+        self::TAMPILAN_BANK => ['kpr_subsidi', 'kpr_komersil'],
+        self::TAMPILAN_CASH => ['cash', 'cash_bertahap'],
+    ];
+
     public const KOLOM_SBUM = 'sbum';
     public const KOLOM_PENCAIRAN = 'pencairan';
     public const KOLOM_BELUM_DIRINCI = 'belum_dirinci';
     private const PREFIX_ITEM = 'item:';
+    private const PREFIX_BT = 'k:bt:';
 
-    /** Label kolom bukan-item Dajam. */
+    /** Label kolom bank selain item Dajam. */
     public const LABEL_LAINNYA = [
         self::KOLOM_SBUM => 'SBUM',
         self::KOLOM_PENCAIRAN => 'Pencairan netto',
         self::KOLOM_BELUM_DIRINCI => 'Belum dirinci',
     ];
 
+    /** Kolom piutang konsumen yang tetap (selalu bisa dipilih), berurutan seperti Kartu Piutang. */
+    public const LABEL_KONSUMEN = [
+        'k:booking_fee' => 'Booking Fee',
+        'k:dp'          => 'DP',
+        'k:biaya_tanah' => 'Biaya Penambahan Tanah',
+        'k:tum'         => 'Tambahan Uang Muka',
+        'k:titipan'     => 'Titipan Biaya Akad',
+        'k:pelunasan'   => 'Pelunasan',
+    ];
+
+    /** Kolom tetap per tampilan (yang selalu ada di panel kolom, juga bila belum ada konsumen yang memilikinya). */
+    private const KONSUMEN_TETAP = [
+        self::TAMPILAN_KPR  => ['k:booking_fee', 'k:dp', 'k:biaya_tanah', 'k:tum', 'k:titipan'],
+        self::TAMPILAN_CASH => ['k:booking_fee', 'k:dp', 'k:pelunasan', 'k:titipan'],
+    ];
+
+    private const TIPE_KARTU = [
+        'booking_fee_group'         => 'k:booking_fee',
+        'dp_group'                  => 'k:dp',
+        'biaya_tanah_group'         => 'k:biaya_tanah',
+        'tambahan_um_group'         => 'k:tum',
+        'titipan_biaya_akad_group'  => 'k:titipan',
+        'pelunasan_group'           => 'k:pelunasan',
+    ];
+
+    /** Jenis jadwal tagihan untuk kolom yang punya jatuh tempo. */
+    private const JADWAL = ['k:booking_fee' => 'booking_fee', 'k:dp' => 'dp', 'k:pelunasan' => 'pelunasan'];
+
+    public static function kelompok(string $tampilan): string
+    {
+        return $tampilan === self::TAMPILAN_CASH ? 'cash' : 'kpr';
+    }
+
     /**
      * @return array{sel: array<int, array<string, array>>, label: array<string, string>}
-     *   sel[id_transaksi][kunci_kolom] = sel; label[kunci_item] = nama item apa adanya (pertama yang ditemui).
+     *   sel[id_transaksi][kunci_kolom] = sel; label[kunci] = nama apa adanya (pertama yang ditemui; untuk item Dajam & biaya tambahan).
      */
-    public static function dataset(): array
+    public static function dataset(string $kelompok): array
     {
-        return FinanceCache::remember('rekap-kekurangan-bank', function () {
+        return FinanceCache::remember('rekap-kekurangan:' . $kelompok, function () use ($kelompok) {
             $sel = [];
             $label = [];
             KavlingKonsumen::query()
-                ->whereIn('cara_bayar', ['kpr_subsidi', 'kpr_komersil'])
+                ->whereIn('cara_bayar', $kelompok === 'cash' ? ['cash', 'cash_bertahap'] : ['kpr_subsidi', 'kpr_komersil'])
                 ->where('status', '!=', 'cancelled')
-                ->whereIn('status_penjualan', ['akad', 'bast'])
+                ->where('status_penjualan', '!=', 'batal')
                 ->with(['jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans', 'rincianBiayaAkad.pembayaran', 'skemaDpPreset', 'pembayarans', 'pencairanKprTahaps'])
                 ->chunkById(200, function ($semua) use (&$sel, &$label) {
                     foreach ($semua as $kk) {
@@ -59,6 +122,65 @@ class RekapKekuranganBank
     /** @return array<string, array> kunci kolom => sel (hanya komponen yang ada pada transaksi ini) */
     private static function selTransaksi(KavlingKonsumen $kk, array &$label): array
     {
+        $breakdown = $kk->kartuPiutangBreakdown();
+        $hasil = self::selKonsumen($kk, $breakdown['kartu_piutang_static'], $label);
+
+        // Sisi bank hanya berarti untuk KPR yang sudah akad/BAST.
+        if (in_array($kk->cara_bayar, ['kpr_subsidi', 'kpr_komersil'], true) && in_array($kk->status_penjualan, ['akad', 'bast'], true)) {
+            $hasil += self::selBank($kk, $breakdown['pencairan_kpr'], $label);
+        }
+
+        return $hasil;
+    }
+
+    /** Piutang konsumen dari baris Kartu Piutang (nominal sudah neto setelah potongan promo). */
+    private static function selKonsumen(KavlingKonsumen $kk, Collection $kartu, array &$label): array
+    {
+        $akum = [];
+        foreach ($kartu as $item) {
+            $kunci = $item['type'] === 'biaya_tambahan_group'
+                ? self::PREFIX_BT . mb_strtolower(trim((string) $item['nama']))
+                : (self::TIPE_KARTU[$item['type']] ?? null);
+            $nominal = (float) ($item['nominal'] ?? 0);
+            if ($kunci === null || $nominal <= 0) continue;
+
+            if ($item['type'] === 'biaya_tambahan_group') {
+                $label[$kunci] ??= trim((string) $item['nama']);
+            }
+            $akum[$kunci]['nominal'] = ($akum[$kunci]['nominal'] ?? 0) + $nominal;
+            $akum[$kunci]['cair'] = ($akum[$kunci]['cair'] ?? 0) + (float) ($item['jumlah_dibayar'] ?? 0);
+            $tanggal = self::tanggalMasuk($kk, $kunci, $item);
+            if ($tanggal && $tanggal > ($akum[$kunci]['tanggal'] ?? '')) $akum[$kunci]['tanggal'] = $tanggal;
+        }
+
+        $hasil = [];
+        foreach ($akum as $kunci => $a) {
+            if ($a['nominal'] <= 0.5) continue;
+            $sel = self::sel($a['nominal'], min($a['cair'], $a['nominal']), isset($a['tanggal']) ? date('d M Y', strtotime($a['tanggal'])) : null);
+            if ($sel['sisa'] > 0.5 && isset(self::JADWAL[$kunci])) {
+                $sel['jatuh_tempo'] = $kk->jadwalTagihans->where('jenis', self::JADWAL[$kunci])->where('status', '!=', 'lunas')
+                    ->map(fn ($j) => $j->tanggal_jatuh_tempo?->format('Y-m-d'))->filter()->min();
+            }
+            $hasil[$kunci] = $sel;
+        }
+
+        return $hasil;
+    }
+
+    /** Tanggal (Y-m-d) pembayaran terakhir untuk satu baris Kartu Piutang. */
+    private static function tanggalMasuk(KavlingKonsumen $kk, string $kunci, array $item): ?string
+    {
+        if (isset(self::JADWAL[$kunci])) {
+            return $kk->jadwalTagihans->where('jenis', self::JADWAL[$kunci])
+                ->map(fn ($j) => $j->pembayaran?->tanggal_bayar?->format('Y-m-d'))->filter()->max();
+        }
+
+        return collect($item['cicilan'] ?? [])->pluck('tanggal_bayar_raw')->filter()->max();
+    }
+
+    /** Sisi bank: item Dajam per nama, SBUM, Pencairan netto, retensi belum dirinci. */
+    private static function selBank(KavlingKonsumen $kk, ?array $pk, array &$label): array
+    {
         $hasil = [];
         $items = $kk->rincianBiayaAkad;
 
@@ -72,7 +194,6 @@ class RekapKekuranganBank
             $hasil[self::KOLOM_SBUM] = $sel;
         }
 
-        $pk = $kk->kartuPiutangBreakdown()['pencairan_kpr'];
         if ($pk) {
             $nominal = (float) $pk['pencairan_nominal'];
             if ($nominal > 0.5) {
@@ -118,14 +239,15 @@ class RekapKekuranganBank
     }
 
     /**
-     * Daftar kolom yang bisa dipilih untuk sekumpulan transaksi (checkbox): item Dajam yang benar-benar ada pada mereka, lalu kolom lainnya.
+     * Daftar kolom yang bisa dipilih untuk sekumpulan transaksi pada satu tampilan (checkbox).
+     * Piutang konsumen: kolom tetap + biaya tambahan yang ada. Pencairan Bank: item Dajam yang benar-benar ada, lalu SBUM dst.
      *
      * @param  int[]  $ids
      * @return array<int, array{key: string, label: string, grup: string, jumlah: int}>
      */
-    public static function kolomTersedia(array $ids): array
+    public static function kolomTersedia(array $ids, string $tampilan): array
     {
-        $data = self::dataset();
+        $data = self::dataset(self::kelompok($tampilan));
         $jumlah = [];
         foreach ($ids as $id) {
             foreach (array_keys($data['sel'][$id] ?? []) as $kunci) {
@@ -133,23 +255,45 @@ class RekapKekuranganBank
             }
         }
 
-        $item = [];
+        if ($tampilan === self::TAMPILAN_BANK) {
+            $item = [];
+            foreach ($jumlah as $kunci => $n) {
+                if (str_starts_with($kunci, self::PREFIX_ITEM)) {
+                    $item[] = ['key' => $kunci, 'label' => $data['label'][$kunci] ?? substr($kunci, strlen(self::PREFIX_ITEM)), 'grup' => 'dajam', 'jumlah' => $n];
+                }
+            }
+            usort($item, fn ($a, $b) => strnatcasecmp($a['label'], $b['label']));
+
+            $lain = [];
+            foreach (self::LABEL_LAINNYA as $kunci => $label) {
+                $lain[] = ['key' => $kunci, 'label' => $label, 'grup' => 'lainnya', 'jumlah' => $jumlah[$kunci] ?? 0];
+            }
+
+            return [...$item, ...$lain];
+        }
+
+        $tetap = [];
+        foreach (self::KONSUMEN_TETAP[$tampilan] as $kunci) {
+            $tetap[$kunci] = ['key' => $kunci, 'label' => self::LABEL_KONSUMEN[$kunci], 'grup' => 'konsumen', 'jumlah' => $jumlah[$kunci] ?? 0];
+        }
+        $tambahan = [];
         foreach ($jumlah as $kunci => $n) {
-            if (str_starts_with($kunci, self::PREFIX_ITEM)) {
-                $item[] = ['key' => $kunci, 'label' => $data['label'][$kunci] ?? substr($kunci, strlen(self::PREFIX_ITEM)), 'grup' => 'dajam', 'jumlah' => $n];
+            if (str_starts_with($kunci, self::PREFIX_BT)) {
+                $tambahan[] = ['key' => $kunci, 'label' => $data['label'][$kunci] ?? substr($kunci, strlen(self::PREFIX_BT)), 'grup' => 'konsumen', 'jumlah' => $n];
             }
         }
-        usort($item, fn ($a, $b) => strnatcasecmp($a['label'], $b['label']));
+        usort($tambahan, fn ($a, $b) => strnatcasecmp($a['label'], $b['label']));
 
-        $lain = [];
-        foreach (self::LABEL_LAINNYA as $kunci => $label) {
-            $lain[] = ['key' => $kunci, 'label' => $label, 'grup' => 'lainnya', 'jumlah' => $jumlah[$kunci] ?? 0];
+        // Biaya tambahan disisipkan setelah biaya tanah (urutan Kartu Piutang), sebelum Tambahan UM / Titipan.
+        $urut = [];
+        foreach ($tetap as $kunci => $k) {
+            $urut[] = $k;
+            if ($kunci === 'k:biaya_tanah') array_push($urut, ...$tambahan);
         }
-
-        return [...$item, ...$lain];
+        return $urut;
     }
 
-    /** Sel yang tampil menurut mode, atau null (kosong). */
+    /** Sel yang tampil menurut status (belum masuk / sudah masuk / semua), atau null (kosong). */
     public static function tampilkan(?array $sel, string $mode, string $kunci): ?array
     {
         if (!$sel) return null;
@@ -162,22 +306,35 @@ class RekapKekuranganBank
         };
     }
 
-    /** Angka yang dihitung ke Total dan dipakai untuk sort: yang sudah diterima pada mode Sudah cair, selain itu sisa yang belum cair. */
+    /** Angka yang dihitung ke Total dan dipakai untuk sort: yang sudah masuk pada status Sudah masuk, selain itu sisa yang belum masuk. */
     public static function nilai(array $sel, string $mode): float
     {
         return (float) ($mode === self::MODE_SUDAH ? $sel['cair'] : $sel['sisa']);
     }
 
+    /** Tambahkan label jatuh tempo & hari terlambat (dihitung saat ini) pada sel yang masih punya sisa. */
+    private static function tandaiJatuhTempo(array $sel): array
+    {
+        if (empty($sel['jatuh_tempo']) || $sel['status'] === 'lunas') return $sel;
+
+        $tempo = \Illuminate\Support\Carbon::parse($sel['jatuh_tempo'])->startOfDay();
+        $hariIni = now()->startOfDay();
+        $sel['jatuh_tempo_label'] = $tempo->format($tempo->year === $hariIni->year ? 'd M' : 'd M Y');
+        $sel['terlambat_hari'] = $tempo->lt($hariIni) ? (int) $tempo->diffInDays($hariIni) : null;
+
+        return $sel;
+    }
+
     /**
-     * Terapkan kolom terpilih & mode ke baris, hitung Total, lalu urutkan.
+     * Terapkan kolom terpilih & status ke baris, hitung Total, lalu urutkan.
      *
-     * @param  Collection<int, array>  $meta  baris identitas; wajib punya 'id' dan 'akad_raw' (Y-m-d|null), 'nama', 'unit'
+     * @param  Collection<int, array>  $meta  baris identitas; wajib punya 'id', 'nama', 'unit', 'tanggal_urut' (Y-m-d|null)
      * @param  string[]  $terpilih  kunci kolom yang ditampilkan
      * @return array{baris: array[], total_kolom: array<string, float>, total: float}
      */
-    public static function susun(Collection $meta, array $terpilih, string $mode, string $sort, string $dir): array
+    public static function susun(Collection $meta, array $terpilih, string $mode, string $sort, string $dir, string $tampilan): array
     {
-        $data = self::dataset();
+        $data = self::dataset(self::kelompok($tampilan));
         $baris = [];
         $totalKolom = array_fill_keys($terpilih, 0.0);
         $totalSemua = 0.0;
@@ -189,7 +346,7 @@ class RekapKekuranganBank
             $adaIsi = false;
             foreach ($terpilih as $kunci) {
                 $sel = self::tampilkan($semua[$kunci] ?? null, $mode, $kunci);
-                $tampil[$kunci] = $sel;
+                $tampil[$kunci] = $sel ? self::tandaiJatuhTempo($sel) : null;
                 if ($sel) {
                     $adaIsi = true;
                     $total += self::nilai($sel, $mode);
@@ -209,7 +366,7 @@ class RekapKekuranganBank
             return match (true) {
                 $sort === 'nama'  => mb_strtolower($b['nama']),
                 $sort === 'unit'  => mb_strtolower($b['unit']),
-                $sort === 'akad'  => $b['akad_raw'],
+                $sort === 'akad'  => $b['tanggal_urut'],
                 $sort === 'total' => $b['total'],
                 default           => ($b['sel'][$sort] ?? null) ? self::nilai($b['sel'][$sort], $mode) : null,
             };

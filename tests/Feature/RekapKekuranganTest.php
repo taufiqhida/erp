@@ -289,6 +289,6 @@ class RekapKekuranganTest extends TestCase
         $r = $this->actingAs($this->admin)->withSession(['current_project_id' => $this->project->id])
             ->get(route('keuangan.rekap-kekurangan.export', ['mode' => 'belum_cair', 'kolom' => ['item:sertifikat'], 'bank' => $this->btn->id]));
         $r->assertOk();
-        $this->assertStringContainsString('rekap-kekurangan-pencairan.xlsx', $r->headers->get('content-disposition'));
+        $this->assertStringContainsString('rekap-kekurangan.xlsx', $r->headers->get('content-disposition'));
     }
 }
