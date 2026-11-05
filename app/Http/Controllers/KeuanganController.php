@@ -14,8 +14,10 @@ use App\Models\KavlingKonsumenBiayaTambahan;
 use App\Models\KavlingKonsumenDajamSbum;
 use App\Models\PembayaranKonsumen;
 use App\Models\PencairanKprTahap;
+use App\Support\RekapKekuranganBank;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -320,6 +322,107 @@ class KeuanganController extends Controller
                 'tampil' => $tampil, 'belum_akad' => $request->boolean('belum_akad') ? '1' : '', 'sort' => $sort, 'dir' => $dir, 'tindak_lanjut' => $tindakLanjut,
             ],
         ]);
+    }
+
+    /**
+     * Rekap Kekurangan Pencairan — satu baris per konsumen KPR yang sudah akad, kolom per komponen dana bank (item Dajam, SBUM, Pencairan
+     * netto, belum dirinci). Kolom dipilih lewat checkbox, mode (belum cair / sudah cair / semua) menentukan baris & isi sel.
+     * Filter, sort, dan paginasi dikerjakan di PHP karena isi sel & Total bergantung pada mode dan kolom terpilih (lihat RekapKekuranganBank).
+     */
+    public function rekapKekurangan(Request $request): Response
+    {
+        abort_unless(Auth::user()->can('view keuangan'), 403);
+
+        $hasil = $this->rekapKekuranganHasil($request);
+        $perPage = $this->perPage($request, 50);
+        $page = max(1, (int) $request->query('page', 1));
+        $rows = (new LengthAwarePaginator(
+            array_slice($hasil['baris'], ($page - 1) * $perPage, $perPage),
+            count($hasil['baris']), $perPage, $page, ['path' => $request->url()]
+        ))->withQueryString();
+
+        return Inertia::render('Keuangan/RekapKekurangan', [
+            'rows'          => $rows,
+            'kolom'         => $hasil['kolom'],
+            'terpilih'      => $hasil['terpilih'],
+            'summary'       => ['jumlah' => count($hasil['baris']), 'total' => $hasil['total'], 'total_kolom' => $hasil['total_kolom']],
+            'filterOptions' => $this->keuanganFilterOptions() + [
+                'cara_bayar' => ['kpr_subsidi' => 'KPR Subsidi', 'kpr_komersil' => 'KPR Komersil'],
+                'bank'       => BankRekananPreset::ordered()->get(['id', 'nama']),
+            ],
+            'filters'       => $request->only(['search', 'kluster', 'blok', 'cara_bayar', 'bank', 'tahap', 'umur', 'akad_dari', 'akad_sampai']) + [
+                'mode' => $hasil['mode'], 'sort' => $hasil['sort'], 'dir' => $hasil['dir'],
+            ],
+        ]);
+    }
+
+    public function exportRekapKekurangan(Request $request): StreamedResponse
+    {
+        abort_unless(Auth::user()->can('view keuangan'), 403);
+
+        $hasil = $this->rekapKekuranganHasil($request);
+        $label = collect($hasil['kolom'])->pluck('label', 'key');
+        $labelTotal = ['belum_cair' => 'Total Belum Cair', 'sudah_cair' => 'Total Sudah Cair', 'semua' => 'Sisa Belum Cair'][$hasil['mode']];
+
+        $headers = ['Konsumen', 'Unit', 'Proyek', 'Bank', 'Cara Bayar', 'Tgl Akad', ...$hasil['terpilih']->map(fn ($k) => $label[$k])->all(), $labelTotal];
+        $mode = $hasil['mode'];
+        $rows = array_map(fn ($b) => [
+            $b['nama'], $b['unit'], $b['project_nama'], $b['bank'], $b['cara_bayar_label'], $b['akad_raw'],
+            ...$hasil['terpilih']->map(fn ($k) => $b['sel'][$k] ? RekapKekuranganBank::nilai($b['sel'][$k], $mode) : null)->all(),
+            $b['total'],
+        ], $hasil['baris']);
+        $rows[] = ['TOTAL', null, null, null, null, null, ...$hasil['terpilih']->map(fn ($k) => $hasil['total_kolom'][$k])->all(), $hasil['total']];
+
+        return $this->streamExcelExport('rekap-kekurangan-pencairan.xlsx', $headers, $rows);
+    }
+
+    /**
+     * Baris yang lolos filter (SQL: RBAC, proyek, kluster/blok/cari, bank, cara bayar, tahap, tanggal akad, umur), lalu mode, kolom terpilih,
+     * Total dan urutan (PHP).
+     *
+     * @return array{baris: array[], kolom: array[], terpilih: \Illuminate\Support\Collection, total_kolom: array, total: float, mode: string, sort: string, dir: string}
+     */
+    private function rekapKekuranganHasil(Request $request): array
+    {
+        $tanggal = fn ($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : null;
+        $umur = in_array((int) $request->umur, [30, 60, 90], true) ? (int) $request->umur : null;
+
+        $meta = $this->keuanganBaseQuery($request)
+            ->whereIn('kavling_konsumen.cara_bayar', ['kpr_subsidi', 'kpr_komersil'])
+            ->whereIn('kavling_konsumen.status_penjualan', in_array($request->tahap, ['akad', 'bast'], true) ? [$request->tahap] : ['akad', 'bast'])
+            ->when($request->bank, fn ($q) => $q->where('kavling_konsumen.bank_rekanan_preset_id', $request->bank))
+            ->when($request->cara_bayar, fn ($q) => $q->where('kavling_konsumen.cara_bayar', $request->cara_bayar))
+            ->when($tanggal($request->akad_dari), fn ($q, $v) => $q->where('kavling_konsumen.tanggal_akad', '>=', $v))
+            ->when($tanggal($request->akad_sampai), fn ($q, $v) => $q->where('kavling_konsumen.tanggal_akad', '<=', $v))
+            ->when($umur, fn ($q, $v) => $q->where('kavling_konsumen.tanggal_akad', '<=', now()->subDays($v)->toDateString()))
+            ->with(['konsumen:id,nama', 'kavling.project:id,nama', 'bankRekananPreset:id,nama'])
+            ->get()
+            ->map(fn ($kk) => [
+                'id'               => $kk->id,
+                'nama'             => $kk->konsumen->nama,
+                'unit'             => $kk->kavling->nomor_lengkap,
+                'project_nama'     => $kk->kavling->project->nama,
+                'bank'             => $kk->bank_rekanan_kpr,
+                'cara_bayar_label' => $this->caraBayarLabel($kk->cara_bayar),
+                'status_penjualan' => $kk->status_penjualan,
+                'akad'             => $kk->tanggal_akad?->format('d M Y'),
+                'akad_raw'         => $kk->tanggal_akad?->format('Y-m-d'),
+                'hari_sejak_akad'  => $kk->tanggal_akad ? (int) $kk->tanggal_akad->diffInDays(now()->startOfDay()) : null,
+            ]);
+
+        $kolom = RekapKekuranganBank::kolomTersedia($meta->pluck('id')->all());
+        $tersedia = collect($kolom)->pluck('key');
+        // Parameter kolom[] tidak ada = semua kolom; ada tetapi hanya penanda "-" = tidak ada kolom dipilih.
+        $terpilih = $request->has('kolom')
+            ? $tersedia->intersect((array) $request->query('kolom'))->values()
+            : $tersedia->values();
+
+        $mode = in_array($request->mode, RekapKekuranganBank::MODE, true) ? $request->mode : RekapKekuranganBank::MODE_BELUM;
+        $sort = in_array($request->sort, ['nama', 'unit', 'akad', 'total', ...$terpilih->all()], true) ? $request->sort : 'total';
+        $dir = $request->dir === 'asc' ? 'asc' : 'desc';
+
+        return RekapKekuranganBank::susun($meta, $terpilih->all(), $mode, $sort, $dir)
+            + ['kolom' => $kolom, 'terpilih' => $terpilih, 'mode' => $mode, 'sort' => $sort, 'dir' => $dir];
     }
 
     /**

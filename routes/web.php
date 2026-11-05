@@ -243,6 +243,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('keuangan/export', [KeuanganController::class, 'exportPiutangExcel'])->name('keuangan.export')->middleware('throttle:heavy');
     Route::get('keuangan/pencairan-kpr', [KeuanganController::class, 'pencairan'])->name('keuangan.pencairan');
     Route::get('keuangan/pencairan-kpr/export', [KeuanganController::class, 'exportPencairanExcel'])->name('keuangan.pencairan.export')->middleware('throttle:heavy');
+    Route::get('keuangan/rekap-kekurangan', [KeuanganController::class, 'rekapKekurangan'])->name('keuangan.rekap-kekurangan');
+    Route::get('keuangan/rekap-kekurangan/export', [KeuanganController::class, 'exportRekapKekurangan'])->name('keuangan.rekap-kekurangan.export')->middleware('throttle:heavy');
     Route::get('keuangan/transaksi/{kk}', [KeuanganController::class, 'detail'])->name('keuangan.detail');
     Route::post('keuangan/transaksi/{kk}/selesai', [KeuanganController::class, 'markComplete'])->name('keuangan.mark-complete');
     Route::post('kavling-konsumen/{kk}/pembayaran', [KeuanganController::class, 'storePembayaran'])
