@@ -105,4 +105,45 @@ class DashboardNilaiPromoTest extends TestCase
         $this->assertArrayHasKey('piutang_konsumen', $f);       // kolom piutang tidak berubah isinya
         $this->assertArrayHasKey('piutang_bank_rincian', $f);
     }
+
+    public function test_biaya_tambahan_dirinci_per_item_untuk_promo_dan_nilai_transaksi_dengan_total_tetap(): void
+    {
+        $a = $this->transaksi();
+        $a->biayaTambahans()->create(['nama' => 'Hook', 'nominal' => 5000000, 'potongan' => 1500000]);
+        $a->biayaTambahans()->create(['nama' => 'Strategis', 'nominal' => 2000000, 'potongan' => 0]);
+        $b = $this->transaksi();
+        $b->biayaTambahans()->create(['nama' => ' hook ', 'nominal' => 3000000, 'potongan' => 1000000]);   // nama sama (huruf/spasi berbeda)
+        $b->biayaTambahans()->create(['nama' => 'HOOK', 'nominal' => 1000000, 'potongan' => 0]);          // dua item bernama sama di satu transaksi
+        $batal = $this->transaksi(['status' => 'cancelled', 'status_penjualan' => 'batal']);
+        $batal->biayaTambahans()->create(['nama' => 'Hook', 'nominal' => 9000000, 'potongan' => 9000000]);
+
+        $f = $this->financials();
+
+        // Promo: hanya item yang benar-benar dapat potongan; Strategis tidak muncul.
+        $promo = collect($f['nilai_promo']['biaya_tambahan_rincian']);
+        $this->assertCount(1, $promo);
+        $this->assertSame('Hook', $promo[0]['nama']);
+        $this->assertEquals(2500000, $promo[0]['nominal']);
+        $this->assertSame(2, $promo[0]['jumlah_transaksi']);
+        $this->assertEquals($f['nilai_promo']['biaya_tambahan'], $promo->sum('nominal'));       // rincian = angka induk
+
+        // Nilai Transaksi: neto per item, terbesar di atas; satu transaksi dengan dua item bernama sama dihitung sekali.
+        $item = collect($f['biaya_tambahan_item']);
+        $this->assertSame(['Hook', 'Strategis'], $item->pluck('nama')->all());
+        $this->assertEquals((5000000 - 1500000) + (3000000 - 1000000) + 1000000, $item[0]['nominal']);
+        $this->assertSame(2, $item[0]['jumlah_transaksi']);
+        $this->assertEquals(2000000, $item[1]['nominal']);
+        $this->assertSame(1, $item[1]['jumlah_transaksi']);
+        $this->assertEquals($f['nilai_transaksi_rincian']['titipan']['biaya_tambahan_lain'], $item->sum('nominal'));   // rincian = angka induk
+    }
+
+    public function test_rincian_item_kosong_bila_tidak_ada_biaya_tambahan(): void
+    {
+        $this->transaksi();
+
+        $f = $this->financials();
+
+        $this->assertSame([], $f['biaya_tambahan_item']);
+        $this->assertSame([], $f['nilai_promo']['biaya_tambahan_rincian']);
+    }
 }

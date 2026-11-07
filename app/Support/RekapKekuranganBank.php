@@ -33,15 +33,11 @@ class RekapKekuranganBank
 
     /** Urutan pipeline penjualan (tanpa batal). */
     public const TAHAP = ['booking', 'pemberkasan', 'proses_bank', 'sp3k', 'rencana_akad', 'akad', 'bast'];
-    public const TAHAP_TERSEDIA = [
+    /** Tahap yang normal untuk tiap tampilan. Cash tidak melewati Proses Bank/SP3K (lihat alur status di BookingController). */
+    private const TAHAP_STANDAR = [
         self::TAMPILAN_KPR  => self::TAHAP,
         self::TAMPILAN_BANK => ['akad', 'bast'],
-        self::TAMPILAN_CASH => self::TAHAP,
-    ];
-    public const TAHAP_DEFAULT = [
-        self::TAMPILAN_KPR  => ['sp3k', 'rencana_akad', 'akad', 'bast'],
-        self::TAMPILAN_BANK => ['akad', 'bast'],
-        self::TAMPILAN_CASH => self::TAHAP,
+        self::TAMPILAN_CASH => ['booking', 'pemberkasan', 'rencana_akad', 'akad', 'bast'],
     ];
     public const CARA_BAYAR = [
         self::TAMPILAN_KPR  => ['kpr_subsidi', 'kpr_komersil'],
@@ -89,6 +85,39 @@ class RekapKekuranganBank
 
     /** Jenis jadwal tagihan untuk kolom yang punya jatuh tempo. */
     private const JADWAL = ['k:booking_fee' => 'booking_fee', 'k:dp' => 'dp', 'k:pelunasan' => 'pelunasan'];
+
+    /**
+     * Tahap yang ditawarkan di filter. Pada tampilan Cash, Proses Bank/SP3K hanya muncul bila ada transaksi cash yang benar-benar berada
+     * di tahap itu (data salah input/lama), supaya konsumennya tidak tersembunyi diam-diam dari rekap tagihan.
+     *
+     * @param  string[]  $ditemukan  tahap tak-standar yang dipakai transaksi cash (lihat tahapCashTakStandar())
+     * @return string[]  berurutan sesuai pipeline
+     */
+    public static function tahapTersedia(string $tampilan, array $ditemukan = []): array
+    {
+        $dasar = self::TAHAP_STANDAR[$tampilan];
+
+        return array_values(array_filter(
+            self::TAHAP,
+            fn ($t) => in_array($t, $dasar, true) || ($tampilan === self::TAMPILAN_CASH && in_array($t, $ditemukan, true))
+        ));
+    }
+
+    /** Tahap yang tercentang bila parameter tahap tidak ada: KPR hanya yang menuju/sudah akad, lainnya semua yang tersedia. */
+    public static function tahapDefault(string $tampilan, array $ditemukan = []): array
+    {
+        return $tampilan === self::TAMPILAN_KPR ? ['sp3k', 'rencana_akad', 'akad', 'bast'] : self::tahapTersedia($tampilan, $ditemukan);
+    }
+
+    /** @return string[] tahap Proses Bank/SP3K yang ternyata dipakai transaksi cash (normalnya kosong). */
+    public static function tahapCashTakStandar(): array
+    {
+        return KavlingKonsumen::query()
+            ->whereIn('cara_bayar', ['cash', 'cash_bertahap'])
+            ->where('status', '!=', 'cancelled')
+            ->whereIn('status_penjualan', ['proses_bank', 'sp3k'])
+            ->distinct()->pluck('status_penjualan')->all();
+    }
 
     public static function kelompok(string $tampilan): string
     {

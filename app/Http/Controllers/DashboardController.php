@@ -117,7 +117,7 @@ class DashboardController extends Controller
         // jadi hasilnya di-cache per (cakupan user/proyek) dan otomatis kedaluwarsa begitu
         // ada perubahan keuangan — lihat FinanceCache::bump() yang dipanggil AppServiceProvider.
         $cacheScope = ($isGlobal ? 'all' : 'u' . $user->id) . ':p' . ($projectId ?: 'all');
-        $ringkasan = FinanceCache::remember('dashboard:ringkasan:v3:' . $cacheScope, function () use ($activeBase) {
+        $ringkasan = FinanceCache::remember('dashboard:ringkasan:v4:' . $cacheScope, function () use ($activeBase) {
             $activeTransaksi = $activeBase()->with([
                 'konsumen:id,nama', 'kavling.project:id,nama', 'skemaDpPreset', 'pembayarans',
                 'jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans',
@@ -136,6 +136,10 @@ class DashboardController extends Controller
             $piutangKonsumenByNama = [];
             $piutangBankByNama = [];
             $penyesuaianBank = 0.0;
+            // Biaya tambahan lain per NAMA item (huruf besar-kecil & spasi diabaikan): nilai transaksi neto dan promo yang diberikan,
+            // beserta jumlah transaksinya. Rincian dari angka induk yang sama, jadi totalnya tetap sama dengan yang sudah ada.
+            $itemNilai = [];
+            $itemPromo = [];
 
             foreach ($activeTransaksi as $kk) {
                 $promoHargaJual = (float) $kk->diskon_nominal;
@@ -145,6 +149,17 @@ class DashboardController extends Controller
                 $nilaiPromo['tanah'] += $promoTanah;
                 $nilaiPromo['biaya_tambahan'] += $promoLain;
                 if ($promoHargaJual > 0 || $promoTanah > 0 || $promoLain > 0) $nilaiPromo['jumlah_transaksi']++;
+                foreach ($kk->biayaTambahans as $bt) {
+                    $kunci = mb_strtolower(trim((string) $bt->nama));
+                    $itemNilai[$kunci] ??= ['nama' => trim((string) $bt->nama), 'nominal' => 0.0, 'transaksi' => []];
+                    $itemNilai[$kunci]['nominal'] += (float) $bt->ditagih;
+                    $itemNilai[$kunci]['transaksi'][$kk->id] = true;
+                    if ((float) $bt->potongan > 0) {
+                        $itemPromo[$kunci] ??= ['nama' => trim((string) $bt->nama), 'nominal' => 0.0, 'transaksi' => []];
+                        $itemPromo[$kunci]['nominal'] += (float) $bt->potongan;
+                        $itemPromo[$kunci]['transaksi'][$kk->id] = true;
+                    }
+                }
 
                 $kategori = $kk->kategoriPendapatan();
                 $totalPendapatan += $kategori['resmi_total'] + $kategori['titipan_total'];
@@ -184,7 +199,13 @@ class DashboardController extends Controller
                 }
             }
 
-            return compact('totalPendapatan', 'nilaiPromo', 'nilaiTransaksiBreakdown', 'piutangTotals', 'piutangKonsumenByNama', 'piutangBankByNama', 'penyesuaianBank');
+            $rincianItem = fn (array $item) => collect($item)->map(fn ($v) => [
+                'nama' => $v['nama'], 'nominal' => round($v['nominal'], 2), 'jumlah_transaksi' => count($v['transaksi']),
+            ])->sortByDesc('nominal')->values()->all();
+            $nilaiPromo['biaya_tambahan_rincian'] = $rincianItem($itemPromo);
+            $biayaTambahanItem = $rincianItem($itemNilai);
+
+            return compact('totalPendapatan', 'nilaiPromo', 'nilaiTransaksiBreakdown', 'piutangTotals', 'piutangKonsumenByNama', 'piutangBankByNama', 'penyesuaianBank', 'biayaTambahanItem');
         });
         extract($ringkasan);
 
@@ -210,6 +231,7 @@ class DashboardController extends Controller
             'nilai_transaksi_berjalan' => $totalPendapatan - $hangusDariPembatalan,
             'nilai_promo'            => $nilaiPromo + ['total' => $nilaiPromo['harga_jual'] + $nilaiPromo['tanah'] + $nilaiPromo['biaya_tambahan']],
             'nilai_transaksi_rincian' => $nilaiTransaksiBreakdown,
+            'biaya_tambahan_item'    => $biayaTambahanItem,
             'piutang_konsumen'       => $piutangTotals['piutang_konsumen'],
             'terbayar_konsumen'      => $piutangTotals['terbayar_konsumen'],
             'sisa_piutang_konsumen'  => max(0, $piutangTotals['piutang_konsumen'] - $piutangTotals['terbayar_konsumen']),

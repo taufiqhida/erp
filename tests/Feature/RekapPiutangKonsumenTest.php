@@ -275,4 +275,32 @@ class RekapPiutangKonsumenTest extends TestCase
 
         $this->actingAs(User::factory()->create())->get(route('keuangan.rekap-kekurangan', ['tampilan' => 'piutang_cash']))->assertForbidden();
     }
+
+    public function test_filter_tahap_cash_hanya_lima_tahap_standar_dan_kpr_tetap_tujuh(): void
+    {
+        $this->cash('Cash Biasa', 'akad', 'cash');
+
+        $cash = $this->props(['tampilan' => 'piutang_cash']);
+        $standar = ['booking', 'pemberkasan', 'rencana_akad', 'akad', 'bast'];
+        $this->assertSame($standar, collect($cash['tahapOptions'])->pluck('key')->all());
+        $this->assertSame($standar, $cash['tahapDefault']);
+        $this->assertSame($standar, $cash['filters']['tahap']);
+        $this->assertSame([], $this->nama($this->props(['tampilan' => 'piutang_cash', 'tahap' => ['proses_bank', 'sp3k']])));   // tahap yang tak ditawarkan diabaikan
+
+        $kpr = $this->props(['tampilan' => 'piutang_kpr']);
+        $this->assertCount(7, $kpr['tahapOptions']);
+        $this->assertCount(2, $this->props(['tampilan' => 'pencairan_bank'])['tahapOptions']);
+    }
+
+    public function test_tahap_cash_tak_standar_muncul_bila_ada_transaksi_cash_di_tahap_itu(): void
+    {
+        $this->cash('Normal', 'akad', 'cash');
+        $this->cash('Anomali', 'sp3k', 'cash');                                          // data salah input / lama
+
+        $p = $this->props(['tampilan' => 'piutang_cash']);
+
+        $this->assertSame(['booking', 'pemberkasan', 'sp3k', 'rencana_akad', 'akad', 'bast'], collect($p['tahapOptions'])->pluck('key')->all());
+        $this->assertEqualsCanonicalizing(['Normal', 'Anomali'], $this->nama($p));      // konsumennya tidak tersembunyi
+        $this->assertNotContains('proses_bank', collect($p['tahapOptions'])->pluck('key')->all());
+    }
 }

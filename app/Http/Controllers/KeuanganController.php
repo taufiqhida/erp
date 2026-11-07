@@ -349,8 +349,8 @@ class KeuanganController extends Controller
             'kolom'         => $hasil['kolom'],
             'terpilih'      => $hasil['terpilih'],
             'summary'       => ['jumlah' => count($hasil['baris']), 'total' => $hasil['total'], 'total_kolom' => $hasil['total_kolom']],
-            'tahapOptions'  => array_map(fn ($k) => ['key' => $k, 'label' => $labelTahap[$k] ?? $k], RekapKekuranganBank::TAHAP_TERSEDIA[$tampilan]),
-            'tahapDefault'  => RekapKekuranganBank::TAHAP_DEFAULT[$tampilan],
+            'tahapOptions'  => array_map(fn ($k) => ['key' => $k, 'label' => $labelTahap[$k] ?? $k], $hasil['tahap_tersedia']),
+            'tahapDefault'  => $hasil['tahap_default'],
             'filterOptions' => $this->keuanganFilterOptions() + [
                 'cara_bayar' => collect(RekapKekuranganBank::CARA_BAYAR[$tampilan])->mapWithKeys(fn ($c) => [$c => $this->caraBayarLabel($c)])->all(),
                 'bank'       => BankRekananPreset::ordered()->get(['id', 'nama']),
@@ -395,10 +395,13 @@ class KeuanganController extends Controller
         $tampilan = in_array($request->tampilan, RekapKekuranganBank::TAMPILAN, true) ? $request->tampilan : RekapKekuranganBank::TAMPILAN_BANK;
         $caraBayarBoleh = RekapKekuranganBank::CARA_BAYAR[$tampilan];
         $caraBayar = in_array($request->cara_bayar, $caraBayarBoleh, true) ? $request->cara_bayar : null;
+        $ditemukan = $tampilan === RekapKekuranganBank::TAMPILAN_CASH ? RekapKekuranganBank::tahapCashTakStandar() : [];
+        $tahapTersedia = RekapKekuranganBank::tahapTersedia($tampilan, $ditemukan);
+        $tahapDefault = RekapKekuranganBank::tahapDefault($tampilan, $ditemukan);
         // Parameter tahap[] tidak ada = bawaan tampilan; ada tetapi tak satu pun valid (mis. penanda "-") = tidak ada tahap dipilih.
         $tahap = $request->has('tahap')
-            ? array_values(array_intersect(RekapKekuranganBank::TAHAP_TERSEDIA[$tampilan], (array) $request->query('tahap')))
-            : RekapKekuranganBank::TAHAP_DEFAULT[$tampilan];
+            ? array_values(array_intersect($tahapTersedia, (array) $request->query('tahap')))
+            : $tahapDefault;
         $tanggal = fn ($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : null;
         $umur = in_array((int) $request->umur, [30, 60, 90], true) ? (int) $request->umur : null;
         $labelTahap = $this->statusPenjualanLabelMap();
@@ -445,7 +448,8 @@ class KeuanganController extends Controller
 
         return RekapKekuranganBank::susun($meta, $terpilih->all(), $mode, $sort, $dir, $tampilan)
             + ['kolom' => $kolom, 'terpilih' => $terpilih, 'mode' => $mode, 'sort' => $sort, 'dir' => $dir,
-               'tampilan' => $tampilan, 'tahap' => $tahap, 'cara_bayar' => $caraBayar];
+               'tampilan' => $tampilan, 'tahap' => $tahap, 'cara_bayar' => $caraBayar,
+               'tahap_tersedia' => $tahapTersedia, 'tahap_default' => $tahapDefault];
     }
 
     /**
