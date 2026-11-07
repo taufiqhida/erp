@@ -9,6 +9,8 @@ const props = defineProps({
     project: Object,
     kavlings: Object, // paginator server-side (data, links, total, ...)
     spkRiwayat: Array,
+    ringkasan: Object,
+    spkKartu: Object,
     filters: Object,
     klusterOptions: Array,
     blokOptions: Array,
@@ -16,7 +18,6 @@ const props = defineProps({
     statusBangunStages: Array,
     kontraktorOptions: Array,
     canManage: Boolean,
-    canCreateSpk: Boolean,
     unitMassal: Array, // dimuat saat modal Update Proses dibuka
 });
 
@@ -27,6 +28,7 @@ const deadlineBadge = {
     warning:  { label: '≤30 hari',  cls: 'bg-amber-500/15 text-amber-400' },
     critical: { label: '≤14 hari',  cls: 'bg-orange-500/15 text-orange-400' },
     expired:  { label: 'Lewat',     cls: 'bg-rose-500/15 text-rose-400' },
+    selesai:  { label: 'Selesai',   cls: 'bg-slate-700/50 text-slate-400' },   // unit/SPK selesai tidak ditandai terlambat
 };
 
 // Urutan & paginasi dikerjakan SERVER (lihat ProsesBangunController::index) supaya benar lintas
@@ -122,7 +124,8 @@ const updateStatusBangun = (k, value) => {
     changeStage(k, value);
 };
 
-const showRiwayat = ref(false);
+const rincianTahap = ref(false);
+const persen = (v) => Math.round(Number(v ?? 0) * 10) / 10;
 </script>
 
 <template>
@@ -150,42 +153,55 @@ const showRiwayat = ref(false);
                     </svg>
                     Update Proses
                 </button>
-                <Link v-if="canCreateSpk" :href="route('spk.create', project.id)"
-                    class="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-violet-500/20">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
-                        <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
-                    </svg>
-                    Buat SPK
-                </Link>
                 </div>
             </div>
 
-            <!-- Riwayat SPK -->
-            <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                <button type="button" @click="showRiwayat = !showRiwayat"
-                    class="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-800/30 transition-colors">
-                    <span class="text-slate-300 text-sm font-medium">Riwayat SPK ({{ spkRiwayat.length }})</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"
-                        :class="['w-4 h-4 text-slate-500 transition-transform', showRiwayat ? 'rotate-180' : '']">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                    </svg>
-                </button>
-                <div v-if="showRiwayat">
-                    <div v-if="!spkRiwayat.length" class="px-5 py-6 text-center text-slate-500 text-sm border-t border-slate-800">
-                        Belum ada SPK diterbitkan untuk proyek ini.
+            <!-- Ringkasan progres bangun (seluruh unit proyek, dari sudut pandang pembangunan) -->
+            <div class="space-y-3">
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div class="bg-slate-800/50 rounded-xl p-3 text-center" title="Unit di tahap bawaan (Belum Mulai)">
+                        <div class="text-slate-200 font-bold text-2xl">{{ ringkasan.belum_mulai }}</div>
+                        <div class="text-slate-400 text-xs mt-0.5">Belum Mulai</div>
                     </div>
-                    <div v-for="spk in spkRiwayat" :key="spk.id"
-                        class="flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-t border-slate-800 text-sm">
-                        <div>
-                            <span class="text-slate-200 font-medium font-mono">{{ spk.nomor_spk }}</span>
-                            <span class="text-slate-500 text-xs ml-2">{{ spk.kontraktor_nama }} · {{ spk.jumlah_unit }} unit</span>
+                    <div class="bg-blue-500/10 rounded-xl p-3 text-center" title="Sedang dibangun: bukan Belum Mulai dan belum selesai">
+                        <div class="text-blue-400 font-bold text-2xl">{{ ringkasan.progress }}</div>
+                        <div class="text-slate-400 text-xs mt-0.5">Progress</div>
+                    </div>
+                    <div class="bg-emerald-500/10 rounded-xl p-3 text-center" title="Selesai dibangun dan belum punya konsumen (Tersedia atau Hold)">
+                        <div class="text-emerald-400 font-bold text-2xl">{{ ringkasan.ready_stock }}</div>
+                        <div class="text-slate-400 text-xs mt-0.5">Ready Stock</div>
+                    </div>
+                    <div class="bg-amber-500/10 rounded-xl p-3 text-center" title="Selesai dibangun, sudah ada konsumen, belum serah terima (BAST)">
+                        <div class="text-amber-400 font-bold text-2xl">{{ ringkasan.menunggu_bast }}</div>
+                        <div class="text-slate-400 text-xs mt-0.5">Menunggu BAST</div>
+                        <div v-if="ringkasan.menunggu_bast_akad > 0" class="text-amber-300/80 text-[0.625rem] mt-0.5">{{ ringkasan.menunggu_bast_akad }} sudah akad</div>
+                    </div>
+                    <div class="bg-teal-500/10 rounded-xl p-3 text-center" title="Transaksi aktif berstatus BAST (sudah diserahterimakan)">
+                        <div class="text-teal-400 font-bold text-2xl">{{ ringkasan.sudah_bast }}</div>
+                        <div class="text-slate-400 text-xs mt-0.5">Sudah BAST</div>
+                    </div>
+                    <div class="bg-violet-500/10 rounded-xl p-3 text-center" title="Rata-rata progress total seluruh unit proyek">
+                        <div class="text-violet-400 font-bold text-2xl">{{ persen(ringkasan.rata_rata) }}%</div>
+                        <div class="text-slate-400 text-xs mt-0.5">Rata-rata</div>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <button type="button" @click="rincianTahap = !rincianTahap" class="text-slate-400 hover:text-slate-200 transition-colors">
+                        {{ rincianTahap ? '▾' : '▸' }} Rincian per tahap ({{ ringkasan.total }} unit)
+                    </button>
+                    <Link :href="route('spk.index', project.id)" class="text-slate-400 hover:text-violet-300 transition-colors">
+                        SPK Unit: <span class="text-slate-200">{{ spkKartu.berjalan }} berjalan</span>
+                        <span v-if="spkKartu.lewat_deadline > 0" class="text-rose-400"> · {{ spkKartu.lewat_deadline }} lewat deadline</span> ›
+                    </Link>
+                </div>
+                <div v-if="rincianTahap" class="bg-slate-900 border border-slate-800 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
+                    <div v-for="s in ringkasan.per_tahap" :key="s.id" class="flex items-center gap-3 text-xs">
+                        <span class="w-2 h-2 rounded-full flex-shrink-0" :style="{ background: s.warna || '#94a3b8' }"></span>
+                        <span class="text-slate-300 w-32 truncate">{{ s.nama }}</span>
+                        <div class="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full" :style="{ width: (ringkasan.total ? (s.jumlah / ringkasan.total) * 100 : 0) + '%', background: s.warna || '#94a3b8' }"></div>
                         </div>
-                        <div class="flex items-center gap-3 text-xs">
-                            <span class="text-slate-500">Terbit {{ spk.tanggal_terbit }} · Deadline {{ spk.tanggal_deadline }}</span>
-                            <span :class="deadlineBadge[spk.deadline_status]?.cls" class="px-2 py-0.5 rounded-full font-medium">
-                                {{ deadlineBadge[spk.deadline_status]?.label }}
-                            </span>
-                        </div>
+                        <span class="text-slate-200 font-medium tabular-nums w-8 text-right">{{ s.jumlah }}</span>
                     </div>
                 </div>
             </div>

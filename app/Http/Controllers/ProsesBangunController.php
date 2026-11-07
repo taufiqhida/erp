@@ -6,8 +6,8 @@ use App\Http\Controllers\Concerns\AuthorizesProjectAccess;
 use App\Models\Kavling;
 use App\Models\Kontraktor;
 use App\Models\Project;
-use App\Models\Spk;
 use App\Models\StatusBangunStage;
+use App\Support\SpkRingkas;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -92,6 +92,8 @@ class ProsesBangunController extends Controller
             'project'  => ['id' => $project->id, 'nama' => $project->nama],
             'kavlings' => $kavlings,
             'spkRiwayat' => $spkRiwayat,
+            'ringkasan'  => $this->ringkasanBangun($project),
+            'spkKartu'   => SpkRingkas::kartu(SpkRingkas::daftar($project)),
             'filters'  => $request->only(['kluster', 'blok', 'tipe_unit_preset_id', 'status_bangun_stage_id', 'kontraktor_id', 'urut', 'arah']),
             'klusterOptions' => $project->kavlings()->whereNotNull('kluster')->distinct()->orderBy('kluster')->pluck('kluster'),
             'blokOptions'    => $project->kavlings()->whereNotNull('blok')->distinct()->orderBy('blok')->pluck('blok'),
@@ -104,76 +106,7 @@ class ProsesBangunController extends Controller
             'kontraktorOptions' => Kontraktor::whereHas('spks', fn($q) => $q->where('project_id', $project->id))
                 ->orderBy('nama')->get(['id', 'nama']),
             'canManage' => Auth::user()->can('update status bangun'),
-            'canCreateSpk' => Auth::user()->can('terbitkan spk'),
         ]);
-    }
-
-    public function createSpk(Project $project): Response
-    {
-        $this->authorizeProjectAccess($project);
-        abort_unless(Auth::user()->can('terbitkan spk'), 403);
-
-        $kavlings = $project->kavlings()
-            ->with('tipeUnitPreset:id,nama')
-            ->orderByUnit()
-            ->get(['id', 'kluster', 'blok', 'nomor_kavling', 'tipe_unit_preset_id', 'status_bangun_stage_id'])
-            ->map(fn($k) => [
-                'id'                     => $k->id,
-                'nomor_lengkap'          => $k->nomor_lengkap,
-                'kluster'                => $k->kluster,
-                'blok'                   => $k->blok,
-                'tipe_unit_preset_id'    => $k->tipe_unit_preset_id,
-                'tipe_unit_nama'         => $k->tipeUnitPreset?->nama,
-                'status_bangun_stage_id' => $k->status_bangun_stage_id,
-            ]);
-
-        return Inertia::render('ProsesBangun/BuatSpk', [
-            'project'      => ['id' => $project->id, 'nama' => $project->nama],
-            'kavlings'     => $kavlings,
-            'kontraktors'  => Kontraktor::where('is_active', true)->orderBy('nama')->get(['id', 'nama']),
-            'klusterOptions' => $project->kavlings()->whereNotNull('kluster')->distinct()->orderBy('kluster')->pluck('kluster'),
-            'blokOptions'    => $project->kavlings()->whereNotNull('blok')->distinct()->orderBy('blok')->pluck('blok'),
-            'tipeUnitOptions' => $project->tipeUnitPresets()->active()->orderBy('nama')->get(['id', 'nama']),
-            'statusBangunStages' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna']),
-        ]);
-    }
-
-    /**
-     * SPK murni record monitoring (siapa ngerjain unit apa, sampai kapan) —
-     * tidak ada generate dokumen sama sekali, dokumen fisiknya disiapkan
-     * manual di luar sistem karena isinya terlalu variatif (RAB, spek
-     * kerja, dll) untuk di-generate dari placeholder sederhana.
-     */
-    public function storeSpk(Request $request, Project $project): RedirectResponse
-    {
-        $this->authorizeProjectAccess($project);
-        abort_unless(Auth::user()->can('terbitkan spk'), 403);
-
-        $validated = $request->validate([
-            'nomor_spk'        => 'required|string|max:100',
-            'kontraktor_id'    => 'required|exists:kontraktors,id',
-            'tanggal_terbit'   => 'required|date',
-            'tanggal_deadline' => 'required|date|after_or_equal:tanggal_terbit',
-            'catatan'          => 'nullable|string',
-            'kavling_ids'      => 'required|array|min:1',
-            'kavling_ids.*'    => "exists:kavlings,id,project_id,{$project->id}",
-        ]);
-
-        DB::transaction(function () use ($validated, $project) {
-            $spk = Spk::create([
-                'project_id'       => $project->id,
-                'kontraktor_id'    => $validated['kontraktor_id'],
-                'nomor_spk'        => $validated['nomor_spk'],
-                'tanggal_terbit'   => $validated['tanggal_terbit'],
-                'tanggal_deadline' => $validated['tanggal_deadline'],
-                'catatan'          => $validated['catatan'] ?? null,
-                'created_by'       => Auth::id(),
-            ]);
-            $spk->kavlings()->attach($validated['kavling_ids']);
-        });
-
-        return redirect()->route('proses-bangun.index', $project->id)
-            ->with('success', 'SPK berhasil diterbitkan.');
     }
 
     /**
@@ -266,6 +199,60 @@ class ProsesBangunController extends Controller
         return back()->with('success', $pesan . '.');
     }
 
+    /**
+     * Kartu ringkasan progres bangun untuk SELURUH unit proyek (tidak ikut filter tabel), dari sudut pandang pembangunan, bukan penjualan:
+     *  - belum_mulai  : tahap bawaan ("Belum Mulai")
+     *  - progress     : sedang dibangun (bukan belum mulai, belum selesai)
+     *  - selesai      : tahap terakhir dan 100%; terbagi menjadi
+     *      ready_stock   : selesai dan belum punya konsumen (Tersedia atau Hold) — tanggung jawab developer
+     *      menunggu_bast : selesai, sudah ada konsumen (dipesan/terjual/pembatalan menunggu), belum BAST; menunggu_bast_akad = yang sudah akad
+     *      sudah_bast    : transaksi aktif berstatus BAST
+     *  - rata_rata    : rata-rata progress total seluruh unit
+     * Patokan akhir tanggung jawab teknik adalah BAST (serah terima), bukan akad.
+     */
+    private function ringkasanBangun(Project $project): array
+    {
+        $defaultId = (int) StatusBangunStage::defaultStage()?->id;
+        $finalId = (int) StatusBangunStage::finalStage()?->id;
+
+        $selesai = "(kavlings.status_bangun_stage_id = {$finalId} AND kavlings.status_bangun_persen >= 100)";
+        $transaksi = fn (string $status) => "EXISTS (SELECT 1 FROM kavling_konsumen kk WHERE kk.kavling_id = kavlings.id AND kk.status != 'cancelled' AND kk.status_penjualan = '{$status}')";
+        $ready = "kavlings.status_jual IN ('available', 'hold')";
+        $progressExpr = "(COALESCE((SELECT SUM(s2.bobot) FROM status_bangun_stages s2 WHERE s2.urutan < (SELECT s1.urutan FROM status_bangun_stages s1 WHERE s1.id = kavlings.status_bangun_stage_id)), 0)"
+            . " + COALESCE((SELECT s3.bobot FROM status_bangun_stages s3 WHERE s3.id = kavlings.status_bangun_stage_id), 0) * LEAST(100, GREATEST(0, kavlings.status_bangun_persen)) / 100)";
+
+        $r = $project->kavlings()->toBase()->reorder()->selectRaw("
+            COUNT(*) AS total,
+            COALESCE(SUM(kavlings.status_bangun_stage_id = {$defaultId}), 0) AS belum_mulai,
+            COALESCE(SUM({$selesai}), 0) AS selesai,
+            COALESCE(SUM({$selesai} AND {$ready}), 0) AS ready_stock,
+            COALESCE(SUM({$transaksi('bast')}), 0) AS sudah_bast,
+            COALESCE(SUM({$selesai} AND NOT ({$ready}) AND NOT {$transaksi('bast')}), 0) AS menunggu_bast,
+            COALESCE(SUM({$selesai} AND NOT ({$ready}) AND NOT {$transaksi('bast')} AND {$transaksi('akad')}), 0) AS menunggu_bast_akad,
+            COALESCE(AVG({$progressExpr}), 0) AS rata_rata
+        ")->first();
+
+        $perTahap = $project->kavlings()->toBase()->reorder()
+            ->selectRaw('status_bangun_stage_id, COUNT(*) AS total')->groupBy('status_bangun_stage_id')->pluck('total', 'status_bangun_stage_id');
+
+        $total = (int) $r->total;
+
+        return [
+            'total'              => $total,
+            'belum_mulai'        => (int) $r->belum_mulai,
+            'progress'           => max(0, $total - (int) $r->belum_mulai - (int) $r->selesai),
+            'selesai'            => (int) $r->selesai,
+            'ready_stock'        => (int) $r->ready_stock,
+            'menunggu_bast'      => (int) $r->menunggu_bast,
+            'menunggu_bast_akad' => (int) $r->menunggu_bast_akad,
+            'sudah_bast'         => (int) $r->sudah_bast,
+            'rata_rata'          => round((float) $r->rata_rata, 1),
+            'per_tahap'          => StatusBangunStage::ordered()->get()->map(fn ($s) => [
+                'id' => $s->id, 'nama' => $s->nama, 'warna' => $s->warna, 'jumlah' => (int) ($perTahap[$s->id] ?? 0),
+            ])->all(),
+        ];
+    }
+
     private function formatRow(Kavling $k): array
     {
         $spkAktif = $k->spk_aktif;
@@ -286,7 +273,8 @@ class ProsesBangunController extends Controller
             'spk_deadline'           => $spkAktif?->tanggal_deadline?->format('d M Y'),
             'spk_deadline_raw'       => $spkAktif?->tanggal_deadline?->format('Y-m-d'),
             'bangun_selesai'         => $k->bangun_selesai,
-            'spk_deadline_status'    => $spkAktif?->deadline_status,
+            // Unit yang sudah selesai dibangun tidak ditandai terlambat/mendesak lagi (badge netral).
+            'spk_deadline_status'    => $k->bangun_selesai ? ($spkAktif ? 'selesai' : null) : $spkAktif?->deadline_status,
             'catatan'                => $k->catatan,
         ];
     }

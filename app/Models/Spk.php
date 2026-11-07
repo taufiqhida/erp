@@ -14,6 +14,7 @@ class Spk extends Model
         'nomor_spk',
         'tanggal_terbit',
         'tanggal_deadline',
+        'nilai_spk',
         'catatan',
         'created_by',
     ];
@@ -21,6 +22,7 @@ class Spk extends Model
     protected $casts = [
         'tanggal_terbit'   => 'date',
         'tanggal_deadline' => 'date',
+        'nilai_spk'        => 'decimal:2',
     ];
 
     public function project(): BelongsTo

@@ -16,6 +16,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\ProsesBangunController;
+use App\Http\Controllers\SpkController;
 use App\Http\Controllers\RencanaAkadController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SuratGenerateController;
@@ -156,10 +157,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('kavlings.massal')->middleware('throttle:heavy');
     Route::post('proyek/{project}/proses-bangun/massal', [ProsesBangunController::class, 'updateMassal'])
         ->name('proses-bangun.massal')->middleware('throttle:heavy');
-    Route::get('proyek/{project}/spk/buat', [ProsesBangunController::class, 'createSpk'])
-        ->name('spk.create');
-    Route::post('proyek/{project}/spk', [ProsesBangunController::class, 'storeSpk'])
-        ->name('spk.store');
+    // ── SPK Unit (daftar SPK berjalan, Buat SPK, Edit SPK) ──
+    Route::get('proyek/{project}/spk', [SpkController::class, 'index'])->name('spk.index');
+    Route::get('proyek/{project}/spk/buat', [SpkController::class, 'create'])->name('spk.create');
+    Route::post('proyek/{project}/spk', [SpkController::class, 'store'])->name('spk.store');
+    Route::get('proyek/{project}/spk/{spk}/edit', [SpkController::class, 'edit'])->name('spk.edit');
+    Route::put('proyek/{project}/spk/{spk}', [SpkController::class, 'update'])->name('spk.update');
 
     // ── Penjualan (menu proyek untuk sales) ───────────────────────────
     Route::get('pemasaran/rencana-akad', [RencanaAkadController::class, 'index'])->name('rencana-akad.index');

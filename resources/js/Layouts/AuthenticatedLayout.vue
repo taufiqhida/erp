@@ -117,7 +117,14 @@ const allNavItems = computed(() => [
             {
                 label: 'Proses Bangun',
                 href: currentProject.value ? route('proses-bangun.index', currentProject.value.id) : route('beranda'),
-                routeName: ['proses-bangun.*', 'spk.*'],
+                routeName: 'proses-bangun.*',
+                roles: null,
+                permission: 'view kavlings',
+            },
+            {
+                label: 'SPK Unit',
+                href: currentProject.value ? route('spk.index', currentProject.value.id) : route('beranda'),
+                routeName: 'spk.*',
                 roles: null,
                 permission: 'view kavlings',
             },
