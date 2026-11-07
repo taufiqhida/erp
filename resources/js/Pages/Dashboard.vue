@@ -345,6 +345,12 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                             <span class="text-amber-400 text-xs font-medium">Sisa {{ formatRp(financials?.sisa_piutang_konsumen) }}</span>
                             <button @click="toggleFinansial('konsumen')" class="text-slate-500 hover:text-slate-300 text-[0.6875rem] transition-colors">{{ expandedFinansial.konsumen ? '▲ Tutup' : '▼ Rincian' }}</button>
                         </div>
+                        <Link :href="route('keuangan.rekap-kekurangan', { tampilan: 'piutang_kpr' })"
+                            title="Yang realistis ditagih sekarang: KPR yang sudah SP3K / rencana akad / akad, dan cash yang cicilannya sudah jatuh tempo. Sisanya masih potensi."
+                            class="flex flex-wrap items-baseline justify-between gap-x-2 mt-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
+                            <span class="whitespace-nowrap">Bisa dikejar {{ formatRp(financials?.bisa_dikejar?.konsumen?.nominal) }}</span>
+                            <span class="text-slate-500 text-[0.6875rem] whitespace-nowrap">{{ financials?.bisa_dikejar?.konsumen?.jumlah ?? 0 }} transaksi ›</span>
+                        </Link>
                         <div v-if="expandedFinansial.konsumen" class="mt-3 pt-3 border-t border-slate-800 space-y-1.5">
                             <div v-for="item in financials?.piutang_konsumen_rincian" :key="item.nama" class="flex items-center justify-between text-xs">
                                 <span class="text-slate-400">{{ item.nama }}</span>
@@ -368,6 +374,12 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                             <span class="text-amber-400 text-xs font-medium">Sisa {{ formatRp(financials?.sisa_piutang_bank) }}</span>
                             <button @click="toggleFinansial('bank')" class="text-slate-500 hover:text-slate-300 text-[0.6875rem] transition-colors">{{ expandedFinansial.bank ? '▲ Tutup' : '▼ Rincian' }}</button>
                         </div>
+                        <Link :href="route('keuangan.pencairan')"
+                            title="Sisa pencairan KPR yang sudah akad/BAST, sama dengan total sisa di Pencairan KPR. Sisanya masih potensi (belum akad)."
+                            class="flex flex-wrap items-baseline justify-between gap-x-2 mt-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
+                            <span class="whitespace-nowrap">Bisa dikejar {{ formatRp(financials?.bisa_dikejar?.bank?.nominal) }}</span>
+                            <span class="text-slate-500 text-[0.6875rem] whitespace-nowrap">{{ financials?.bisa_dikejar?.bank?.jumlah ?? 0 }} transaksi ›</span>
+                        </Link>
                         <div v-if="expandedFinansial.bank" class="mt-3 pt-3 border-t border-slate-800 space-y-1.5">
                             <div v-for="item in financials?.piutang_bank_rincian" :key="item.nama" class="flex items-center justify-between text-xs">
                                 <span class="text-slate-400">{{ item.nama }}</span>

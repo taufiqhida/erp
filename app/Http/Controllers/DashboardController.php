@@ -117,7 +117,7 @@ class DashboardController extends Controller
         // jadi hasilnya di-cache per (cakupan user/proyek) dan otomatis kedaluwarsa begitu
         // ada perubahan keuangan — lihat FinanceCache::bump() yang dipanggil AppServiceProvider.
         $cacheScope = ($isGlobal ? 'all' : 'u' . $user->id) . ':p' . ($projectId ?: 'all');
-        $ringkasan = FinanceCache::remember('dashboard:ringkasan:v4:' . $cacheScope, function () use ($activeBase) {
+        $ringkasan = FinanceCache::remember('dashboard:ringkasan:v5:' . $cacheScope, function () use ($activeBase) {
             $activeTransaksi = $activeBase()->with([
                 'konsumen:id,nama', 'kavling.project:id,nama', 'skemaDpPreset', 'pembayarans',
                 'jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans',
@@ -140,6 +140,12 @@ class DashboardController extends Controller
             // beserta jumlah transaksinya. Rincian dari angka induk yang sama, jadi totalnya tetap sama dengan yang sudah ada.
             $itemNilai = [];
             $itemPromo = [];
+            // Angka di atas adalah POTENSI (semua transaksi aktif). "Bisa dikejar" = bagian yang realistis ditagih sekarang:
+            //  - Bank: sisa pencairan KPR yang sudah Akad/BAST (sama dengan total sisa di tab Pencairan KPR).
+            //  - Konsumen KPR: sisa piutang yang sudah SP3K / Rencana akad / Akad / BAST (sebelum akad semestinya sudah lunas).
+            //  - Konsumen Cash: hanya cicilan yang sudah lewat jatuh tempo.
+            $bisaDikejar = ['bank' => ['nominal' => 0.0, 'jumlah' => 0], 'konsumen' => ['nominal' => 0.0, 'jumlah' => 0]];
+            $hariIni = now()->startOfDay();
 
             foreach ($activeTransaksi as $kk) {
                 $promoHargaJual = (float) $kk->diskon_nominal;
@@ -176,6 +182,23 @@ class DashboardController extends Controller
                 $piutangTotals['piutang_bank']      += $breakdown['total_piutang_bank'];
                 $piutangTotals['terbayar_bank']     += $breakdown['total_terbayar_bank'];
 
+                $kprAktif = in_array($kk->cara_bayar, ['kpr_subsidi', 'kpr_komersil'], true);
+                $sisaBank = max(0.0, $breakdown['total_piutang_bank'] - $breakdown['total_terbayar_bank']);
+                $sisaKonsumen = max(0.0, $breakdown['total_piutang_konsumen'] - $breakdown['total_terbayar_konsumen']);
+                if ($kprAktif && in_array($kk->status_penjualan, ['akad', 'bast'], true) && $sisaBank > 0.009) {
+                    $bisaDikejar['bank']['nominal'] += $sisaBank;
+                    $bisaDikejar['bank']['jumlah']++;
+                }
+                $kejarKonsumen = $kprAktif
+                    ? (in_array($kk->status_penjualan, ['sp3k', 'rencana_akad', 'akad', 'bast'], true) ? $sisaKonsumen : 0.0)
+                    : min($sisaKonsumen, (float) $kk->jadwalTagihans
+                        ->filter(fn ($j) => $j->status !== 'lunas' && $j->tanggal_jatuh_tempo && $j->tanggal_jatuh_tempo->lt($hariIni))
+                        ->sum(fn ($j) => max(0.0, (float) $j->jumlah - (float) ($j->pembayaran?->jumlah ?? 0))));
+                if ($kejarKonsumen > 0.009) {
+                    $bisaDikejar['konsumen']['nominal'] += $kejarKonsumen;
+                    $bisaDikejar['konsumen']['jumlah']++;
+                }
+
                 foreach ($breakdown['kartu_piutang_static'] as $item) {
                     $piutangKonsumenByNama[$item['nama']] ??= ['nominal' => 0.0, 'terbayar' => 0.0];
                     $piutangKonsumenByNama[$item['nama']]['nominal']  += $item['nominal'];
@@ -205,7 +228,7 @@ class DashboardController extends Controller
             $nilaiPromo['biaya_tambahan_rincian'] = $rincianItem($itemPromo);
             $biayaTambahanItem = $rincianItem($itemNilai);
 
-            return compact('totalPendapatan', 'nilaiPromo', 'nilaiTransaksiBreakdown', 'piutangTotals', 'piutangKonsumenByNama', 'piutangBankByNama', 'penyesuaianBank', 'biayaTambahanItem');
+            return compact('totalPendapatan', 'nilaiPromo', 'nilaiTransaksiBreakdown', 'piutangTotals', 'piutangKonsumenByNama', 'piutangBankByNama', 'penyesuaianBank', 'biayaTambahanItem', 'bisaDikejar');
         });
         extract($ringkasan);
 
@@ -232,6 +255,7 @@ class DashboardController extends Controller
             'nilai_promo'            => $nilaiPromo + ['total' => $nilaiPromo['harga_jual'] + $nilaiPromo['tanah'] + $nilaiPromo['biaya_tambahan']],
             'nilai_transaksi_rincian' => $nilaiTransaksiBreakdown,
             'biaya_tambahan_item'    => $biayaTambahanItem,
+            'bisa_dikejar'           => $bisaDikejar,
             'piutang_konsumen'       => $piutangTotals['piutang_konsumen'],
             'terbayar_konsumen'      => $piutangTotals['terbayar_konsumen'],
             'sisa_piutang_konsumen'  => max(0, $piutangTotals['piutang_konsumen'] - $piutangTotals['terbayar_konsumen']),
