@@ -13,6 +13,7 @@ class PromoPresetLawan extends Model
     public const TANAH = 'tanah';
     public const BIAYA_TAMBAHAN = 'biaya_tambahan';
     public const HARGA_JUAL = 'harga_jual';      // diskon umum: mengurangi harga jual, tidak terikat ke satu biaya
+    public const TITIPAN_BIAYA_AKAD = 'titipan_biaya_akad';   // Titipan Biaya Akad (Program All In), termasuk kasus notaris sendiri
 
     protected $fillable = ['promo_preset_id', 'jenis', 'biaya_tambahan_preset_id'];
 

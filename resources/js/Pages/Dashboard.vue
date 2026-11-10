@@ -326,6 +326,10 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                                 <span class="min-w-0 text-slate-500">{{ it.nama }}<span class="block text-[0.625rem] text-slate-600">{{ it.jumlah_transaksi }} transaksi</span></span>
                                 <span class="text-slate-400 whitespace-nowrap">{{ formatRp(it.nominal) }}</span>
                             </div>
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-slate-400">Titipan Biaya Akad</span>
+                                <span class="text-slate-300">{{ formatRp(financials?.nilai_promo?.titipan_biaya_akad) }}</span>
+                            </div>
                             <p class="text-slate-500 text-[0.6875rem] pt-1">Hanya transaksi yang masih aktif; promo pada transaksi yang batal tidak dihitung.</p>
                         </div>
                     </div>

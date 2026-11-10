@@ -35,14 +35,14 @@ class PotonganPromo
         return ['potongan' => $potongan, 'mode' => $mode, 'nilai' => (float) $nilai];
     }
 
-    /** Lawan dari promo yang dipilih: ['tanah' => bool, 'biaya_tambahan' => int[], 'harga_jual' => bool]. */
+    /** Lawan dari promo yang dipilih: ['tanah' => bool, 'biaya_tambahan' => int[], 'harga_jual' => bool, 'titipan' => bool]. */
     public static function lawan(?int $promoId): array
     {
-        $kosong = ['tanah' => false, 'biaya_tambahan' => [], 'harga_jual' => false];
+        $kosong = ['tanah' => false, 'biaya_tambahan' => [], 'harga_jual' => false, 'titipan' => false];
         if (!$promoId) return $kosong;
         $promo = PromoPreset::with('lawan')->find($promoId);
 
-        return $promo ? ['tanah' => $promo->lawanTanah(), 'biaya_tambahan' => $promo->lawanBiayaTambahanIds(), 'harga_jual' => $promo->lawanHargaJual()] : $kosong;
+        return $promo ? ['tanah' => $promo->lawanTanah(), 'biaya_tambahan' => $promo->lawanBiayaTambahanIds(), 'harga_jual' => $promo->lawanHargaJual(), 'titipan' => $promo->lawanTitipanBiayaAkad()] : $kosong;
     }
 
     /** Aturan validasi tambahan untuk input potongan di form (booking dan ubah rincian). */
@@ -52,6 +52,9 @@ class PotonganPromo
             'potongan_tanah'                  => 'nullable|array',
             'potongan_tanah.mode'             => 'nullable|in:persen,nominal',
             'potongan_tanah.nilai'            => 'nullable|numeric|min:0',
+            'potongan_titipan'                => 'nullable|array',
+            'potongan_titipan.mode'           => 'nullable|in:persen,nominal',
+            'potongan_titipan.nilai'          => 'nullable|numeric|min:0',
             'biaya_tambahan.*.potongan'       => 'nullable|array',
             'biaya_tambahan.*.potongan.mode'  => 'nullable|in:persen,nominal',
             'biaya_tambahan.*.potongan.nilai' => 'nullable|numeric|min:0',

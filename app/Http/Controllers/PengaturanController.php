@@ -912,13 +912,14 @@ class PengaturanController extends Controller
             'presets' => PromoPreset::with('lawan')->orderBy('nama')->get()->map(fn ($p) => [
                 'id' => $p->id, 'nama' => $p->nama, 'keterangan' => $p->keterangan, 'is_active' => $p->is_active,
                 'lawan_tanah' => $p->lawanTanah(), 'lawan_harga_jual' => $p->lawanHargaJual(), 'lawan_biaya_tambahan' => $p->lawanBiayaTambahanIds(),
+                'lawan_titipan_biaya_akad' => $p->lawanTitipanBiayaAkad(),
             ]),
             'biayaTambahanPresets' => BiayaTambahanPreset::ordered()->get(['id', 'nama']),
         ]);
     }
 
     /**
-     * Atur "lawan" sebuah promo: biaya yang boleh dipotong promo itu (Kelebihan Tanah dan/atau preset Biaya Tambahan). Tanpa nominal —
+     * Atur "lawan" sebuah promo: biaya yang boleh dipotong promo itu (Harga Jual, Kelebihan Tanah, Titipan Biaya Akad, dan/atau preset Biaya Tambahan). Tanpa nominal —
      * nominal atau persen potongan diisi per transaksi saat booking/ubah rincian.
      */
     public function updateLawanPromo(Request $request, PromoPreset $promo): RedirectResponse
@@ -926,6 +927,7 @@ class PengaturanController extends Controller
         $validated = $request->validate([
             'tanah'                       => 'boolean',
             'harga_jual'                  => 'boolean',
+            'titipan_biaya_akad'          => 'boolean',
             'biaya_tambahan_preset_ids'   => 'nullable|array',
             'biaya_tambahan_preset_ids.*' => 'integer|exists:biaya_tambahan_presets,id',
         ]);
@@ -934,6 +936,7 @@ class PengaturanController extends Controller
             $promo->lawan()->delete();
             if ($validated['tanah'] ?? false) $promo->lawan()->create(['jenis' => \App\Models\PromoPresetLawan::TANAH]);
             if ($validated['harga_jual'] ?? false) $promo->lawan()->create(['jenis' => \App\Models\PromoPresetLawan::HARGA_JUAL]);
+            if ($validated['titipan_biaya_akad'] ?? false) $promo->lawan()->create(['jenis' => \App\Models\PromoPresetLawan::TITIPAN_BIAYA_AKAD]);
             foreach (array_unique($validated['biaya_tambahan_preset_ids'] ?? []) as $id) {
                 $promo->lawan()->create(['jenis' => \App\Models\PromoPresetLawan::BIAYA_TAMBAHAN, 'biaya_tambahan_preset_id' => $id]);
             }

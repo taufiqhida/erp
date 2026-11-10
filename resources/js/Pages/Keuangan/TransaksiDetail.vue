@@ -311,7 +311,7 @@ const deleteCicilanLain = async (c) => {
                         </div>
                         <div v-if="transaksi.titipan_biaya_akad_nominal > 0" class="flex justify-between text-slate-400">
                             <span>Titipan Biaya Akad<span class="text-slate-500 text-xs ml-1">(dari Program All In)</span></span>
-                            <span class="text-slate-300">{{ formatRp(transaksi.titipan_biaya_akad_nominal) }}</span>
+                            <span class="text-slate-300">{{ formatRp(transaksi.titipan_biaya_akad_ditagih ?? transaksi.titipan_biaya_akad_nominal) }}<span v-if="Number(transaksi.titipan_biaya_akad_potongan) > 0" class="text-emerald-300 text-xs ml-1">(potongan promo {{ formatRp(transaksi.titipan_biaya_akad_potongan) }})</span></span>
                         </div>
                         <div v-if="!(transaksi.booking_fee > 0) && !(transaksi.dp_nominal > 0) && !(transaksi.titipan_biaya_akad_nominal > 0)" class="text-slate-500 text-xs">Tidak ada booking fee maupun DP.</div>
                     </div>

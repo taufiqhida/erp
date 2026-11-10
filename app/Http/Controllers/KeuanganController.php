@@ -556,6 +556,8 @@ class KeuanganController extends Controller
                 'promo_nama'     => $kk->promoPreset?->nama,
                 'program_all_in_nama'        => $kk->programAllInPreset?->nama,
                 'titipan_biaya_akad_nominal' => $kk->titipan_biaya_akad_nominal,
+                'titipan_biaya_akad_potongan' => $kk->titipan_biaya_akad_potongan,
+                'titipan_biaya_akad_ditagih' => $kk->titipan_biaya_akad_ditagih,
                 'skema_dp_preset' => $kk->skemaDpPreset ? [
                     'nama'                         => $kk->skemaDpPreset->nama,
                     'booking_fee_aktif'            => $kk->skemaDpPreset->booking_fee_aktif,
@@ -923,7 +925,7 @@ class KeuanganController extends Controller
 
     public function storeTitipanBiayaAkadCicilan(Request $request, KavlingKonsumen $kk): RedirectResponse
     {
-        abort_unless((float) $kk->titipan_biaya_akad_nominal > 0, 422, 'Transaksi ini tidak punya Titipan Biaya Akad.');
+        abort_unless($kk->titipan_biaya_akad_ditagih > 0, 422, 'Transaksi ini tidak punya Titipan Biaya Akad yang perlu ditagih.');
         return $this->storeCicilanKonsumen($request, $kk, 'titipan_biaya_akad', 'Titipan Biaya Akad');
     }
 

@@ -24,7 +24,7 @@ trait HasFinanceTotals
     public const FINANCE_TRIGGER_FIELDS = [
         'harga_dasar', 'harga_deal', 'booking_fee', 'cara_bayar', 'skema_dp_preset_id', 'plafon_kpr',
         'biaya_kelebihan_tanah_aktif', 'biaya_kelebihan_tanah_nominal', 'biaya_kelebihan_tanah_potongan', 'total_biaya_tambahan',
-        'titipan_biaya_akad_nominal', 'diskon_nominal',
+        'titipan_biaya_akad_nominal', 'titipan_biaya_akad_potongan', 'diskon_nominal',
     ];
 
     public static function withoutFinanceRefresh(callable $callback)

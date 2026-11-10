@@ -47,6 +47,9 @@ class KavlingKonsumen extends Model
         'total_biaya_tambahan',
         'program_all_in_preset_id',
         'titipan_biaya_akad_nominal',
+        'titipan_biaya_akad_potongan',
+        'titipan_biaya_akad_potongan_mode',
+        'titipan_biaya_akad_potongan_nilai',
         'status_penjualan',
         'tanggal_rencana_akad',
         'notaris_preset_id',
@@ -86,6 +89,8 @@ class KavlingKonsumen extends Model
         'diskon_nominal'                       => 'decimal:2',
         'total_biaya_tambahan'                 => 'decimal:2',
         'titipan_biaya_akad_nominal'           => 'decimal:2',
+        'titipan_biaya_akad_potongan'          => 'decimal:2',
+        'titipan_biaya_akad_potongan_nilai'    => 'decimal:2',
     ];
 
     public function getActivitylogOptions(): LogOptions
@@ -134,6 +139,12 @@ class KavlingKonsumen extends Model
     public function promoPreset(): BelongsTo
     {
         return $this->belongsTo(PromoPreset::class);
+    }
+
+    /** Titipan Biaya Akad yang benar-benar ditagih = bruto (Program All In dikurangi BF/DP tercakup) dikurangi potongan promo. */
+    public function getTitipanBiayaAkadDitagihAttribute(): float
+    {
+        return max(0.0, (float) $this->titipan_biaya_akad_nominal - (float) $this->titipan_biaya_akad_potongan);
     }
 
     /** Biaya Kelebihan Tanah yang benar-benar ditagih = bruto dikurangi potongan promo. */
@@ -566,12 +577,14 @@ class KavlingKonsumen extends Model
         // untuk KPR maupun cash. Dibayar terpisah lewat aksi Catat Pembayaran
         // sendiri (bukan otomatis ngikut status Booking Fee/DP).
         if ((float) $this->titipan_biaya_akad_nominal > 0) {
-            [$cicilan, $dibayar, $status] = $cicilanLain('titipan_biaya_akad', (float) $this->titipan_biaya_akad_nominal);
+            [$cicilan, $dibayar, $status] = $cicilanLain('titipan_biaya_akad', $this->titipan_biaya_akad_ditagih);
             $terbayarKonsumen += $dibayar;
             $kartuPiutangStatic->push([
                 'type' => 'titipan_biaya_akad_group', 'id' => null, 'status' => $status,
                 'nama' => 'Titipan Biaya Akad', 'subjek' => 'Konsumen',
-                'nominal' => (float) $this->titipan_biaya_akad_nominal,
+                'nominal' => $this->titipan_biaya_akad_ditagih,
+                'bruto' => (float) $this->titipan_biaya_akad_nominal,
+                'potongan' => (float) $this->titipan_biaya_akad_potongan,
                 'jumlah_dibayar' => $dibayar > 0 ? $dibayar : null,
                 'cicilan' => $cicilan,
             ]);
@@ -782,7 +795,7 @@ class KavlingKonsumen extends Model
         $titipanRincian = [
             'biaya_tanah'         => $this->biaya_kelebihan_tanah_aktif ? $this->biaya_kelebihan_tanah_ditagih : 0,
             'biaya_tambahan_lain' => (float) $this->biayaTambahans->sum(fn ($b) => $b->ditagih),
-            'titipan_biaya_akad'  => (float) $this->titipan_biaya_akad_nominal,
+            'titipan_biaya_akad'  => $this->titipan_biaya_akad_ditagih,
             'booking_fee'         => $bookingFeeResmi ? 0 : $bookingFee,
         ];
 

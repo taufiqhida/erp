@@ -491,6 +491,10 @@ class KonsumenController extends Controller
                     'program_all_in_preset_id'  => $trx->program_all_in_preset_id,
                     'program_all_in_nama'        => $trx->programAllInPreset?->nama,
                     'titipan_biaya_akad_nominal' => $trx->titipan_biaya_akad_nominal,
+                    'titipan_biaya_akad_potongan' => $trx->titipan_biaya_akad_potongan,
+                    'titipan_biaya_akad_potongan_mode' => $trx->titipan_biaya_akad_potongan_mode,
+                    'titipan_biaya_akad_potongan_nilai' => $trx->titipan_biaya_akad_potongan_nilai,
+                    'titipan_biaya_akad_ditagih' => $trx->titipan_biaya_akad_ditagih,
                     'titipan_biaya_akad_locked'  => $trx->pembayarans->where('jenis', 'titipan_biaya_akad')->isNotEmpty(),
                     'status_penjualan' => $trx->status_penjualan,
                     'is_locked'        => $trx->is_locked,
@@ -571,7 +575,7 @@ class KonsumenController extends Controller
             'statusBangunStages' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna']),
             'biayaTambahanPresets' => BiayaTambahanPreset::where('is_active', true)->ordered()->get(['id', 'nama']),
             'promoPresets' => PromoPreset::untukForm(),
-            'programAllInPresets' => ProgramAllInPreset::where('is_active', true)->ordered()->get(['id', 'nama', 'nominal']),
+            'programAllInPresets' => ProgramAllInPreset::where('is_active', true)->ordered()->get(['id', 'nama', 'nominal', 'include_booking_fee', 'include_dp']),
             'suratTemplates' => SuratTemplate::orderBy('nama')->get(['id', 'nama']),
         ]);
     }

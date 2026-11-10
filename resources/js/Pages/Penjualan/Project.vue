@@ -195,6 +195,7 @@ const bookForm = useForm({
     diskon_nilai:    '',
     // Potongan promo per biaya (hanya untuk "lawan" dari promo yang dipilih)
     potongan_tanah:  { mode: 'persen', nilai: '' },
+    potongan_titipan: { mode: 'persen', nilai: '' },
     potongan_biaya:  {},   // { [presetId]: { mode, nilai } }
     // Section 3 — Skema Pembayaran (baru terbuka setelah harga netto selesai dihitung)
     cara_bayar:      'kpr_subsidi',
@@ -247,6 +248,14 @@ const biayaKelebihanTanahBruto = computed(() => {
 const promoTerpilih = computed(() => props.promoPresets.find(p => p.id === bookForm.promo_preset_id) ?? null);
 const lawanTanahAktif = computed(() => !!promoTerpilih.value?.lawan_tanah && bookForm.biaya_kelebihan_tanah_aktif && biayaKelebihanTanahBruto.value > 0);
 const lawanBiayaIds = computed(() => bookForm.biaya_tambahan_selected.filter(id => promoTerpilih.value?.lawan_biaya_tambahan?.includes(id)));
+// Titipan Biaya Akad bruto = nominal Program All In dikurangi Booking Fee/DP yang sudah tercakup (rumus sama dengan server).
+const allInTerpilih = computed(() => props.programAllInPresets.find(p => String(p.id) === String(bookForm.program_all_in_preset_id)) ?? null);
+const titipanBruto = computed(() => {
+    const p = allInTerpilih.value;
+    if (!p) return 0;
+    return Math.max(0, Number(p.nominal) - (p.include_booking_fee ? Number(bookForm.booking_fee) || 0 : 0) - (p.include_dp ? Number(bookForm.dp_nominal) || 0 : 0));
+});
+const lawanTitipanAktif = computed(() => !!promoTerpilih.value?.lawan_titipan_biaya_akad && titipanBruto.value > 0);
 const potonganNominal = (bruto, p) => {
     const n = Number(p?.nilai);
     if (!n || bruto <= 0) return 0;
@@ -255,7 +264,7 @@ const potonganNominal = (bruto, p) => {
 const potonganTanah = computed(() => lawanTanahAktif.value ? potonganNominal(biayaKelebihanTanahBruto.value, bookForm.potongan_tanah) : 0);
 const potonganBiaya = (id) => lawanBiayaIds.value.includes(id) ? potonganNominal(Number(bookForm.biaya_tambahan_nominals[id]) || 0, bookForm.potongan_biaya[id]) : 0;
 const totalPotongan = computed(() => potonganTanah.value + bookForm.biaya_tambahan_selected.reduce((s, id) => s + potonganBiaya(id), 0));
-const adaLawanTapiKosong = computed(() => !!promoTerpilih.value && (promoTerpilih.value.lawan_tanah || promoTerpilih.value.lawan_biaya_tambahan?.length) && !lawanTanahAktif.value && !lawanBiayaIds.value.length);
+const adaLawanTapiKosong = computed(() => !!promoTerpilih.value && (promoTerpilih.value.lawan_tanah || promoTerpilih.value.lawan_biaya_tambahan?.length || promoTerpilih.value.lawan_titipan_biaya_akad) && !lawanTanahAktif.value && !lawanBiayaIds.value.length && !lawanTitipanAktif.value);
 
 // Yang ditagih (setelah potongan promo)
 const biayaKelebihanTanahNominal = computed(() => biayaKelebihanTanahBruto.value - potonganTanah.value);
@@ -337,6 +346,7 @@ const submitBooking = () => {
     };
     if (!Number(payload.diskon_nilai) || !promoTerpilih.value?.lawan_harga_jual) { payload.diskon_mode = ''; payload.diskon_nilai = ''; }   // tanpa lawan Harga Jual / nilai kosong = tanpa diskon
     payload.potongan_tanah = lawanTanahAktif.value && bookForm.potongan_tanah.nilai !== '' ? bookForm.potongan_tanah : null;
+    payload.potongan_titipan = lawanTitipanAktif.value && bookForm.potongan_titipan.nilai !== '' ? bookForm.potongan_titipan : null;
     delete payload.potongan_biaya;
     delete payload.biaya_tambahan_selected;
     delete payload.biaya_tambahan_nominals;
@@ -1015,6 +1025,7 @@ const isBookable = (k) => k.status_jual === 'available';
                                     Potongan pada Harga Jual hanya mengurangi harga jual; tagihan KPR tidak berubah. Untuk memotong biaya tertentu, pakai lawan Kelebihan Tanah / Biaya Tambahan.
                                 </p>
                                 <PotonganPromoInput v-if="lawanTanahAktif" label="Kelebihan Tanah" :bruto="biayaKelebihanTanahBruto" v-model="bookForm.potongan_tanah" />
+                                <PotonganPromoInput v-if="lawanTitipanAktif" label="Titipan Biaya Akad" :bruto="titipanBruto" v-model="bookForm.potongan_titipan" />
                                 <PotonganPromoInput v-for="id in lawanBiayaIds" :key="`pot-${id}`" :label="biayaPresetNama(id)"
                                     :bruto="Number(bookForm.biaya_tambahan_nominals[id]) || 0" v-model="bookForm.potongan_biaya[id]" />
                                 <p v-if="adaLawanTapiKosong" class="text-slate-500 text-xs">Promo ini memotong biaya tertentu, tetapi biaya itu belum ada di pemesanan ini.</p>

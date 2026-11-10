@@ -12,7 +12,7 @@ const props = defineProps({
 // "Lawan" promo: biaya yang boleh dipotong promo ini (tanpa nominal — nominal/persen diisi per transaksi saat booking).
 const lawanForms = reactive({});
 const bukaLawan = (preset) => {
-    lawanForms[preset.id] = { tanah: preset.lawan_tanah, harga_jual: preset.lawan_harga_jual, biaya_tambahan_preset_ids: [...preset.lawan_biaya_tambahan] };
+    lawanForms[preset.id] = { tanah: preset.lawan_tanah, harga_jual: preset.lawan_harga_jual, titipan_biaya_akad: preset.lawan_titipan_biaya_akad, biaya_tambahan_preset_ids: [...preset.lawan_biaya_tambahan] };
 };
 const toggleLawanBt = (presetId, id) => {
     const arr = lawanForms[presetId].biaya_tambahan_preset_ids;
@@ -28,6 +28,7 @@ const simpanLawan = (preset) => {
 const namaLawan = (preset) => [
     ...(preset.lawan_harga_jual ? ['Harga Jual (diskon)'] : []),
     ...(preset.lawan_tanah ? ['Kelebihan Tanah'] : []),
+    ...(preset.lawan_titipan_biaya_akad ? ['Titipan Biaya Akad'] : []),
     ...preset.lawan_biaya_tambahan.map(id => props.biayaTambahanPresets.find(b => b.id === id)?.nama).filter(Boolean),
 ];
 
@@ -85,6 +86,9 @@ const destroy = async (preset) => {
                                 </label>
                                 <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                                     <input type="checkbox" v-model="lawanForms[preset.id].tanah" class="rounded border-slate-600 bg-slate-800 text-violet-500" /> Kelebihan Tanah
+                                </label>
+                                <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                                    <input type="checkbox" v-model="lawanForms[preset.id].titipan_biaya_akad" class="rounded border-slate-600 bg-slate-800 text-violet-500" /> Titipan Biaya Akad (mis. diskon biaya akad, notaris sendiri)
                                 </label>
                                 <label v-for="b in biayaTambahanPresets" :key="b.id" class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                                     <input type="checkbox" :checked="lawanForms[preset.id].biaya_tambahan_preset_ids.includes(b.id)" @change="toggleLawanBt(preset.id, b.id)"

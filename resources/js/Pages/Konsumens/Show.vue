@@ -67,6 +67,7 @@ const getRincianForm = (trx) => {
             biaya_kelebihan_tanah_harga_per_m2: trx.biaya_kelebihan_tanah_harga_per_m2 ?? '',
             biaya_kelebihan_tanah_nominal_input: trx.biaya_kelebihan_tanah_mode === 'nominal' ? (trx.biaya_kelebihan_tanah_nominal ?? '') : '',
             potongan_tanah: { mode: trx.biaya_kelebihan_tanah_potongan_mode ?? 'persen', nilai: trx.biaya_kelebihan_tanah_potongan_nilai ?? '' },
+            potongan_titipan: { mode: trx.titipan_biaya_akad_potongan_mode ?? 'persen', nilai: trx.titipan_biaya_akad_potongan_nilai ?? '' },
             biaya_tambahan: (trx.biaya_tambahan || []).map(bt => ({ ...bt, potongan_input: { mode: bt.potongan_mode ?? 'persen', nilai: bt.potongan_nilai ?? '' } })),
             promo_preset_id: trx.promo_preset_id ?? '',
             diskon_mode: trx.diskon_mode ?? '',
@@ -116,6 +117,13 @@ const subtotalHargaJualForm = (trx, form) => {
     return (Number(form.harga_dasar_ke_unit && trx.harga_unit_sekarang != null ? trx.harga_unit_sekarang : trx.harga_dasar) || 0) + tanah + lain;
 };
 const lawanBtForm = (form, bt) => !bt.locked && !!promoForm(form)?.lawan_biaya_tambahan?.includes(Number(bt.preset_id));
+// Titipan Biaya Akad bruto = nominal Program All In dikurangi Booking Fee/DP yang sudah tercakup (sama dengan rumus server).
+const titipanBrutoForm = (trx, form) => {
+    const p = props.programAllInPresets.find(x => String(x.id) === String(form.program_all_in_preset_id));
+    if (!p) return 0;
+    return Math.max(0, Number(p.nominal) - (p.include_booking_fee ? Number(trx.booking_fee) || 0 : 0) - (p.include_dp ? Number(trx.dp_nominal) || 0 : 0));
+};
+const lawanTitipanForm = (trx, form) => !!promoForm(form)?.lawan_titipan_biaya_akad && !titipanBiayaAkadLocked(trx) && titipanBrutoForm(trx, form) > 0;
 
 const muatanRincian = (form, tambahan = {}) => ({
     biaya_kelebihan_tanah_aktif: form.biaya_kelebihan_tanah_aktif,
@@ -124,6 +132,8 @@ const muatanRincian = (form, tambahan = {}) => ({
     biaya_kelebihan_tanah_harga_per_m2: form.biaya_kelebihan_tanah_harga_per_m2 || null,
     biaya_kelebihan_tanah_nominal_input: form.biaya_kelebihan_tanah_nominal_input || null,
     potongan_tanah: lawanTanahForm(form) && form.potongan_tanah?.nilai !== '' && form.potongan_tanah?.nilai != null ? form.potongan_tanah : null,
+    // Server hanya memakai ini bila promo punya lawan Titipan Biaya Akad, titipan belum terkunci, dan nominal titipan > 0.
+    potongan_titipan: form.potongan_titipan?.nilai !== '' && form.potongan_titipan?.nilai != null ? form.potongan_titipan : null,
     biaya_tambahan: form.biaya_tambahan.filter(bt => !bt.locked).map(bt => ({
         id: bt.id || null, preset_id: bt.preset_id, nominal: Number(bt.nominal) || 0,
         potongan: lawanBtForm(form, bt) && bt.potongan_input?.nilai !== '' && bt.potongan_input?.nilai != null ? bt.potongan_input : null,
@@ -609,7 +619,7 @@ onMounted(() => {
                                 </div>
                                 <div v-if="trx.titipan_biaya_akad_nominal > 0" class="flex justify-between text-slate-400">
                                     <span>Titipan Biaya Akad<span class="text-slate-500 text-xs ml-1">(dari Program All In)</span></span>
-                                    <span class="text-slate-300">{{ formatRp(trx.titipan_biaya_akad_nominal) }}</span>
+                                    <span class="text-slate-300">{{ formatRp(trx.titipan_biaya_akad_ditagih ?? trx.titipan_biaya_akad_nominal) }}<span v-if="Number(trx.titipan_biaya_akad_potongan) > 0" class="text-emerald-300 text-xs ml-1">(potongan promo {{ formatRp(trx.titipan_biaya_akad_potongan) }})</span></span>
                                 </div>
                                 <div v-if="!(trx.booking_fee > 0) && !(trx.dp_nominal > 0) && !(trx.titipan_biaya_akad_nominal > 0)" class="text-slate-500 text-xs">Tidak ada booking fee maupun DP.</div>
                             </div>
@@ -707,6 +717,8 @@ onMounted(() => {
                                     <p v-if="trx.is_kpr && promoForm(getRincianForm(trx)).lawan_harga_jual" class="text-slate-500 text-[0.6875rem]">Potongan pada Harga Jual hanya mengurangi harga jual; tagihan KPR tidak berubah. Untuk memotong biaya tertentu, pakai lawan Kelebihan Tanah / Biaya Tambahan.</p>
                                     <PotonganPromoInput v-if="lawanTanahForm(getRincianForm(trx), biayaKelebihanLocked(trx))" label="Kelebihan Tanah"
                                         :bruto="brutoTanahForm(getRincianForm(trx))" v-model="getRincianForm(trx).potongan_tanah" />
+                                    <PotonganPromoInput v-if="lawanTitipanForm(trx, getRincianForm(trx))" label="Titipan Biaya Akad"
+                                        :bruto="titipanBrutoForm(trx, getRincianForm(trx))" v-model="getRincianForm(trx).potongan_titipan" />
                                     <template v-for="(bt, idx) in getRincianForm(trx).biaya_tambahan" :key="`pot-${idx}`">
                                         <PotonganPromoInput v-if="lawanBtForm(getRincianForm(trx), bt)" :label="biayaTambahanPresets.find(p => p.id === Number(bt.preset_id))?.nama ?? bt.nama"
                                             :bruto="Number(bt.nominal) || 0" v-model="bt.potongan_input" />
@@ -721,7 +733,7 @@ onMounted(() => {
                                     <span v-if="titipanBiayaAkadLocked(trx)" class="text-amber-400 text-xs">🔒 Titipan Biaya Akad sudah ada pembayaran</span>
                                 </div>
                                 <div v-if="titipanBiayaAkadLocked(trx)" class="text-slate-500 text-xs">
-                                    {{ formatRp(trx.titipan_biaya_akad_nominal) }} (terkunci, sudah ada pembayaran)
+                                    {{ formatRp(trx.titipan_biaya_akad_ditagih ?? trx.titipan_biaya_akad_nominal) }} (terkunci, sudah ada pembayaran)
                                 </div>
                                 <select v-else v-model="getRincianForm(trx).program_all_in_preset_id"
                                     class="w-full px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">

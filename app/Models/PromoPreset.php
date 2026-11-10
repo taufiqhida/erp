@@ -34,6 +34,12 @@ class PromoPreset extends Model
         return $this->lawan->contains('jenis', PromoPresetLawan::HARGA_JUAL);
     }
 
+    /** Apakah promo ini boleh memotong Titipan Biaya Akad (mis. diskon biaya akad, konsumen memakai notaris sendiri). */
+    public function lawanTitipanBiayaAkad(): bool
+    {
+        return $this->lawan->contains('jenis', PromoPresetLawan::TITIPAN_BIAYA_AKAD);
+    }
+
     /** @return int[] id preset Biaya Tambahan yang boleh dipotong promo ini. */
     public function lawanBiayaTambahanIds(): array
     {
@@ -49,6 +55,7 @@ class PromoPreset extends Model
             'lawan_tanah'        => $p->lawanTanah(),
             'lawan_harga_jual'   => $p->lawanHargaJual(),
             'lawan_biaya_tambahan' => $p->lawanBiayaTambahanIds(),
+            'lawan_titipan_biaya_akad' => $p->lawanTitipanBiayaAkad(),
         ]);
     }
 }

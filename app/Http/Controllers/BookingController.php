@@ -160,7 +160,7 @@ class BookingController extends Controller
             ]),
             'statusBangunStages' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna', 'urutan']),
             'sumberLeadPresets' => SumberLead::where('is_active', true)->ordered()->get(['id', 'nama', 'is_referral']),
-            'programAllInPresets' => ProgramAllInPreset::where('is_active', true)->ordered()->get(['id', 'nama', 'nominal']),
+            'programAllInPresets' => ProgramAllInPreset::where('is_active', true)->ordered()->get(['id', 'nama', 'nominal', 'include_booking_fee', 'include_dp']),
         ]);
     }
 
@@ -246,6 +246,9 @@ class BookingController extends Controller
             'potongan_tanah'                  => 'nullable|array',
             'potongan_tanah.mode'             => 'nullable|in:persen,nominal',
             'potongan_tanah.nilai'            => 'nullable|numeric|min:0',
+            'potongan_titipan'                => 'nullable|array',
+            'potongan_titipan.mode'           => 'nullable|in:persen,nominal',
+            'potongan_titipan.nilai'          => 'nullable|numeric|min:0',
             'biaya_tambahan.*.potongan'       => 'nullable|array',
             'biaya_tambahan.*.potongan.mode'  => 'nullable|in:persen,nominal',
             'biaya_tambahan.*.potongan.nilai' => 'nullable|numeric|min:0',
@@ -373,6 +376,8 @@ class BookingController extends Controller
                 if ($allInPreset->include_dp) $titipanBiayaAkadNominal -= $dpNominal;
                 $titipanBiayaAkadNominal = max(0, $titipanBiayaAkadNominal);
             }
+            // Potongan promo pada Titipan Biaya Akad (lawan promo "titipan_biaya_akad"): bruto tetap disimpan, yang ditagih = bruto - potongan.
+            $potTitipan = PotonganPromo::untukBaris((float) $titipanBiayaAkadNominal, $validated['potongan_titipan'] ?? null, $lawan['titipan'] && $titipanBiayaAkadNominal > 0);
 
             // Buat transaksi
             $transaksi = KavlingKonsumen::create([
@@ -403,6 +408,9 @@ class BookingController extends Controller
                 'total_biaya_tambahan' => $totalBiayaTambahan,
                 'program_all_in_preset_id'   => $allInPreset?->id,
                 'titipan_biaya_akad_nominal' => $titipanBiayaAkadNominal,
+                'titipan_biaya_akad_potongan'       => $potTitipan['potongan'],
+                'titipan_biaya_akad_potongan_mode'  => $potTitipan['mode'],
+                'titipan_biaya_akad_potongan_nilai' => $potTitipan['nilai'],
                 // Booking otomatis tercomplete & lanjut ke Pemberkasan begitu
                 // sales input booking — tidak ada tahap "Booking" manual yang
                 // perlu dikonfirmasi terpisah lagi (tetap bisa direview lewat
@@ -881,6 +889,9 @@ class BookingController extends Controller
             'potongan_tanah'                  => 'nullable|array',
             'potongan_tanah.mode'             => 'nullable|in:persen,nominal',
             'potongan_tanah.nilai'            => 'nullable|numeric|min:0',
+            'potongan_titipan'                => 'nullable|array',
+            'potongan_titipan.mode'           => 'nullable|in:persen,nominal',
+            'potongan_titipan.nilai'          => 'nullable|numeric|min:0',
             'biaya_tambahan.*.potongan'       => 'nullable|array',
             'biaya_tambahan.*.potongan.mode'  => 'nullable|in:persen,nominal',
             'biaya_tambahan.*.potongan.nilai' => 'nullable|numeric|min:0',

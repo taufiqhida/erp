@@ -28,7 +28,7 @@ class PerubahanRincian
     public const KOLOM = [
         'biaya_kelebihan_tanah_aktif', 'biaya_kelebihan_tanah_luas', 'biaya_kelebihan_tanah_mode', 'biaya_kelebihan_tanah_harga_per_m2',
         'biaya_kelebihan_tanah_nominal_input', 'biaya_tambahan', 'promo_preset_id', 'diskon_mode', 'diskon_nilai', 'program_all_in_preset_id',
-        'potongan_tanah',
+        'potongan_tanah', 'potongan_titipan',
     ];
 
     /** Ambil hanya kolom rincian dari data tervalidasi. */
@@ -154,6 +154,12 @@ class PerubahanRincian
             }
             $kk->program_all_in_preset_id   = $allInPreset?->id;
             $kk->titipan_biaya_akad_nominal = $titipan;
+
+            // Potongan promo pada Titipan Biaya Akad: hanya bila promo yang dipilih memang punya lawan itu (pola sama dengan tanah).
+            $ptt = PotonganPromo::untukBaris((float) $titipan, $u['potongan_titipan'] ?? null, $lawan['titipan'] && $titipan > 0);
+            $kk->titipan_biaya_akad_potongan       = $ptt['potongan'];
+            $kk->titipan_biaya_akad_potongan_mode  = $ptt['mode'];
+            $kk->titipan_biaya_akad_potongan_nilai = $ptt['nilai'];
         }
 
         $kk->save();
@@ -229,6 +235,9 @@ class PerubahanRincian
             'Promo'           => $kk->promoPreset?->nama ?? 'Tidak ada',
             'Diskon'          => $kk->diskon_mode ? ($kk->diskon_mode === 'persen' ? rtrim(rtrim(number_format((float) $kk->diskon_nilai, 2, ',', ''), '0'), ',') . '% (' . $rp($kk->diskon_nominal) . ')' : $rp($kk->diskon_nominal)) : 'Tidak ada',
             'Program All In'  => $kk->programAllInPreset?->nama ?? 'Tidak ada',
+            'Titipan Biaya Akad' => (float) $kk->titipan_biaya_akad_nominal > 0
+                ? $rp($kk->titipan_biaya_akad_nominal) . ((float) $kk->titipan_biaya_akad_potongan > 0 ? ' (potongan promo ' . $rp($kk->titipan_biaya_akad_potongan) . ')' : '')
+                : 'Tidak ada',
             'Harga deal'      => $rp($kk->harga_deal),
         ];
     }
