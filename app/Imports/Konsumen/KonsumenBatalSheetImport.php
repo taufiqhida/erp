@@ -204,8 +204,10 @@ class KonsumenBatalSheetImport implements ToCollection, SkipsEmptyRows
         [$alih, $alihErr] = ImportBantuan::bacaPeralihan($v, $tglBooking, $tglBatal, $nik, $str('hp'), fn ($x) => $this->parseTanggal($x));
         // NIK cocok dengan konsumen lain tetapi nama jelas beda: tolak baris (jangan menempel ke orang yang salah).
         $tolak = $nama ? ImportBantuan::tolakNikNamaBeda($nama, $nik) : null;
-        if ($alihErr || $tolak) {
-            $this->result->skip($this->sheetLabel, $rowNum, implode(' | ', array_unique(array_filter([...$alihErr, $tolak]))));
+        // Konsumen yang sama masih aktif di unit yang sama pada periode batal ini: kemungkinan salah sheet.
+        $bertabrakan = $nama ? ImportBantuan::tolakBatalBertabrakan($nama, $nik, $kavling, $tglBatal) : null;
+        if ($alihErr || $tolak || $bertabrakan) {
+            $this->result->skip($this->sheetLabel, $rowNum, implode(' | ', array_unique(array_filter([...$alihErr, $tolak, $bertabrakan]))));
             return;
         }
 

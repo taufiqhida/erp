@@ -123,6 +123,26 @@ class ImportBantuan
         return "{$siapa}: NIK {$nik} sudah terdaftar atas nama \"{$ada->nama}\" (ID {$ada->id}), sedangkan baris menulis \"{$nama}\" — baris DILEWATI supaya data tidak masuk ke orang yang salah. Periksa NIK pada file.";
     }
 
+    /**
+     * Sheet Batal: tolak baris bila konsumen yang SAMA (dikenali lewat NIK) masih punya transaksi aktif/Selesai di unit yang SAMA dengan
+     * periode yang bertabrakan (booking transaksi aktif tidak lebih akhir dari Tanggal Batal). Itu tanda salah sheet: konsumen yang
+     * masih aktif tercatat batal. Yang sah tetap lolos: konsumen batal lalu booking ulang SESUDAH tanggal batalnya, batal di unit lain,
+     * atau unit yang kini dimiliki orang lain. Tanpa NIK konsumen dianggap baru, jadi tidak ada yang dicocokkan.
+     */
+    public static function tolakBatalBertabrakan(string $nama, ?string $nik, ?\App\Models\Kavling $kavling, ?Carbon $tglBatal): ?string
+    {
+        if (!$nik || !$kavling || !$tglBatal) return null;
+        $konsumen = Konsumen::where('nik', $nik)->first();
+        if (!$konsumen) return null;
+
+        $aktif = KavlingKonsumen::where('kavling_id', $kavling->id)->where('konsumen_id', $konsumen->id)->whereIn('status', ['active', 'completed'])
+            ->whereDate('tanggal_booking', '<=', $tglBatal->toDateString())->orderBy('tanggal_booking')->first();
+        if (!$aktif) return null;
+
+        return "{$nama} (NIK {$nik}) masih punya transaksi aktif di {$kavling->blok}-{$kavling->nomor_kavling} (booking {$aktif->tanggal_booking->format('d M Y')}), sedangkan baris ini "
+            . "mencatatnya batal {$tglBatal->format('d M Y')}. Kemungkinan salah sheet — baris DILEWATI. Bila memang batal, batalkan lewat menu Pengajuan.";
+    }
+
     /** Peringatan kemungkinan ganda untuk pembeli di satu baris: NIK kosong dengan nama yang sudah ada, atau NIK cocok tetapi nama jauh berbeda. */
     public static function peringatanKemiripan(string $nama, ?string $nik, ?Konsumen $cocokNik): ?string
     {

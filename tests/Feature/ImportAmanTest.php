@@ -217,4 +217,62 @@ class ImportAmanTest extends TestCase
         $r->assertSessionHas('importLaporan', fn ($l) => $l['importedBatal'] === 0 && $l['skipped'] === 1 && str_contains($l['errors'][0], 'Pembeli Sebelumnya'));
         $this->assertSame(0, KavlingKonsumen::count());
     }
+
+    // ── Sheet Batal: bertabrakan dengan transaksi aktif milik konsumen yang sama di unit yang sama ──
+
+    private function transaksiAktif(Konsumen $konsumen, string $nomorUnit, string $booking, string $status = 'active'): KavlingKonsumen
+    {
+        $unit = Kavling::where('project_id', $this->project->id)->where('blok', 'A1')->where('nomor_kavling', $nomorUnit)->firstOrFail();
+
+        return KavlingKonsumen::create(['kavling_id' => $unit->id, 'konsumen_id' => $konsumen->id, 'status' => $status, 'status_penjualan' => 'pemberkasan', 'cara_bayar' => 'cash',
+            'tanggal_booking' => $booking, 'harga_dasar' => 300000000, 'harga_deal' => 300000000]);
+    }
+
+    public function test_batal_ditolak_bila_konsumen_yang_sama_masih_aktif_di_unit_yang_sama_pada_periode_itu(): void
+    {
+        $budi = Konsumen::create(['nama' => 'Budi Santoso', 'nik' => '3201010101010055']);
+        $this->transaksiAktif($budi, '1', '2026-03-10');                          // aktif sejak 10 Mar, padahal baris Batal: 1 Mar - 15 Apr
+
+        $file = $this->file([$this->baris(['nik' => '3201010101010055'])]);
+        $this->kirim($file, 'cek')->assertSessionHas('importLaporan', fn ($l) => $l['importedBatal'] === 0 && $l['skipped'] === 1
+            && str_contains($l['errors'][0], 'masih punya transaksi aktif di A1-1') && str_contains($l['errors'][0], 'salah sheet'));
+        $this->assertSame(1, KavlingKonsumen::count());
+    }
+
+    public function test_batal_ditolak_juga_bila_transaksi_aktifnya_sudah_selesai(): void
+    {
+        $budi = Konsumen::create(['nama' => 'Budi Santoso', 'nik' => '3201010101010055']);
+        $this->transaksiAktif($budi, '1', '2026-03-10', 'completed');
+
+        $this->kirim($this->file([$this->baris(['nik' => '3201010101010055'])]), 'cek')
+            ->assertSessionHas('importLaporan', fn ($l) => $l['skipped'] === 1);
+    }
+
+    public function test_batal_yang_sah_tetap_lolos(): void
+    {
+        $budi = Konsumen::create(['nama' => 'Budi Santoso', 'nik' => '3201010101010055']);
+
+        // (1) Budi booking ulang unit yang sama SESUDAH tanggal batalnya (15 Apr): riwayat batal pertamanya sah.
+        $this->transaksiAktif($budi, '1', '2026-04-20');
+        $this->kirim($this->file([$this->baris(['nik' => '3201010101010055'])]), 'cek')
+            ->assertSessionHas('importLaporan', fn ($l) => $l['importedBatal'] === 1 && $l['skipped'] === 0);
+
+        // (2) NIK yang belum dikenal sistem (konsumen baru): tidak ada transaksi aktif yang bisa bertabrakan.
+        $this->kirim($this->file([$this->baris(['nik' => '3201010101010077', 'nama' => 'Orang Lain Batal'])]), 'cek')
+            ->assertSessionHas('importLaporan', fn ($l) => $l['importedBatal'] === 1 && $l['skipped'] === 0);
+    }
+
+    public function test_batal_di_unit_lain_atau_tanpa_nik_tidak_dicocokkan(): void
+    {
+        $budi = Konsumen::create(['nama' => 'Budi Santoso', 'nik' => '3201010101010055']);
+        $this->transaksiAktif($budi, '2', '2026-03-10');                          // Budi aktif di A1-2; baris Batal di A1-1
+
+        $this->kirim($this->file([$this->baris(['nik' => '3201010101010055'])]), 'cek')
+            ->assertSessionHas('importLaporan', fn ($l) => $l['importedBatal'] === 1 && $l['skipped'] === 0);
+
+        // Tanpa NIK konsumen dianggap baru: tidak ada pencocokan (hanya peringatan kemungkinan ganda).
+        $this->transaksiAktif(Konsumen::create(['nama' => 'Budi Santoso']), '1', '2026-03-10');
+        $this->kirim($this->file([$this->baris(['nik' => ''])]), 'cek')
+            ->assertSessionHas('importLaporan', fn ($l) => $l['importedBatal'] === 1 && $l['skipped'] === 0);
+    }
 }
