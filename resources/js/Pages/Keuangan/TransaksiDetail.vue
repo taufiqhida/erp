@@ -259,7 +259,7 @@ const deleteCicilanLain = async (c) => {
                         <span class="text-slate-300">{{ formatRp(transaksi.biaya_kelebihan_tanah_nominal) }}</span>
                     </div>
                     <div v-if="transaksi.biaya_kelebihan_tanah_aktif && Number(transaksi.biaya_kelebihan_tanah_potongan) > 0" class="flex justify-between text-slate-400 pl-3">
-                        <span>− Potongan promo{{ transaksi.promo_nama ? ` (${transaksi.promo_nama})` : '' }}</span>
+                        <span>− Potongan promo{{ transaksi.tanah_promo_nama ? ` (${transaksi.tanah_promo_nama})` : '' }}</span>
                         <span class="text-emerald-300">{{ formatRp(transaksi.biaya_kelebihan_tanah_potongan) }}</span>
                     </div>
                     <template v-for="(bt, i) in transaksi.biaya_tambahan" :key="`bt-${i}`">
@@ -268,12 +268,12 @@ const deleteCicilanLain = async (c) => {
                             <span class="text-slate-300">{{ formatRp(bt.nominal) }}</span>
                         </div>
                         <div v-if="Number(bt.potongan) > 0" class="flex justify-between text-slate-400 pl-3">
-                            <span>− Potongan promo{{ transaksi.promo_nama ? ` (${transaksi.promo_nama})` : '' }}</span>
+                            <span>− Potongan promo{{ bt.promo_nama ? ` (${bt.promo_nama})` : '' }}</span>
                             <span class="text-emerald-300">{{ formatRp(bt.potongan) }}</span>
                         </div>
                     </template>
                     <div v-if="transaksi.diskon_nominal > 0" class="flex justify-between text-slate-400">
-                        <span>− Diskon{{ transaksi.promo_nama ? ` (${transaksi.promo_nama})` : '' }}{{ transaksi.diskon_mode === 'persen' ? ` ${transaksi.diskon_nilai}%` : '' }}</span>
+                        <span>− Diskon{{ transaksi.diskon_promo_nama ? ` (${transaksi.diskon_promo_nama})` : '' }}{{ transaksi.diskon_mode === 'persen' ? ` ${transaksi.diskon_nilai}%` : '' }}</span>
                         <span class="text-rose-400">{{ formatRp(transaksi.diskon_nominal) }}</span>
                     </div>
                     <div class="flex justify-between pt-1.5 border-t border-slate-700 font-semibold">
@@ -311,7 +311,7 @@ const deleteCicilanLain = async (c) => {
                         </div>
                         <div v-if="transaksi.titipan_biaya_akad_nominal > 0" class="flex justify-between text-slate-400">
                             <span>Titipan Biaya Akad<span class="text-slate-500 text-xs ml-1">(dari Program All In)</span></span>
-                            <span class="text-slate-300">{{ formatRp(transaksi.titipan_biaya_akad_ditagih ?? transaksi.titipan_biaya_akad_nominal) }}<span v-if="Number(transaksi.titipan_biaya_akad_potongan) > 0" class="text-emerald-300 text-xs ml-1">(potongan promo {{ formatRp(transaksi.titipan_biaya_akad_potongan) }})</span></span>
+                            <span class="text-slate-300">{{ formatRp(transaksi.titipan_biaya_akad_ditagih ?? transaksi.titipan_biaya_akad_nominal) }}<span v-if="Number(transaksi.titipan_biaya_akad_potongan) > 0" class="text-emerald-300 text-xs ml-1">(potongan promo {{ formatRp(transaksi.titipan_biaya_akad_potongan) }}{{ transaksi.titipan_promo_nama ? ` · ${transaksi.titipan_promo_nama}` : '' }})</span></span>
                         </div>
                         <div v-if="!(transaksi.booking_fee > 0) && !(transaksi.dp_nominal > 0) && !(transaksi.titipan_biaya_akad_nominal > 0)" class="text-slate-500 text-xs">Tidak ada booking fee maupun DP.</div>
                     </div>

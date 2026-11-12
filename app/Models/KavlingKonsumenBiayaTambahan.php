@@ -18,6 +18,7 @@ class KavlingKonsumenBiayaTambahan extends Model
         'potongan',
         'potongan_mode',
         'potongan_nilai',
+        'promo_preset_id',
     ];
 
     protected $casts = [
@@ -35,6 +36,12 @@ class KavlingKonsumenBiayaTambahan extends Model
     public function kavlingKonsumen(): BelongsTo
     {
         return $this->belongsTo(KavlingKonsumen::class);
+    }
+
+    /** Promo yang memotong item biaya ini (null bila tanpa potongan). */
+    public function promoPreset(): BelongsTo
+    {
+        return $this->belongsTo(PromoPreset::class, 'promo_preset_id');
     }
 
     public function preset(): BelongsTo

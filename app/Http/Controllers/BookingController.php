@@ -12,6 +12,7 @@ use App\Models\CatatanTransaksi;
 use App\Support\KoreksiTanggalBooking;
 use App\Support\PerubahanRincian;
 use App\Support\PotonganPromo;
+use App\Support\PromoPerBiaya;
 use App\Models\DokumenTemplate;
 use App\Models\Kavling;
 use App\Models\KavlingKonsumenBiayaTambahan;
@@ -240,6 +241,11 @@ class BookingController extends Controller
             'biaya_tambahan.*.nominal'           => 'required|numeric|min:0',
             // Section 2 — Diskon / Promo
             'promo_preset_id'     => 'nullable|exists:promo_presets,id',
+            // Promo per biaya: tiap baris biaya memilih promonya sendiri (hanya berlaku bila promo itu memang punya lawan baris tsb).
+            'diskon_promo_id'     => 'nullable|exists:promo_presets,id',
+            'promo_tanah_id'      => 'nullable|exists:promo_presets,id',
+            'promo_titipan_id'    => 'nullable|exists:promo_presets,id',
+            'biaya_tambahan.*.promo_preset_id' => 'nullable|exists:promo_presets,id',
             'diskon_mode'         => 'nullable|in:persen,nominal',
             'diskon_nilai'        => 'required_with:diskon_mode|nullable|numeric|min:0',
             // Potongan promo per biaya (hanya berlaku untuk lawan dari promo yang dipilih)
@@ -296,18 +302,17 @@ class BookingController extends Controller
             }
 
             // ── Potongan promo: hanya untuk biaya yang menjadi "lawan" dari promo yang dipilih ──
-            $lawan = PotonganPromo::lawan($validated['promo_preset_id'] ?? null);
-            $potTanah = PotonganPromo::untukBaris(
-                (float) $biayaKelebihanNominal, $validated['potongan_tanah'] ?? null,
-                $lawan['tanah'] && ($validated['biaya_kelebihan_tanah_aktif'] ?? false)
-            );
+            $promoBaris = PromoPerBiaya::dari($validated);
+            $promoTanahId = ($validated['biaya_kelebihan_tanah_aktif'] ?? false) ? $promoBaris->tanah() : null;
+            $potTanah = PotonganPromo::untukBaris((float) $biayaKelebihanNominal, $validated['potongan_tanah'] ?? null, $promoTanahId !== null);
 
             // ── Biaya Tambahan Lain (multi-preset) ──
             $biayaTambahanItems = collect($validated['biaya_tambahan'] ?? [])
-                ->map(function ($item) use ($lawan) {
+                ->map(function ($item) use ($promoBaris) {
                     $preset = BiayaTambahanPreset::find($item['preset_id']);
                     $bruto = (float) $item['nominal'];
-                    $pot = PotonganPromo::untukBaris($bruto, $item['potongan'] ?? null, in_array((int) $item['preset_id'], $lawan['biaya_tambahan'], true));
+                    $promoId = $promoBaris->biayaTambahan($item);
+                    $pot = PotonganPromo::untukBaris($bruto, $item['potongan'] ?? null, $promoId !== null);
                     return [
                         'biaya_tambahan_preset_id' => $item['preset_id'],
                         'nama'                     => $preset?->nama ?? 'Biaya Tambahan',
@@ -315,6 +320,7 @@ class BookingController extends Controller
                         'potongan'                 => $pot['potongan'],
                         'potongan_mode'            => $pot['mode'],
                         'potongan_nilai'           => $pot['nilai'],
+                        'promo_preset_id'          => $pot['potongan'] > 0 ? $promoId : null,
                     ];
                 });
             $biayaTambahanTotal = $biayaTambahanItems->sum(fn ($i) => $i['nominal'] - $i['potongan']);
@@ -327,7 +333,8 @@ class BookingController extends Controller
             $subtotal   = $hargaDasar + $totalBiayaTambahan;
 
             // Diskon = potongan promo pada lawan "Harga Jual": hanya berlaku bila promo yang dipilih memang punya lawan itu.
-            $diskonAktif = !empty($validated['diskon_mode']) && $lawan['harga_jual'];
+            $promoDiskonId = $promoBaris->hargaJual();
+            $diskonAktif = !empty($validated['diskon_mode']) && $promoDiskonId !== null;
             $diskonNominal = 0;
             if ($diskonAktif) {
                 $diskonNominal = $validated['diskon_mode'] === 'persen'
@@ -377,7 +384,8 @@ class BookingController extends Controller
                 $titipanBiayaAkadNominal = max(0, $titipanBiayaAkadNominal);
             }
             // Potongan promo pada Titipan Biaya Akad (lawan promo "titipan_biaya_akad"): bruto tetap disimpan, yang ditagih = bruto - potongan.
-            $potTitipan = PotonganPromo::untukBaris((float) $titipanBiayaAkadNominal, $validated['potongan_titipan'] ?? null, $lawan['titipan'] && $titipanBiayaAkadNominal > 0);
+            $promoTitipanId = $titipanBiayaAkadNominal > 0 ? $promoBaris->titipan() : null;
+            $potTitipan = PotonganPromo::untukBaris((float) $titipanBiayaAkadNominal, $validated['potongan_titipan'] ?? null, $promoTitipanId !== null);
 
             // Buat transaksi
             $transaksi = KavlingKonsumen::create([
@@ -401,16 +409,19 @@ class BookingController extends Controller
                 'biaya_kelebihan_tanah_potongan'       => $potTanah['potongan'],
                 'biaya_kelebihan_tanah_potongan_mode'  => $potTanah['mode'],
                 'biaya_kelebihan_tanah_potongan_nilai' => $potTanah['nilai'],
+                'biaya_kelebihan_tanah_promo_id'       => $potTanah['potongan'] > 0 ? $promoTanahId : null,
                 'promo_preset_id'  => $validated['promo_preset_id'] ?? null,
                 'diskon_mode'      => $diskonAktif ? $validated['diskon_mode'] : null,
                 'diskon_nilai'     => $diskonAktif ? $validated['diskon_nilai'] : null,
                 'diskon_nominal'   => $diskonNominal,
+                'diskon_promo_id'  => $diskonNominal > 0 ? $promoDiskonId : null,
                 'total_biaya_tambahan' => $totalBiayaTambahan,
                 'program_all_in_preset_id'   => $allInPreset?->id,
                 'titipan_biaya_akad_nominal' => $titipanBiayaAkadNominal,
                 'titipan_biaya_akad_potongan'       => $potTitipan['potongan'],
                 'titipan_biaya_akad_potongan_mode'  => $potTitipan['mode'],
                 'titipan_biaya_akad_potongan_nilai' => $potTitipan['nilai'],
+                'titipan_biaya_akad_promo_id'       => $potTitipan['potongan'] > 0 ? $promoTitipanId : null,
                 // Booking otomatis tercomplete & lanjut ke Pemberkasan begitu
                 // sales input booking — tidak ada tahap "Booking" manual yang
                 // perlu dikonfirmasi terpisah lagi (tetap bisa direview lewat
@@ -884,6 +895,10 @@ class BookingController extends Controller
             'biaya_tambahan.*.preset_id'         => 'required|exists:biaya_tambahan_presets,id',
             'biaya_tambahan.*.nominal'           => 'required|numeric|min:0',
             'promo_preset_id'     => 'nullable|exists:promo_presets,id',
+            'diskon_promo_id'     => 'nullable|exists:promo_presets,id',
+            'promo_tanah_id'      => 'nullable|exists:promo_presets,id',
+            'promo_titipan_id'    => 'nullable|exists:promo_presets,id',
+            'biaya_tambahan.*.promo_preset_id' => 'nullable|exists:promo_presets,id',
             'diskon_mode'         => 'nullable|in:persen,nominal',
             'diskon_nilai'        => 'required_with:diskon_mode|nullable|numeric|min:0',
             'potongan_tanah'                  => 'nullable|array',

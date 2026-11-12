@@ -471,6 +471,7 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                     'diskon_mode' => $diskonMode,
                     'diskon_nilai' => $diskonNilai,
                     'diskon_nominal' => $diskonNominal,
+                    'diskon_promo_id' => $diskonNominal > 0 ? $promo?->id : null,
                     'total_biaya_tambahan' => $totalBiayaTambahan,
                     'program_all_in_preset_id' => $allInPreset?->id,
                     'titipan_biaya_akad_nominal' => $titipanNominal,

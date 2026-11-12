@@ -44,6 +44,9 @@ class KavlingKonsumen extends Model
         'diskon_mode',
         'diskon_nilai',
         'diskon_nominal',
+        'diskon_promo_id',
+        'biaya_kelebihan_tanah_promo_id',
+        'titipan_biaya_akad_promo_id',
         'total_biaya_tambahan',
         'program_all_in_preset_id',
         'titipan_biaya_akad_nominal',
@@ -136,9 +139,72 @@ class KavlingKonsumen extends Model
         return $this->belongsTo(SkemaDpPreset::class);
     }
 
+    /** Promo label (preset tanpa lawan, mis. Free Kanopi) — dan promo tunggal lama pada transaksi sebelum promo per biaya. */
     public function promoPreset(): BelongsTo
     {
         return $this->belongsTo(PromoPreset::class);
+    }
+
+    public function diskonPromo(): BelongsTo
+    {
+        return $this->belongsTo(PromoPreset::class, 'diskon_promo_id');
+    }
+
+    public function tanahPromo(): BelongsTo
+    {
+        return $this->belongsTo(PromoPreset::class, 'biaya_kelebihan_tanah_promo_id');
+    }
+
+    public function titipanPromo(): BelongsTo
+    {
+        return $this->belongsTo(PromoPreset::class, 'titipan_biaya_akad_promo_id');
+    }
+
+    /**
+     * Promo yang memotong tiap biaya. Transaksi lama yang belum diisi (perintah promo:isi-per-biaya) memakai promo tunggal lamanya
+     * selama biaya itu memang punya potongan, supaya tampilan dan form tetap benar sebelum maupun sesudah backfill.
+     */
+    public function promoIdDiskon(): ?int
+    {
+        return $this->diskon_promo_id ?? ((float) $this->diskon_nominal > 0 ? $this->promo_preset_id : null);
+    }
+
+    public function promoIdTanah(): ?int
+    {
+        return $this->biaya_kelebihan_tanah_promo_id ?? ((float) $this->biaya_kelebihan_tanah_potongan > 0 ? $this->promo_preset_id : null);
+    }
+
+    public function promoIdTitipan(): ?int
+    {
+        return $this->titipan_biaya_akad_promo_id ?? ((float) $this->titipan_biaya_akad_potongan > 0 ? $this->promo_preset_id : null);
+    }
+
+    public function promoIdBiayaTambahan(KavlingKonsumenBiayaTambahan $bt): ?int
+    {
+        return $bt->promo_preset_id ?? ((float) $bt->potongan > 0 ? $this->promo_preset_id : null);
+    }
+
+    /** Nama promo untuk id tertentu dari relasi yang sudah dimuat (promo label, promo per biaya). */
+    public function namaPromoDariId(?int $id): ?string
+    {
+        if ($id === null) return null;
+
+        return collect([$this->promoPreset, $this->diskonPromo, $this->tanahPromo, $this->titipanPromo])
+            ->merge($this->biayaTambahans->map(fn ($bt) => $bt->promoPreset))
+            ->filter()->firstWhere('id', $id)?->nama;
+    }
+
+    /**
+     * Nama semua promo yang dipakai transaksi ini (promo per biaya + promo label), tanpa duplikat. Relasi promoPreset, diskonPromo,
+     * tanahPromo, titipanPromo dan biayaTambahans.promoPreset sebaiknya sudah dimuat (eager load) saat dipakai di daftar.
+     */
+    public function getPromoNamaGabunganAttribute(): ?string
+    {
+        $nama = collect([$this->promoPreset?->nama, $this->diskonPromo?->nama, $this->tanahPromo?->nama, $this->titipanPromo?->nama])
+            ->merge($this->biayaTambahans->map(fn ($bt) => $bt->promoPreset?->nama))
+            ->filter()->unique()->values();
+
+        return $nama->isEmpty() ? null : $nama->implode(', ');
     }
 
     /** Titipan Biaya Akad yang benar-benar ditagih = bruto (Program All In dikurangi BF/DP tercakup) dikurangi potongan promo. */
