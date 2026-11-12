@@ -612,8 +612,7 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                 // sudah benar-benar tuntas otomatis terkunci, tidak perlu diklik satu-satu.
                 $trx->load(['jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans', 'rincianBiayaAkad.pembayaran', 'skemaDpPreset', 'pembayarans', 'pencairanKprTahaps']);
                 $breakdown = $trx->kartuPiutangBreakdown();
-                if ($breakdown['total_terbayar_konsumen'] >= $breakdown['total_piutang_konsumen']
-                    && $breakdown['total_terbayar_bank'] >= $breakdown['total_piutang_bank']) {
+                if (KavlingKonsumen::lunasPenuh($breakdown)) {
                     $trx->update(['status' => 'completed']);
                 }
 

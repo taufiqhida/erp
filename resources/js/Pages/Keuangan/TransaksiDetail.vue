@@ -218,6 +218,12 @@ const deleteCicilanLain = async (c) => {
                         </template>
                     </div>
                 </div>
+                <p v-if="transaksi.selesai_belum_lunas" class="mt-4 text-amber-300 text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                    ⚠ Transaksi ini berstatus <b>Selesai</b> tetapi masih ada sisa tagihan
+                    ({{ [transaksi.sisa_konsumen > 0.5 ? `konsumen ${formatRp(transaksi.sisa_konsumen)}` : null, transaksi.sisa_bank > 0.5 ? `bank ${formatRp(transaksi.sisa_bank)}` : null].filter(Boolean).join(', ') }}).
+                    Kemungkinan data dikoreksi setelah ditandai Selesai. Minta admin membukanya kembali (<code>transaksi:buka-kembali-selesai</code>),
+                    atau lengkapi pembayaran bila sisanya memang belum masuk.
+                </p>
                 <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mt-5 pt-5 border-t border-slate-800">
                     <div>
                         <div class="text-slate-500 text-xs">Unit</div>

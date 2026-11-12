@@ -153,7 +153,10 @@ class PencairanKprTindakLanjutTest extends TestCase
     {
         $belumAkad = $this->trx(['status_penjualan' => 'pemberkasan'], denganSbum: false);
         $this->tahap($belumAkad, 100000000);
-        $selesai = $this->trx(['status' => 'completed'], denganSbum: false);
+        // Transaksi Selesai peninggalan lama (belum lunas menurut hitungan sekarang). Status diberikan lewat query langsung, karena
+        // transaksi yang dibuat/diubah lewat model dan tak lunas kini otomatis dibuka kembali (lihat HasFinanceTotals).
+        $selesai = $this->trx([], denganSbum: false);
+        \Illuminate\Support\Facades\DB::table('kavling_konsumen')->where('id', $selesai->id)->update(['status' => 'completed']);
 
         $t = $this->props('dashboard')['tindakLanjutBank'];
 

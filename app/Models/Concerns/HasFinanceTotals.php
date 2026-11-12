@@ -51,10 +51,15 @@ trait HasFinanceTotals
             return;
         }
 
-        static::query()->find($id)?->refreshFinance();
+        // Jalur event (pembayaran/jadwal/rincian/pencairan berubah): transaksi Selesai yang tak lagi lunas dibuka kembali.
+        static::query()->find($id)?->refreshFinance(tinjauSelesai: true);
     }
 
-    public function refreshFinance(): void
+    /**
+     * @param  bool  $tinjauSelesai  true hanya dari jalur event (perubahan data). Perintah massal (finance:recompute, perbaikan data)
+     *                               sengaja TIDAK mengubah status, supaya penghitungan ulang tidak membuka transaksi diam-diam.
+     */
+    public function refreshFinance(bool $tinjauSelesai = false): void
     {
         $this->unsetRelations()->load([
             'jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans', 'rincianBiayaAkad.pembayaran',
@@ -80,5 +85,37 @@ trait HasFinanceTotals
 
         foreach ($values as $key => $value) $this->setAttribute($key, $value);
         $this->syncOriginalAttributes(array_keys($values));
+
+        if ($tinjauSelesai) $this->bukaKembaliBilaTakLunas($b);
+    }
+
+    /**
+     * Status Selesai (completed) mengunci transaksi dan sebelumnya satu arah: setelah pembayaran/pencairan/rincian dikoreksi lewat
+     * override, tidak ada yang meninjau ulang. Kini transaksi Selesai yang hasil koreksinya tidak lagi lunas otomatis kembali
+     * berjalan (active) dan kuncinya lepas, supaya Keuangan bisa melanjutkan pencatatan lalu menandai Selesai lagi bila sudah tuntas.
+     * Dicatat di activity log (Audit Trail) beserta nominal sisanya.
+     */
+    private function bukaKembaliBilaTakLunas(array $b): void
+    {
+        if ($this->status !== 'completed' || static::lunasPenuh($b)) return;
+
+        $sisaKonsumen = round(max(0, $b['total_piutang_konsumen'] - $b['total_terbayar_konsumen']), 2);
+        $sisaBank = round(max(0, $b['total_piutang_bank'] - $b['total_terbayar_bank']), 2);
+
+        static::query()->whereKey($this->getKey())->update(['status' => 'active']);
+        $this->setAttribute('status', 'active');
+        $this->syncOriginalAttributes(['status']);
+
+        $rp = fn ($n) => 'Rp ' . number_format($n, 0, ',', '.');
+        $rincian = collect([$sisaKonsumen > 0.5 ? "sisa konsumen {$rp($sisaKonsumen)}" : null, $sisaBank > 0.5 ? "sisa bank {$rp($sisaBank)}" : null])->filter()->implode(', ');
+        $pesan = "Status Selesai dibuka kembali otomatis karena belum lunas ({$rincian}).";
+
+        activity('transaksi')->performedOn($this)->causedBy(auth()->user())
+            ->withProperties(['sisa_konsumen' => $sisaKonsumen, 'sisa_bank' => $sisaBank])->log($pesan);
+
+        // Beri tahu pengguna yang sedang bekerja (toast), bila ini terjadi di dalam permintaan web.
+        if (app()->bound('request') && request()->hasSession()) {
+            request()->session()->flash('warning', "Transaksi dibuka kembali (tidak lagi Selesai): {$rincian}. Lengkapi pembayaran lalu tandai Selesai lagi.");
+        }
     }
 }

@@ -173,6 +173,8 @@ class KeuanganController extends Controller
                     'hari_terlambat'         => $terlambat ? (int) $tempo->diffInDays(now()->startOfDay()) : 0,
                     'siap_selesai'           => $kk->status === 'active' && (float) $kk->fin_piutang_konsumen > 0
                         && $sisa <= self::SISA_EPS && (float) $kk->fin_sisa_bank <= self::SISA_EPS,
+                    // Peninggalan sebelum ada peninjauan ulang otomatis: berstatus Selesai tetapi masih ada sisa (lihat transaksi:buka-kembali-selesai).
+                    'selesai_belum_lunas'    => $kk->status === 'completed' && ($sisa > self::SISA_EPS || (float) $kk->fin_sisa_bank > self::SISA_EPS),
                 ];
             });
 
@@ -589,8 +591,10 @@ class KeuanganController extends Controller
                 'total_terbayar_konsumen' => $breakdown['total_terbayar_konsumen'],
                 'total_piutang_bank'     => $breakdown['total_piutang_bank'],
                 'total_terbayar_bank'    => $breakdown['total_terbayar_bank'],
-                'can_complete'           => $breakdown['total_terbayar_konsumen'] >= $breakdown['total_piutang_konsumen']
-                    && $breakdown['total_terbayar_bank'] >= $breakdown['total_piutang_bank'],
+                'can_complete'           => KavlingKonsumen::lunasPenuh($breakdown),
+                'selesai_belum_lunas'    => $kk->status === 'completed' && !KavlingKonsumen::lunasPenuh($breakdown),
+                'sisa_konsumen'          => round(max(0, $breakdown['total_piutang_konsumen'] - $breakdown['total_terbayar_konsumen']), 2),
+                'sisa_bank'              => round(max(0, $breakdown['total_piutang_bank'] - $breakdown['total_terbayar_bank']), 2),
                 'pencairan_kpr_tahaps'   => $kk->pencairanKprTahaps->map(fn($t) => [
                     'id'           => $t->id,
                     'nominal'      => $t->nominal,
@@ -651,8 +655,7 @@ class KeuanganController extends Controller
         $breakdown = $kk->kartuPiutangBreakdown();
 
         abort_unless(
-            $breakdown['total_terbayar_konsumen'] >= $breakdown['total_piutang_konsumen']
-            && $breakdown['total_terbayar_bank'] >= $breakdown['total_piutang_bank'],
+            KavlingKonsumen::lunasPenuh($breakdown),
             422,
             'Semua pembayaran konsumen dan pencairan bank harus lunas dulu sebelum transaksi bisa ditandai selesai.'
         );

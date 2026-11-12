@@ -523,6 +523,19 @@ class KavlingKonsumen extends Model
         return $dpJadwal->every(fn($j) => $j->status === 'lunas');
     }
 
+    /**
+     * SATU-SATUNYA aturan "lunas penuh" untuk status Selesai: total terbayar konsumen DAN bank menutup total piutangnya (toleransi
+     * Rp 0,5 untuk pembulatan). Dipakai tombol Tandai Selesai, impor (Selesai otomatis), tombol aktif di Detail Keuangan, dan peninjauan
+     * ulang otomatis saat transaksi Selesai diedit.
+     *
+     * @param  array{total_terbayar_konsumen: float, total_piutang_konsumen: float, total_terbayar_bank: float, total_piutang_bank: float}  $breakdown
+     */
+    public static function lunasPenuh(array $breakdown): bool
+    {
+        return (float) $breakdown['total_terbayar_konsumen'] >= (float) $breakdown['total_piutang_konsumen'] - 0.5
+            && (float) $breakdown['total_terbayar_bank'] >= (float) $breakdown['total_piutang_bank'] - 0.5;
+    }
+
     /** Apakah seluruh Kartu Piutang (semua jenis) sudah lunas (gate cash/cash bertahap sebelum Rencana Akad) */
     public function getPiutangLunasAttribute(): bool
     {

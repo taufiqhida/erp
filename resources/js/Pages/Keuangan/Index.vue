@@ -203,7 +203,8 @@ const statusPenjualanConfig = computed(() => {
                                 </td>
                                 <td class="px-4 py-3">
                                     <span class="px-2 py-0.5 text-xs rounded-full font-medium" :style="statusPenjualanConfig[row.status_penjualan]?.style">{{ row.status_penjualan_label }}</span>
-                                    <div v-if="row.status === 'completed'" class="mt-1"><span class="px-2 py-0.5 text-[0.625rem] rounded-full font-medium bg-emerald-500/15 text-emerald-400">✅ Selesai</span></div>
+                                    <div v-if="row.selesai_belum_lunas" class="mt-1"><span class="px-2 py-0.5 text-[0.625rem] rounded-full font-medium bg-amber-500/15 text-amber-300" title="Berstatus Selesai tetapi masih ada sisa tagihan. Hubungi admin untuk membukanya kembali.">⚠ Selesai · belum lunas</span></div>
+                                    <div v-else-if="row.status === 'completed'" class="mt-1"><span class="px-2 py-0.5 text-[0.625rem] rounded-full font-medium bg-emerald-500/15 text-emerald-400">✅ Selesai</span></div>
                                     <div v-else-if="row.siap_selesai" class="mt-1"><span class="px-2 py-0.5 text-[0.625rem] rounded-full font-medium bg-emerald-500/15 text-emerald-400">Siap ditandai Selesai</span></div>
                                 </td>
                                 <td class="px-4 py-3 text-slate-200 text-right font-medium">{{ formatRp(row.kategori_resmi) }}</td>
