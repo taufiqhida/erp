@@ -86,10 +86,14 @@ class Kavling extends Model
         return $this->hasMany(KavlingKonsumen::class);
     }
 
-    /** Transaksi aktif (konsumen saat ini) */
+    /**
+     * Transaksi yang sedang memegang unit (konsumen saat ini): berjalan (active) ATAU sudah Selesai (completed, terkunci). Transaksi yang
+     * sudah ditandai Selesai (termasuk hasil import yang piutangnya sudah lunas) tetap pemilik unit, jadi nama pembeli dan tombol lihat
+     * pesanan harus tetap tampil di siteplan/tabel. Hanya transaksi batal (cancelled) yang tidak dihitung. Dipakai untuk tampilan.
+     */
     public function activeTransaction(): HasOne
     {
-        return $this->hasOne(KavlingKonsumen::class)->where('status', 'active')->latest();
+        return $this->hasOne(KavlingKonsumen::class)->whereIn('status', ['active', 'completed'])->latest();
     }
 
     public function cancellationRequests(): HasMany
