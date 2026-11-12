@@ -324,7 +324,7 @@ const deleteCicilanLain = async (c) => {
                                         <button @click="editingTanggal = null" class="ml-0.5 text-slate-500 hover:text-slate-300 text-xs" aria-label="Batal mengubah">✕</button>
                                     </template>
                                     <template v-else>
-                                        <span class="text-slate-500 text-xs ml-2">jatuh tempo {{ j.tanggal_jatuh_tempo }}</span>
+                                        <span class="text-slate-500 text-xs ml-2">{{ j.tanggal_jatuh_tempo ? `jatuh tempo ${j.tanggal_jatuh_tempo}` : 'jatuh tempo: menunggu rencana akad' }}</span>
                                         <button v-if="j.status === 'belum_bayar' && canPayItem" @click="openEditTanggal(j)"
                                             class="text-slate-500 hover:text-violet-400 text-xs ml-1" title="Ubah tanggal jatuh tempo">✎</button>
                                     </template>

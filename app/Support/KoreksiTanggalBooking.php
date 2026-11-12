@@ -46,6 +46,8 @@ class KoreksiTanggalBooking
         $digeser = [];
         $terkunci = 0;
         foreach ($kk->jadwalTagihans()->get() as $j) {
+            // Jatuh tempo kosong (menunggu rencana akad) tidak mengikuti tanggal booking, jadi tidak digeser maupun dihitung terkunci.
+            if ($j->tanggal_jatuh_tempo === null) continue;
             if ($j->status === 'belum_bayar' || in_array($j->pembayaran_konsumen_id, $idUtj, true)) $digeser[] = $j->id;
             else $terkunci++;
         }

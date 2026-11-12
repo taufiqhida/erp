@@ -46,6 +46,7 @@ class JadwalTagihan extends Model
 
     public function getIsTerlambatAttribute(): bool
     {
-        return $this->status === 'belum_bayar' && $this->tanggal_jatuh_tempo->isPast();
+        // Jatuh tempo kosong = menunggu tanggal rencana akad: belum bisa dianggap terlambat.
+        return $this->status === 'belum_bayar' && $this->tanggal_jatuh_tempo !== null && $this->tanggal_jatuh_tempo->isPast();
     }
 }

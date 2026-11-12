@@ -541,8 +541,8 @@ class KonsumenController extends Controller
                         'jenis_label'             => $j->jenis_label,
                         'nomor_cicilan'           => $j->nomor_cicilan,
                         'jumlah'                  => $j->jumlah,
-                        'tanggal_jatuh_tempo'     => $j->tanggal_jatuh_tempo->format('d M Y'),
-                        'tanggal_jatuh_tempo_raw' => $j->tanggal_jatuh_tempo->format('Y-m-d'),
+                        'tanggal_jatuh_tempo'     => $j->tanggal_jatuh_tempo?->format('d M Y'),       // null = menunggu rencana akad
+                        'tanggal_jatuh_tempo_raw' => $j->tanggal_jatuh_tempo?->format('Y-m-d'),
                         'status'                  => $j->status,
                         'is_terlambat'            => $j->is_terlambat,
                         'jumlah_dibayar'          => $j->pembayaran?->jumlah,

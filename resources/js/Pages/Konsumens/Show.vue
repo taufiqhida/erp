@@ -885,7 +885,7 @@ onMounted(() => {
                                             class="flex flex-wrap items-center justify-between gap-2 pl-8 pr-3 py-2 text-sm border-b border-slate-800/40 last:border-b-0">
                                             <div class="flex-1">
                                                 <span class="text-slate-400">{{ j.jenis_label }} #{{ j.nomor_cicilan }}</span>
-                                                <span class="text-slate-500 text-xs ml-2">jatuh tempo {{ j.tanggal_jatuh_tempo }}</span>
+                                                <span class="text-slate-500 text-xs ml-2">{{ j.tanggal_jatuh_tempo ? `jatuh tempo ${j.tanggal_jatuh_tempo}` : 'jatuh tempo: menunggu rencana akad' }}</span>
                                                 <span v-if="j.status !== 'lunas' && j.is_terlambat" class="ml-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-500/15 text-rose-400">Terlambat</span>
                                             </div>
                                             <div class="flex items-center gap-3 flex-shrink-0">

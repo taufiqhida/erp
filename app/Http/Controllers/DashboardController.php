@@ -294,8 +294,9 @@ class DashboardController extends Controller
                 'project'             => $j->kavlingKonsumen->kavling->project->nama,
                 'jenis_label'         => $j->jenis_label,
                 'jumlah'              => $j->jumlah,
-                'tanggal_jatuh_tempo' => $j->tanggal_jatuh_tempo->format('d M Y'),
-                'hari_terlambat'      => (int) abs(now()->startOfDay()->diffInDays($j->tanggal_jatuh_tempo)),
+                // Query di atas sudah membuang jatuh tempo kosong; ?-> hanya pengaman.
+                'tanggal_jatuh_tempo' => $j->tanggal_jatuh_tempo?->format('d M Y'),
+                'hari_terlambat'      => $j->tanggal_jatuh_tempo ? (int) abs(now()->startOfDay()->diffInDays($j->tanggal_jatuh_tempo)) : 0,
                 'transaksi_id'        => $j->kavling_konsumen_id,
             ]),
         ];
