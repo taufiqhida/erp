@@ -302,4 +302,58 @@ class KonsumenImportSpec
             'tahap_batal' => 'Tahap Batal', 'alih_hubungan' => 'Hubungan Peralihan',
         ][$key] ?? null;
     }
+
+    /**
+     * Pemeriksaan header file SEBELUM ada baris yang diimpor. Importer membaca kolom berdasarkan POSISI, jadi file yang kolomnya
+     * bergeser (template lama sebelum ada preset baru, kolom dihapus/diselipkan) akan mengisi kolom yang salah tanpa ketahuan.
+     * Setiap sheet yang dikenali dibandingkan dengan header yang dihasilkan columns()/batalColumns() saat ini. Tanda " *" dan " †"
+     * di ujung header diabaikan. Mengembalikan daftar masalah (kosong = file sesuai template).
+     *
+     * @return string[]
+     */
+    public static function validasiHeader(string $path): array
+    {
+        $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($path);
+        $reader->setReadDataOnly(true);
+        $ss = $reader->load($path);
+
+        $norm = fn ($s) => mb_strtolower(preg_replace('/\s+/u', ' ', trim(preg_replace('/\s*[*†]+\s*$/u', '', trim((string) $s)))));
+        $masalah = [];
+        $dikenali = 0;
+
+        $periksa = function (string $judul, array $kolom) use ($ss, $norm, &$masalah, &$dikenali) {
+            $sheet = $ss->getSheetByName($judul);
+            if (!$sheet) return;
+            $dikenali++;
+
+            $harapan = array_map(fn ($c) => $norm($c[1]), $kolom);
+            $terbaca = [];
+            $maks = max(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::columnIndexFromString($sheet->getHighestColumn()), count($harapan));
+            for ($i = 1; $i <= $maks; $i++) $terbaca[] = $norm($sheet->getCell([$i, 1])->getValue());
+            while ($terbaca && end($terbaca) === '') array_pop($terbaca);
+            if (!$terbaca && $sheet->getHighestRow() <= 1) return;       // sheet kosong: tidak ada yang diimpor
+
+            $beda = [];
+            for ($i = 0; $i < max(count($terbaca), count($harapan)); $i++) {
+                if (($terbaca[$i] ?? '') === ($harapan[$i] ?? '')) continue;
+                $huruf = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1);
+                $dapat = ($terbaca[$i] ?? '') === '' ? '(kosong)' : '"' . $sheet->getCell([$i + 1, 1])->getValue() . '"';
+                $mestinya = isset($kolom[$i]) ? '"' . $kolom[$i][1] . '"' : '(tidak ada kolom)';
+                $beda[] = "kolom {$huruf}: file berisi {$dapat}, seharusnya {$mestinya}";
+            }
+            if (!$beda) return;
+
+            $jumlah = count($terbaca) !== count($harapan) ? " Jumlah kolom file " . count($terbaca) . ", seharusnya " . count($harapan) . '.' : '';
+            $masalah[] = "[{$judul}] Header tidak sesuai template: " . implode('; ', array_slice($beda, 0, 3)) . (count($beda) > 3 ? '; … (' . (count($beda) - 3) . ' kolom lain juga berbeda)' : '') . '.' . $jumlah;
+        };
+
+        foreach (self::CARA_BAYAR_SHEETS as $caraBayar => $judul) $periksa($judul, self::columns($caraBayar));
+        $periksa(self::BATAL_SHEET, self::batalColumns());
+
+        if ($dikenali === 0) {
+            $masalah[] = 'Tidak ada sheet yang dikenali. Nama sheet harus: ' . implode(', ', [...array_values(self::CARA_BAYAR_SHEETS), self::BATAL_SHEET]) . '.';
+        }
+
+        return $masalah;
+    }
 }

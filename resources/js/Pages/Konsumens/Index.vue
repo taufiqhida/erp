@@ -16,12 +16,35 @@ const showLengkapi = ref(false);
 // Sama seperti pola Import Excel Kavling — download template, browse file,
 // upload. Butuh proyek aktif karena unit di-assign scoped per proyek.
 const showImport = ref(false);
-const importForm = useForm({ file: null });
-const onImportFile = (e) => { importForm.file = e.target.files[0]; };
-const submitImport = () => {
-    importForm.post(route('konsumens.import', currentProject.value.id), {
-        onSuccess: () => { showImport.value = false; importForm.reset(); },
+const importForm = useForm({ file: null, mode: 'cek' });
+// Alur aman: pilih file -> "Cek dulu" (simulasi, tidak menyimpan apa pun) -> baca laporan -> "Import sungguhan" untuk file yang SAMA.
+const sudahDicek = ref(false);
+const laporan = ref(null);   // laporan terakhir dari server: { mode: 'cek'|'import'|'ditolak', imported, importedBatal, skipped, errors[], warnings[] }
+const onImportFile = (e) => { importForm.file = e.target.files[0]; sudahDicek.value = false; laporan.value = null; };
+const kirimImport = (mode) => {
+    importForm.transform((d) => ({ ...d, mode })).post(route('konsumens.import', currentProject.value.id), {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: (p) => {
+            laporan.value = p.props.flash?.importLaporan ?? null;
+            if (mode === 'cek') sudahDicek.value = laporan.value?.mode === 'cek';
+            else if (laporan.value?.mode === 'import') { sudahDicek.value = false; importForm.reset(); }
+        },
     });
+};
+const tutupImport = () => { showImport.value = false; sudahDicek.value = false; laporan.value = null; importForm.reset(); };
+const bisaImportSungguhan = computed(() => sudahDicek.value && !!importForm.file && ((laporan.value?.imported ?? 0) + (laporan.value?.importedBatal ?? 0)) > 0);
+const judulLaporan = computed(() => ({
+    cek: 'SIMULASI — belum ada yang disimpan',
+    import: 'SELESAI — data sudah disimpan',
+    ditolak: 'FILE DITOLAK — tidak ada yang diproses',
+}[laporan.value?.mode] ?? ''));
+const salinLaporan = async () => {
+    const l = laporan.value;
+    if (!l) return;
+    const teks = [judulLaporan.value, `Konsumen: ${l.imported}, batal: ${l.importedBatal}, dilewati: ${l.skipped}, peringatan: ${l.warnings.length}`,
+        ...(l.errors.length ? ['', 'DILEWATI / DITOLAK:', ...l.errors] : []), ...(l.warnings.length ? ['', 'PERINGATAN:', ...l.warnings] : [])].join('\n');
+    try { await navigator.clipboard.writeText(teks); } catch { /* clipboard bisa diblokir; laporan tetap terlihat di layar */ }
 };
 
 const props = defineProps({
@@ -489,14 +512,14 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
         <!-- ── MODAL: Import Konsumen ───────────────────────────────── -->
         <Teleport to="body">
             <div v-if="showImport" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showImport = false" />
-                <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+                <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="tutupImport" />
+                <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full shadow-2xl max-h-[92vh] overflow-y-auto" :class="laporan ? 'max-w-2xl' : 'max-w-md'">
                     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
                         <div>
                             <h3 class="text-white font-semibold">Import Konsumen</h3>
                             <p class="text-slate-400 text-xs mt-0.5">{{ currentProject?.nama }} — upload file Excel (.xlsx) sesuai format template</p>
                         </div>
-                        <button @click="showImport = false" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
+                        <button @click="tutupImport" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/></svg>
                         </button>
                     </div>
@@ -510,18 +533,48 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                             <p>Template berisi 4 sheet (KPR Subsidi/KPR Komersil/Cash/Cash Bertahap) — pilih sheet sesuai cara bayar tiap konsumen — ditambah sheet <b>Batal</b> untuk konsumen yang sudah batal (riwayat &amp; uang hangus; khusus yang berhak mereview pembatalan). Baca sheet "Petunjuk" &amp; "Kamus Kolom" di dalam file untuk aturan lengkap dan strategi migrasi bertahap.</p>
                             <p class="pt-1 text-slate-500">Unit (Kluster+Blok+Nomor) harus sudah ada di Stok Kavling &amp; berstatus Tersedia. Baris dengan data tidak valid dilewati dengan pesan error yang jelas — baris lain tetap masuk.</p>
                         </div>
+                        <p class="text-slate-500 text-xs">Alur aman: pilih file → <b class="text-slate-300">Cek dulu</b> (simulasi, tidak ada yang disimpan) → baca laporan → <b class="text-slate-300">Import sungguhan</b>.</p>
                         <div>
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">Pilih File Excel</label>
                             <input type="file" accept=".xlsx,.xls" @change="onImportFile"
                                 class="block w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:bg-slate-700 file:text-slate-300 hover:file:bg-slate-600 cursor-pointer" />
                             <p v-if="importForm.errors.file" class="text-rose-400 text-xs mt-1">{{ importForm.errors.file }}</p>
                         </div>
+                        <!-- Laporan lengkap (simulasi / hasil import / file ditolak) — tetap tampil sampai dialog ditutup -->
+                        <div v-if="laporan" class="rounded-xl border p-4 space-y-3 text-xs"
+                            :class="laporan.mode === 'ditolak' ? 'border-rose-500/40 bg-rose-500/5' : laporan.mode === 'cek' ? 'border-sky-500/40 bg-sky-500/5' : 'border-emerald-500/40 bg-emerald-500/5'">
+                            <div class="flex items-center justify-between gap-3">
+                                <span class="font-semibold" :class="laporan.mode === 'ditolak' ? 'text-rose-300' : laporan.mode === 'cek' ? 'text-sky-300' : 'text-emerald-300'">{{ judulLaporan }}</span>
+                                <button type="button" @click="salinLaporan" class="text-violet-400 hover:text-violet-300">Salin laporan</button>
+                            </div>
+                            <div v-if="laporan.mode !== 'ditolak'" class="grid grid-cols-4 gap-2 text-center">
+                                <div class="bg-slate-800/70 rounded-lg py-2"><div class="text-slate-100 text-base font-semibold">{{ laporan.imported }}</div><div class="text-slate-500">{{ laporan.mode === 'cek' ? 'akan masuk' : 'masuk' }}</div></div>
+                                <div class="bg-slate-800/70 rounded-lg py-2"><div class="text-slate-100 text-base font-semibold">{{ laporan.importedBatal }}</div><div class="text-slate-500">batal</div></div>
+                                <div class="bg-slate-800/70 rounded-lg py-2"><div class="text-base font-semibold" :class="laporan.skipped ? 'text-rose-300' : 'text-slate-100'">{{ laporan.skipped }}</div><div class="text-slate-500">dilewati</div></div>
+                                <div class="bg-slate-800/70 rounded-lg py-2"><div class="text-base font-semibold" :class="laporan.warnings.length ? 'text-amber-300' : 'text-slate-100'">{{ laporan.warnings.length }}</div><div class="text-slate-500">peringatan</div></div>
+                            </div>
+                            <div v-if="laporan.errors.length">
+                                <div class="text-rose-300 font-medium mb-1">{{ laporan.mode === 'ditolak' ? 'Masalah pada file' : 'Dilewati' }} ({{ laporan.errors.length }})</div>
+                                <ul class="max-h-44 overflow-y-auto space-y-1 text-slate-300 bg-slate-950/50 rounded-lg p-2"><li v-for="(e, i) in laporan.errors" :key="`e${i}`">{{ e }}</li></ul>
+                            </div>
+                            <div v-if="laporan.warnings.length">
+                                <div class="text-amber-300 font-medium mb-1">Peringatan — baris sudah/akan masuk, cek manual ({{ laporan.warnings.length }})</div>
+                                <ul class="max-h-44 overflow-y-auto space-y-1 text-slate-300 bg-slate-950/50 rounded-lg p-2"><li v-for="(w, i) in laporan.warnings" :key="`w${i}`">{{ w }}</li></ul>
+                            </div>
+                            <p v-if="laporan.mode === 'cek' && !bisaImportSungguhan" class="text-slate-400">Tidak ada baris yang bisa diimpor. Perbaiki file, lalu pilih ulang dan Cek dulu lagi.</p>
+                            <p v-else-if="laporan.mode === 'cek'" class="text-slate-400">Belum ada yang disimpan. Bila laporan sudah sesuai, klik <b class="text-slate-200">Import sungguhan</b> (file harus tetap yang sama).</p>
+                        </div>
                     </div>
                     <div class="px-6 pb-5 flex gap-3">
-                        <button @click="showImport = false" class="flex-1 py-2.5 text-slate-400 border border-slate-700 rounded-lg text-sm transition-colors hover:text-slate-200">Batal</button>
-                        <button @click="submitImport" :disabled="importForm.processing || !importForm.file"
-                            class="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-all">
-                            {{ importForm.processing ? 'Mengimpor...' : '📥 Import Sekarang' }}
+                        <button @click="tutupImport" class="flex-1 py-2.5 text-slate-400 border border-slate-700 rounded-lg text-sm transition-colors hover:text-slate-200">{{ laporan?.mode === 'import' ? 'Tutup' : 'Batal' }}</button>
+                        <button @click="kirimImport('cek')" :disabled="importForm.processing || !importForm.file"
+                            class="flex-1 py-2.5 bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 disabled:opacity-50 text-sky-200 text-sm font-medium rounded-lg transition-colors">
+                            {{ importForm.processing ? 'Memeriksa...' : '🔍 Cek dulu' }}
+                        </button>
+                        <button @click="kirimImport('import')" :disabled="importForm.processing || !bisaImportSungguhan"
+                            :title="bisaImportSungguhan ? '' : 'Jalankan Cek dulu untuk file ini lebih dulu'"
+                            class="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-all">
+                            📥 Import sungguhan
                         </button>
                     </div>
                 </div>

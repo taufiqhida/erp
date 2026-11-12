@@ -24,6 +24,7 @@ use App\Support\KonsumenImportSpec;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -929,7 +930,9 @@ class KonsumenController extends Controller
             ['Kolom tambahan Sheet Batal', 'Sales / Agent, Bank Rekanan KPR, dan Tahap Terakhir Sebelum Batal bersifat opsional (kosong = aman). Sales/Bank yang tidak ada di master TIDAK menggagalkan baris: baris tetap masuk dan namanya dicatat di Rincian + muncul sebagai peringatan. Tahap Terakhir harus dari dropdown; dipakai untuk analisis batal di tahap mana dan tampil di profil konsumen.'],
             ['Tanggal Batal', 'Isi tanggal KEJADIAN batalnya (kapan konsumen menyatakan batal / uang dikembalikan), bukan tanggal Anda menginput data. Tanggal ini dipakai Dashboard untuk menghitung jumlah batal per periode. Kalau benar-benar tidak diketahui, perkirakan terdekat dan tulis di Rincian.'],
             ['Pembeli Sebelumnya (alih pembeli)', 'Enam kolom opsional di ujung kanan SETIAP sheet (4 cara bayar + Batal). Isi hanya kalau transaksi di baris itu hasil ALIH PEMBELI: baris diisi data pembeli SEKARANG (B), kolom "Pembeli Sebelumnya" diisi data pembeli awal (A). Nama wajib bila kolom lain terisi; NIK/HP A tidak boleh sama dengan B; tanggal peralihan tidak boleh sebelum Tanggal Booking (dan tidak melewati Tanggal Batal di sheet Batal). Hasilnya muncul di menu Pengajuan dan riwayat peralihan profil konsumen. Kalau A sendiri pernah punya transaksi batal terpisah, isi NIK A yang sama supaya terhubung ke konsumen yang sama.'],
-            ['Peringatan (tidak memblokir)', 'Setelah import, laporan bisa memuat "(peringatan)" untuk: NIK kosong padahal sudah ada konsumen bernama sama (kemungkinan ganda), NIK cocok tetapi nama sangat berbeda, serta Sales/Bank yang tidak ada di master. Baris peringatan SUDAH masuk; cek manual dan perbaiki bila perlu.'],
+            ['Peringatan (tidak memblokir)', 'Laporan bisa memuat "(peringatan)" untuk: NIK kosong padahal sudah ada konsumen bernama sama (kemungkinan ganda), serta Sales/Bank yang tidak ada di master. Baris peringatan SUDAH masuk; cek manual dan perbaiki bila perlu.'],
+            ['NIK milik orang lain (DITOLAK)', 'Kalau NIK pada baris sudah terdaftar atas nama konsumen lain dan namanya jelas berbeda (kemiripan di bawah 50%), baris DILEWATI — bukan sekadar peringatan — supaya transaksi tidak menempel ke orang yang salah. Berlaku juga untuk NIK Pembeli Sebelumnya. Nama yang hanya berbeda penulisan (mis. singkatan) tetap dianggap konsumen yang sama.'],
+            ['Cek dulu & header file', 'Upload selalu lewat "Cek dulu": importer dijalankan penuh lalu DIBATALKAN, laporannya (baris masuk, dilewati, peringatan) tampil lengkap. Baru setelah itu "Import sungguhan" untuk file yang sama. Header tiap sheet juga diperiksa: kalau kolom bergeser atau jumlahnya beda dengan template saat ini (mis. preset baru ditambahkan sesudah template diunduh), SELURUH file ditolak — unduh ulang template lalu pindahkan datanya.'],
             ['Selesai otomatis', 'Kalau semua piutang konsumen & bank pada baris itu sudah lunas (rekap Terbayar mencukupi), transaksi otomatis ditandai Selesai & terkunci — sama seperti tombol "Tandai Selesai" manual.'],
         ];
         $h->fromArray(['Bagian', 'Keterangan'], null, 'A3');
@@ -983,22 +986,67 @@ class KonsumenController extends Controller
 
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls',
+            'mode' => 'required|in:cek,import',
         ]);
 
+        $file = $request->file('file');
+        $cek = $request->input('mode') === 'cek';
+
+        // 1) Header file harus sama dengan template saat ini. Import membaca kolom berdasarkan POSISI, jadi kolom yang bergeser
+        //    akan mengisi data ke kolom yang salah tanpa ketahuan. Satu masalah saja menolak SELURUH file (tidak ada baris yang masuk).
+        $masalahHeader = KonsumenImportSpec::validasiHeader($file->getRealPath());
+        if ($masalahHeader) {
+            return back()->with('error', 'File ditolak: kolomnya tidak sesuai template saat ini. Unduh ulang template, lalu pindahkan data ke file baru.')
+                ->with('importLaporan', ['mode' => 'ditolak', 'imported' => 0, 'importedBatal' => 0, 'skipped' => 0, 'errors' => $masalahHeader, 'warnings' => []]);
+        }
+
+        // 2) Import sungguhan hanya boleh untuk file yang SAMA dengan yang barusan lolos "Cek dulu" (proyek sama, maks. 2 jam).
+        $kunciSesi = 'import_konsumen_dicek.' . $project->id;
+        $sidik = sha1_file($file->getRealPath());
+        if (!$cek) {
+            $dicek = $request->session()->get($kunciSesi);
+            if (!$dicek || ($dicek['sidik'] ?? null) !== $sidik || now()->timestamp - ($dicek['waktu'] ?? 0) > 7200) {
+                return back()->with('error', 'Jalankan "Cek dulu" untuk file ini lebih dulu. Import sungguhan hanya untuk file yang sama dengan yang baru dicek.');
+            }
+        }
+
         $import = new KonsumenImport($project);
-        Excel::import($import, $request->file('file'));
+        if ($cek) {
+            // Simulasi: jalankan importer yang SAMA persis di dalam satu transaksi database luar, lalu batalkan semuanya.
+            DB::beginTransaction();
+            try {
+                Excel::import($import, $file);
+            } finally {
+                DB::rollBack();
+                \App\Support\FinanceCache::bump();   // cache yang sempat dihitung dari data simulasi dibuang
+            }
+        } else {
+            Excel::import($import, $file);
+            $request->session()->forget($kunciSesi);
+        }
         $result = $import->result;
+
+        $catatan = array_slice(array_merge($result->errors, $result->warnings), 0, 50);   // ringkasan untuk toast
+        $laporan = [
+            'mode' => $cek ? 'cek' : 'import', 'imported' => $result->imported, 'importedBatal' => $result->importedBatal, 'skipped' => $result->skipped,
+            'errors' => array_slice($result->errors, 0, 500), 'warnings' => array_slice($result->warnings, 0, 500),
+        ];
+
+        if ($cek) {
+            $request->session()->put($kunciSesi, ['sidik' => $sidik, 'waktu' => now()->timestamp]);
+            $msg = "CEK DULU (belum ada yang disimpan): {$result->imported} konsumen akan ditambahkan";
+            if ($result->importedBatal > 0) $msg .= ", {$result->importedBatal} konsumen batal akan dicatat";
+            if ($result->skipped > 0) $msg .= ", {$result->skipped} baris akan dilewati";
+            if (!empty($result->warnings)) $msg .= ', ' . count($result->warnings) . ' peringatan';
+
+            return back()->with($result->skipped || $result->warnings ? 'warning' : 'success', $msg . '.')->with('importLaporan', $laporan)->with($catatan ? ['importErrors' => $catatan] : []);
+        }
 
         $msg = "Import selesai: {$result->imported} konsumen berhasil ditambahkan";
         if ($result->importedBatal > 0) $msg .= ", {$result->importedBatal} konsumen batal dicatat";
         if ($result->skipped > 0) $msg .= ", {$result->skipped} baris dilewati";
-
-        $catatan = array_merge($result->errors, $result->warnings);
         if (!empty($result->warnings)) $msg .= ', ' . count($result->warnings) . ' peringatan perlu dicek';
-        if (!empty($catatan)) {
-            return back()->with('warning', $msg)->with('importErrors', array_slice($catatan, 0, 50));
-        }
 
-        return back()->with('success', $msg . '.');
+        return back()->with($result->skipped || $result->warnings ? 'warning' : 'success', $msg . '.')->with('importLaporan', $laporan)->with($catatan ? ['importErrors' => $catatan] : []);
     }
 }

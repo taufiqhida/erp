@@ -403,6 +403,8 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
         // Peralihan pembeli (opsional): baris ini hasil alih pembeli dari orang lain.
         [$alih, $alihErr] = ImportBantuan::bacaPeralihan($v, $tglBooking, null, $nik, $str('hp'), fn ($x) => $this->parseTanggal($x));
         array_push($errors, ...$alihErr);
+        // NIK cocok dengan konsumen lain tetapi nama jelas beda: tolak baris (jangan menempel ke orang yang salah).
+        if ($nama && ($tolak = ImportBantuan::tolakNikNamaBeda($nama, $nik))) $errors[] = $tolak;
 
         if (!empty($errors)) {
             $this->result->skip($this->sheetLabel, $rowNum, implode(' | ', array_unique($errors)));

@@ -78,7 +78,10 @@ class ImportKonsumenPeralihanTest extends TestCase
 
     private function impor(UploadedFile $file)
     {
-        return $this->actingAs($this->admin)->post(route('konsumens.import', $this->project), ['file' => $file]);
+        // Import sungguhan hanya boleh setelah "Cek dulu" untuk file yang sama.
+        $this->actingAs($this->admin)->post(route('konsumens.import', $this->project), ['file' => $file, 'mode' => 'cek']);
+
+        return $this->actingAs($this->admin)->post(route('konsumens.import', $this->project), ['file' => $file, 'mode' => 'import']);
     }
 
     public function test_baris_cash_dengan_pembeli_sebelumnya_membuat_riwayat_peralihan_disetujui(): void

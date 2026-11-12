@@ -54,6 +54,8 @@ class HandleInertiaRequests extends Middleware
                 'error'        => $request->session()->get('error'),
                 'warning'      => $request->session()->get('warning'),
                 'importErrors' => $request->session()->get('importErrors'),
+                // Laporan import konsumen lengkap (mode cek/import/ditolak, hitungan, semua baris dilewati dan peringatan): tampil di dialog import.
+                'importLaporan' => $request->session()->get('importLaporan'),
                 // Password sementara hasil reset: tampil SEKALI (flash), tidak disimpan di mana pun.
                 'tempPassword' => $request->session()->get('tempPassword'),
             ],

@@ -82,7 +82,11 @@ class ImportKprPencairanTest extends TestCase
         (new Xlsx($ss))->save($path);
         $this->tmp[] = $path;
 
-        return $this->actingAs($this->admin)->post(route('konsumens.import', $this->project), ['file' => new UploadedFile($path, 'kpr.xlsx', null, null, true)]);
+        // Import sungguhan hanya boleh setelah "Cek dulu" untuk file yang sama.
+        $file = new UploadedFile($path, 'kpr.xlsx', null, null, true);
+        $this->actingAs($this->admin)->post(route('konsumens.import', $this->project), ['file' => $file, 'mode' => 'cek']);
+
+        return $this->actingAs($this->admin)->post(route('konsumens.import', $this->project), ['file' => $file, 'mode' => 'import']);
     }
 
     public function test_total_sudah_cair_netto_diterima_dan_retensi_terhitung_otomatis(): void

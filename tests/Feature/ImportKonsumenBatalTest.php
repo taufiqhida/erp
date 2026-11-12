@@ -88,7 +88,11 @@ class ImportKonsumenBatalTest extends TestCase
 
     private function impor(UploadedFile $file, ?User $user = null)
     {
-        return $this->actingAs($user ?? $this->admin)->post(route('konsumens.import', $this->project), ['file' => $file]);
+        // Import sungguhan hanya boleh setelah "Cek dulu" untuk file yang sama.
+        $u = $user ?? $this->admin;
+        $this->actingAs($u)->post(route('konsumens.import', $this->project), ['file' => $file, 'mode' => 'cek']);
+
+        return $this->actingAs($u)->post(route('konsumens.import', $this->project), ['file' => $file, 'mode' => 'import']);
     }
 
     public function test_template_punya_sheet_batal_dengan_tanggal_bayar_terakhir_di_samping_total_dibayar(): void
@@ -388,14 +392,15 @@ class ImportKonsumenBatalTest extends TestCase
         $this->assertSame(2, Konsumen::where('nama', 'Budi Santoso')->count());
     }
 
-    public function test_peringatan_nik_cocok_tapi_nama_jauh_berbeda(): void
+    public function test_nik_cocok_tapi_nama_jauh_berbeda_ditolak_bukan_sekadar_diperingatkan(): void
     {
         Konsumen::create(['nama' => 'Xaviera Putri', 'nik' => '3201010101010010']);
 
         $r = $this->impor($this->fileBatal($this->baris(['nama' => 'Budi Santoso', 'nik' => '3201010101010010'])));
 
-        $r->assertSessionHas('importErrors', fn ($e) => str_contains(implode(' ', $e), 'pastikan NIK-nya benar'));
-        $this->assertSame(1, KavlingKonsumen::count());
+        $r->assertSessionHas('importErrors', fn ($e) => str_contains(implode(' ', $e), 'sudah terdaftar atas nama "Xaviera Putri"') && str_contains(implode(' ', $e), 'DILEWATI'));
+        $this->assertSame(0, KavlingKonsumen::count());                          // baris tidak masuk
+        $this->assertSame(0, Konsumen::where('nama', 'Budi Santoso')->count());  // dan tidak membuat konsumen baru
     }
 
     public function test_template_memuat_kolom_baru_dan_daftar_tahap(): void

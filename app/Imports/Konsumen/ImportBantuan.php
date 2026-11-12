@@ -17,6 +17,9 @@ use Illuminate\Support\Facades\Auth;
  */
 class ImportBantuan
 {
+    /** Kemiripan nama (persen) di bawah angka ini dianggap BEDA ORANG bila NIK-nya cocok dengan konsumen yang sudah ada. */
+    public const AMBANG_NAMA = 50;
+
     public const KUNCI_PERALIHAN = ['alih_nama', 'alih_nik', 'alih_hp', 'alih_hubungan', 'alih_tgl', 'alih_alasan'];
 
     /** Kolom peralihan opsional (ditaruh di ujung kanan agar file lama tetap valid). */
@@ -59,6 +62,7 @@ class ImportBantuan
 
         $nik = $str('alih_nik');
         $hp = $str('alih_hp');
+        if ($nik && $nama && ($tolak = self::tolakNikNamaBeda($nama, $nik, 'Pembeli Sebelumnya'))) $errors[] = $tolak;
         if ($nik && $nikSekarang && $nik === $nikSekarang) $errors[] = 'NIK Pembeli Sebelumnya sama dengan NIK pembeli di baris ini.';
         if ($hp && $hpSekarang && $hp === $hpSekarang) $errors[] = 'No. HP Pembeli Sebelumnya sama dengan No. HP pembeli di baris ini.';
 
@@ -103,6 +107,22 @@ class ImportBantuan
         ]);
     }
 
+    /**
+     * Penolakan (bukan sekadar peringatan): NIK pada baris cocok dengan konsumen yang SUDAH ADA, tetapi nama di baris jelas berbeda
+     * (kemiripan di bawah AMBANG_NAMA). Bila dibiarkan, transaksi baris itu menempel ke orang yang salah (insiden 9 Nov 2026).
+     * Mengembalikan pesan untuk baris yang harus dilewati, atau null bila aman.
+     */
+    public static function tolakNikNamaBeda(string $nama, ?string $nik, string $siapa = 'Pembeli'): ?string
+    {
+        if ($nik === null || $nik === '') return null;
+        $ada = Konsumen::where('nik', $nik)->first();
+        if (!$ada) return null;
+        similar_text(mb_strtolower(trim($nama)), mb_strtolower(trim($ada->nama)), $persen);
+        if ($persen >= self::AMBANG_NAMA) return null;
+
+        return "{$siapa}: NIK {$nik} sudah terdaftar atas nama \"{$ada->nama}\" (ID {$ada->id}), sedangkan baris menulis \"{$nama}\" — baris DILEWATI supaya data tidak masuk ke orang yang salah. Periksa NIK pada file.";
+    }
+
     /** Peringatan kemungkinan ganda untuk pembeli di satu baris: NIK kosong dengan nama yang sudah ada, atau NIK cocok tetapi nama jauh berbeda. */
     public static function peringatanKemiripan(string $nama, ?string $nik, ?Konsumen $cocokNik): ?string
     {
@@ -122,6 +142,6 @@ class ImportBantuan
     {
         similar_text(mb_strtolower($nama), mb_strtolower($cocok->nama), $persen);
 
-        return $persen < 50 ? "NIK {$nik} cocok dengan konsumen \"{$cocok->nama}\" (ID {$cocok->id}), sedangkan baris menulis \"{$nama}\" — pastikan NIK-nya benar." : null;
+        return $persen < self::AMBANG_NAMA ? "NIK {$nik} cocok dengan konsumen \"{$cocok->nama}\" (ID {$cocok->id}), sedangkan baris menulis \"{$nama}\" — pastikan NIK-nya benar." : null;
     }
 }
