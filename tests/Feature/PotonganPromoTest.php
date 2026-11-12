@@ -287,16 +287,24 @@ class PotonganPromoTest extends TestCase
         $this->assertEquals(166000000 + 8400000 + 5000000, $tanpaPromo->harga_deal);
     }
 
-    public function test_diskon_persen_dihitung_dari_subtotal_bersih_setelah_potongan_lawan_lain(): void
+    public function test_diskon_persen_dihitung_dari_harga_dasar_saja_bukan_dari_biaya_tambahan(): void
     {
         $promo = $this->promoHargaJual();
         $promo->lawan()->create(['jenis' => PromoPresetLawan::TANAH]);
 
         $kk = $this->booking(['promo_preset_id' => $promo->id, 'potongan_tanah' => ['mode' => 'persen', 'nilai' => 100], 'diskon_mode' => 'persen', 'diskon_nilai' => 1]);
 
-        $subtotal = 166000000 + 5000000;                                       // tanah sudah gratis, tinggal Hook
-        $this->assertEquals(round($subtotal * 0.01, 2), $kk->diskon_nominal);
-        $this->assertEquals($subtotal - round($subtotal * 0.01, 2), $kk->harga_deal);
+        // 1% dari harga dasar 166 jt; biaya tambahan (Hook 5 jt, tanah gratis) tidak ikut jadi dasar hitung diskon.
+        $this->assertEquals(1660000, $kk->diskon_nominal);
+        $this->assertEquals(166000000 + 5000000 - 1660000, $kk->harga_deal);
+    }
+
+    public function test_diskon_dibatasi_maksimal_sebesar_harga_dasar(): void
+    {
+        $kk = $this->booking(['promo_preset_id' => $this->promoHargaJual()->id, 'diskon_mode' => 'nominal', 'diskon_nilai' => 999000000]);
+
+        $this->assertEquals(166000000, $kk->diskon_nominal);
+        $this->assertEquals(8400000 + 5000000, $kk->harga_deal);                // hanya biaya tambahan yang tersisa
     }
 
     public function test_ubah_rincian_mengganti_promo_tanpa_lawan_harga_jual_membuang_diskon(): void

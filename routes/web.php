@@ -373,6 +373,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('sumber-lead/{sumberLead}', [PengaturanController::class, 'destroySumberLead'])
                 ->name('sumber-lead.destroy');
 
+            // Bonus saat booking
+            Route::get('bonus', [PengaturanController::class, 'bonus'])
+                ->name('bonus');
+            Route::post('bonus', [PengaturanController::class, 'storeBonus'])
+                ->name('bonus.store');
+            Route::patch('bonus/{bonus}', [PengaturanController::class, 'updateBonus'])
+                ->name('bonus.update');
+            Route::delete('bonus/{bonus}', [PengaturanController::class, 'destroyBonus'])
+                ->name('bonus.destroy');
+
             // Preset Promo
             Route::get('promo', [PengaturanController::class, 'promo'])
                 ->name('promo');

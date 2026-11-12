@@ -112,8 +112,8 @@ class UbahRincianTest extends TestCase
 
         $trx = $this->trx->fresh();
         $this->assertEquals(10000000, $trx->total_biaya_tambahan);
-        $this->assertEquals(6200000, $trx->diskon_nominal);                                    // 2% × (300 jt + 10 jt)
-        $this->assertEquals(303800000, $trx->harga_deal);
+        $this->assertEquals(6000000, $trx->diskon_nominal);                                    // 2% × harga dasar 300 jt (biaya tambahan tidak ikut)
+        $this->assertEquals(304000000, $trx->harga_deal);
         $this->assertSame($this->promo->id, $trx->promo_preset_id);
         $this->assertSame(1, $trx->biayaTambahans()->count());
         $this->assertTrue(CatatanTransaksi::where('tahap', 'Ubah rincian')->exists());

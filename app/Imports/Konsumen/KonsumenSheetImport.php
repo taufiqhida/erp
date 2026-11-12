@@ -258,7 +258,8 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
         $subtotal = $hargaDasar + $totalBiayaTambahan;
         $diskonNominal = 0.0;
         if ($diskonMode && $diskonNilai !== null) {
-            $diskonNominal = $diskonMode === 'persen' ? round($subtotal * ($diskonNilai / 100), 2) : $diskonNilai;
+            // Persen dihitung dari harga dasar saja (biaya tambahan punya promonya sendiri), dibatasi 0..harga dasar.
+            $diskonNominal = \App\Support\PotonganPromo::nominal($hargaDasar, $diskonMode, $diskonNilai);
         }
         $hargaJualNetto = $subtotal - $diskonNominal;
 

@@ -25,6 +25,7 @@ const navGroups = [
             { label: 'Template Pemberkasan', route: 'pengaturan.dokumen-templates', permission: 'manage system settings' },
             { label: 'Biaya Tambahan',       route: 'pengaturan.biaya-tambahan', permission: 'manage system settings' },
             { label: 'Promo',                route: 'pengaturan.promo', permission: 'manage system settings' },
+            { label: 'Bonus',                route: 'pengaturan.bonus', permission: 'manage system settings' },
             { label: 'Skema DP',             route: 'pengaturan.skema-dp', permission: 'manage system settings' },
             { label: 'Dana Jaminan & SBUM',  route: 'pengaturan.dajam-sbum', permission: 'manage dajam sbum preset' },
             { label: 'Program All In',       route: 'pengaturan.program-all-in', permission: 'manage program all in' },

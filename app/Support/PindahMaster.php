@@ -93,6 +93,11 @@ class PindahMaster
                 'kolom' => ['nama', 'keterangan', 'is_active'],
                 'aturan' => ['nama' => 'required|string|max:255', 'keterangan' => 'nullable|string|max:2000', 'is_active' => $bool],
             ],
+            'bonus' => [
+                'label' => 'Bonus', 'model' => \App\Models\BonusPreset::class, 'cocok' => ['nama'], 'urut' => 'ordered',
+                'kolom' => ['nama', 'keterangan', 'is_active'],
+                'aturan' => ['nama' => 'required|string|max:150', 'keterangan' => 'nullable|string|max:255', 'is_active' => $bool],
+            ],
             'program_all_in' => [
                 'label' => 'Program All In', 'model' => ProgramAllInPreset::class, 'cocok' => ['nama'], 'urut' => 'ordered',
                 'kolom' => ['nama', 'nominal', 'include_booking_fee', 'include_dp', 'is_active'],

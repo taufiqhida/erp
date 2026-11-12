@@ -354,7 +354,7 @@ class KonsumenController extends Controller
         $transaksis = $konsumen->kavlingKonsumens()
             ->with([
                 'kavling.project:id,nama', 'kavling.tipeUnitPreset', 'kavling.statusBangunStage', 'dokumens', 'bastRecord', 'catatans.penyelesai', 'pembayarans', 'biayaTambahans.pembayarans', 'biayaTambahans.promoPreset:id,nama',
-                'promoPreset:id,nama', 'diskonPromo:id,nama', 'tanahPromo:id,nama', 'titipanPromo:id,nama', 'programAllInPreset:id,nama', 'skemaDpPreset', 'bankRekananPreset:id,nama', 'salesAgent:id,nama',
+                'promoPreset:id,nama', 'diskonPromo:id,nama', 'tanahPromo:id,nama', 'titipanPromo:id,nama', 'programAllInPreset', 'bonuses:id,nama', 'skemaDpPreset', 'bankRekananPreset:id,nama', 'salesAgent:id,nama',
                 'jadwalTagihans' => fn($q) => $q->orderBy('jenis')->orderBy('nomor_cicilan'),
                 'jadwalTagihans.pembayaran',
                 'rincianBiayaAkad' => fn($q) => $q->orderBy('kategori')->orderBy('nama'),
@@ -503,6 +503,9 @@ class KonsumenController extends Controller
                     'titipan_biaya_akad_potongan_mode' => $trx->titipan_biaya_akad_potongan_mode,
                     'titipan_biaya_akad_potongan_nilai' => $trx->titipan_biaya_akad_potongan_nilai,
                     'titipan_biaya_akad_ditagih' => $trx->titipan_biaya_akad_ditagih,
+                    'titipan_termasuk' => $trx->titipanTermasuk($dpTotal),
+                    'bonus_ids'  => $trx->bonuses->pluck('id')->all(),
+                    'bonus_nama' => $trx->bonuses->pluck('nama')->all(),
                     'titipan_biaya_akad_locked'  => $trx->pembayarans->where('jenis', 'titipan_biaya_akad')->isNotEmpty(),
                     'status_penjualan' => $trx->status_penjualan,
                     'is_locked'        => $trx->is_locked,
@@ -583,6 +586,7 @@ class KonsumenController extends Controller
             'statusBangunStages' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna']),
             'biayaTambahanPresets' => BiayaTambahanPreset::where('is_active', true)->ordered()->get(['id', 'nama']),
             'promoPresets' => PromoPreset::untukForm(),
+            'bonusPresets' => \App\Models\BonusPreset::ordered()->get(['id', 'nama', 'is_active']),
             'programAllInPresets' => ProgramAllInPreset::where('is_active', true)->ordered()->get(['id', 'nama', 'nominal', 'include_booking_fee', 'include_dp']),
             'suratTemplates' => SuratTemplate::orderBy('nama')->get(['id', 'nama']),
         ]);

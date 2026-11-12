@@ -268,6 +268,22 @@ class PromoPerBiayaTest extends TestCase
         $this->assertNull($baru->diskon_promo_id);                                         // yang tidak cocok dibiarkan
     }
 
+    public function test_keterangan_titipan_termasuk_dp_atau_bf_mengikuti_preset_all_in(): void
+    {
+        $allInDp = ProgramAllInPreset::create(['nama' => 'All In incl DP', 'nominal' => 11000000, 'include_booking_fee' => false, 'include_dp' => true, 'is_active' => true]);
+        $allInKeduanya = ProgramAllInPreset::create(['nama' => 'All In incl BF DP', 'nominal' => 11000000, 'include_booking_fee' => true, 'include_dp' => true, 'is_active' => true]);
+
+        $tanpa = $this->booking();                                                                                  // All In 11 jt tanpa include
+        $this->assertNull($tanpa->load('programAllInPreset')->titipanTermasuk(1660000));
+
+        $dp = $this->booking(['program_all_in_preset_id' => $allInDp->id]);
+        $this->assertSame('DP', $dp->load('programAllInPreset')->titipanTermasuk(1660000));
+        $this->assertNull($dp->titipanTermasuk(0));                                                                 // tanpa DP tidak ada yang dikurangi
+
+        $dua = $this->booking(['program_all_in_preset_id' => $allInKeduanya->id]);
+        $this->assertSame('Booking Fee & DP', $dua->load('programAllInPreset')->titipanTermasuk(1660000));
+    }
+
     public function test_transaksi_lama_belum_diisi_tetap_terbaca_lewat_promo_tunggal_lama(): void
     {
         $kk = $this->booking($this->tanah() + ['promo_preset_id' => $this->promoTanah->id, 'potongan_tanah' => ['mode' => 'persen', 'nilai' => 50]]);

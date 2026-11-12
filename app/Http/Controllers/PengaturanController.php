@@ -669,6 +669,52 @@ class PengaturanController extends Controller
     }
 
     /* ---------------------------------------------------------------
+     | Bonus saat booking (tandon, kipas, ...) — label saja
+     --------------------------------------------------------------- */
+
+    public function bonus(): Response
+    {
+        return Inertia::render('Pengaturan/Bonus', [
+            'presets' => \App\Models\BonusPreset::ordered()->withCount(['transaksis as dipakai'])->get(),
+        ]);
+    }
+
+    public function storeBonus(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama'       => 'required|string|max:150',
+            'keterangan' => 'nullable|string|max:255',
+        ]);
+
+        \App\Models\BonusPreset::create($validated);
+
+        return back()->with('success', 'Bonus berhasil ditambahkan.');
+    }
+
+    public function updateBonus(Request $request, \App\Models\BonusPreset $bonus): RedirectResponse
+    {
+        $validated = $request->validate([
+            'nama'       => 'required|string|max:150',
+            'keterangan' => 'nullable|string|max:255',
+            'is_active'  => 'boolean',
+        ]);
+
+        $bonus->update($validated);
+
+        return back()->with('success', 'Bonus berhasil diperbarui.');
+    }
+
+    public function destroyBonus(\App\Models\BonusPreset $bonus): RedirectResponse
+    {
+        if ($bonus->transaksis()->exists()) {
+            return back()->with('error', "Bonus \"{$bonus->nama}\" sudah dipakai {$bonus->transaksis()->count()} transaksi, jadi tidak bisa dihapus. Nonaktifkan saja.");
+        }
+        $bonus->delete();
+
+        return back()->with('success', 'Bonus berhasil dihapus.');
+    }
+
+    /* ---------------------------------------------------------------
      | Program All In — bundel nominal yang mencakup Booking Fee/DP/Titipan
      | Biaya Akad. Dipilih di form booking, hasilnya baris "Titipan Biaya
      | Akad" di Kartu Piutang (nominal All In dikurangi komponen yang
@@ -1045,6 +1091,7 @@ class PengaturanController extends Controller
     {
         $models = [
             'biaya-tambahan' => BiayaTambahanPreset::class,
+            'bonus'          => \App\Models\BonusPreset::class,
             'program-all-in' => ProgramAllInPreset::class,
             'sumber-lead'    => SumberLead::class,
             'bank-rekanan'   => BankRekananPreset::class,
@@ -1057,6 +1104,7 @@ class PengaturanController extends Controller
         // jenis di routes/web.php), bukan lewat middleware route.
         $requiredPermission = [
             'biaya-tambahan' => 'manage system settings',
+            'bonus'          => 'manage system settings',
             'program-all-in' => 'manage program all in',
             'sumber-lead'    => 'manage system settings',
             'bank-rekanan'   => 'manage bank rekanan',

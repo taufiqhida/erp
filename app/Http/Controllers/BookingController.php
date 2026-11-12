@@ -154,10 +154,11 @@ class BookingController extends Controller
                 ]),
             'biayaTambahanPresets' => BiayaTambahanPreset::where('is_active', true)->ordered()->get(['id', 'nama']),
             'promoPresets' => PromoPreset::untukForm(),
+            'bonusPresets' => \App\Models\BonusPreset::where('is_active', true)->ordered()->get(['id', 'nama', 'is_active']),
             'skemaDpPresets' => SkemaDpPreset::where('is_active', true)->orderBy('nama')->get([
                 'id', 'nama', 'cara_bayar',
-                'booking_fee_aktif', 'booking_fee_tipe', 'booking_fee_nilai', 'booking_fee_basis',
-                'dp_aktif', 'dp_tipe', 'dp_nilai', 'dp_basis',
+                'booking_fee_aktif', 'booking_fee_tipe', 'booking_fee_nilai', 'booking_fee_basis', 'booking_fee_tenor', 'booking_fee_masuk_harga_jual',
+                'dp_aktif', 'dp_tipe', 'dp_nilai', 'dp_basis', 'dp_tenor', 'dp_masuk_harga_jual',
             ]),
             'statusBangunStages' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna', 'urutan']),
             'sumberLeadPresets' => SumberLead::where('is_active', true)->ordered()->get(['id', 'nama', 'is_referral']),
@@ -241,6 +242,9 @@ class BookingController extends Controller
             'biaya_tambahan.*.nominal'           => 'required|numeric|min:0',
             // Section 2 — Diskon / Promo
             'promo_preset_id'     => 'nullable|exists:promo_presets,id',
+            // Bonus saat booking (label saja)
+            'bonus_ids'           => 'nullable|array',
+            'bonus_ids.*'         => 'integer|exists:bonus_presets,id',
             // Promo per biaya: tiap baris biaya memilih promonya sendiri (hanya berlaku bila promo itu memang punya lawan baris tsb).
             'diskon_promo_id'     => 'nullable|exists:promo_presets,id',
             'promo_tanah_id'      => 'nullable|exists:promo_presets,id',
@@ -335,12 +339,8 @@ class BookingController extends Controller
             // Diskon = potongan promo pada lawan "Harga Jual": hanya berlaku bila promo yang dipilih memang punya lawan itu.
             $promoDiskonId = $promoBaris->hargaJual();
             $diskonAktif = !empty($validated['diskon_mode']) && $promoDiskonId !== null;
-            $diskonNominal = 0;
-            if ($diskonAktif) {
-                $diskonNominal = $validated['diskon_mode'] === 'persen'
-                    ? round($subtotal * ((float) $validated['diskon_nilai'] / 100), 2)
-                    : (float) $validated['diskon_nilai'];
-            }
+            // Persen dihitung dari HARGA DASAR saja (biaya tambahan punya promonya sendiri) dan dibatasi 0..harga dasar.
+            $diskonNominal = $diskonAktif ? PotonganPromo::nominal($hargaDasar, $validated['diskon_mode'], $validated['diskon_nilai']) : 0;
 
             $hargaJualNetto = $subtotal - $diskonNominal;
 
@@ -437,6 +437,9 @@ class BookingController extends Controller
 
             foreach ($biayaTambahanItems as $item) {
                 $transaksi->biayaTambahans()->create($item);
+            }
+            if (!empty($validated['bonus_ids'])) {
+                $transaksi->bonuses()->sync(array_values(array_unique($validated['bonus_ids'])));
             }
 
             // ── Kartu Piutang: generate jadwal tagihan booking fee & DP dari
@@ -895,6 +898,8 @@ class BookingController extends Controller
             'biaya_tambahan.*.preset_id'         => 'required|exists:biaya_tambahan_presets,id',
             'biaya_tambahan.*.nominal'           => 'required|numeric|min:0',
             'promo_preset_id'     => 'nullable|exists:promo_presets,id',
+            'bonus_ids'           => 'nullable|array',
+            'bonus_ids.*'         => 'integer|exists:bonus_presets,id',
             'diskon_promo_id'     => 'nullable|exists:promo_presets,id',
             'promo_tanah_id'      => 'nullable|exists:promo_presets,id',
             'promo_titipan_id'    => 'nullable|exists:promo_presets,id',

@@ -28,7 +28,7 @@ class PerubahanRincian
     public const KOLOM = [
         'biaya_kelebihan_tanah_aktif', 'biaya_kelebihan_tanah_luas', 'biaya_kelebihan_tanah_mode', 'biaya_kelebihan_tanah_harga_per_m2',
         'biaya_kelebihan_tanah_nominal_input', 'biaya_tambahan', 'promo_preset_id', 'diskon_mode', 'diskon_nilai', 'program_all_in_preset_id',
-        'potongan_tanah', 'potongan_titipan', 'diskon_promo_id', 'promo_tanah_id', 'promo_titipan_id',
+        'potongan_tanah', 'potongan_titipan', 'diskon_promo_id', 'promo_tanah_id', 'promo_titipan_id', 'bonus_ids',
     ];
 
     /** Ambil hanya kolom rincian dari data tervalidasi. */
@@ -132,12 +132,8 @@ class PerubahanRincian
         // Diskon = potongan promo pada lawan "Harga Jual": hanya berlaku bila promo yang dipilih memang punya lawan itu.
         $promoDiskonId = $promoBaris->hargaJual();
         $diskonAktif = !empty($u['diskon_mode']) && $promoDiskonId !== null;
-        $diskonNominal = 0;
-        if ($diskonAktif) {
-            $diskonNominal = $u['diskon_mode'] === 'persen'
-                ? round($subtotal * ((float) $u['diskon_nilai'] / 100), 2)
-                : (float) $u['diskon_nilai'];
-        }
+        // Persen dihitung dari HARGA DASAR saja (biaya tambahan punya promonya sendiri) dan dibatasi 0..harga dasar.
+        $diskonNominal = $diskonAktif ? PotonganPromo::nominal((float) $kk->harga_dasar, $u['diskon_mode'], $u['diskon_nilai'] ?? null) : 0;
 
         $kk->promo_preset_id      = $u['promo_preset_id'] ?? null;
         $kk->diskon_mode          = $diskonAktif ? $u['diskon_mode'] : null;
@@ -171,6 +167,11 @@ class PerubahanRincian
         }
 
         $kk->save();
+
+        // Bonus (label saja): hanya disinkronkan bila dikirim. Usulan lama yang tersimpan sebelum fitur ini tidak memuatnya dan membiarkan bonus apa adanya.
+        if (array_key_exists('bonus_ids', $u)) {
+            $kk->bonuses()->sync(array_values(array_unique(array_map('intval', $u['bonus_ids'] ?? []))));
+        }
     }
 
     /**
@@ -230,7 +231,7 @@ class PerubahanRincian
     private static function potret(KavlingKonsumen $kk): array
     {
         $kk->unsetRelations();
-        $kk->refresh()->load('biayaTambahans.promoPreset', 'promoPreset', 'diskonPromo', 'tanahPromo', 'titipanPromo', 'programAllInPreset');
+        $kk->refresh()->load('biayaTambahans.promoPreset', 'promoPreset', 'diskonPromo', 'tanahPromo', 'titipanPromo', 'programAllInPreset', 'bonuses');
         $rp = fn ($n) => 'Rp ' . number_format((float) $n, 0, ',', '.');
 
         return [
@@ -242,6 +243,7 @@ class PerubahanRincian
             'Biaya tambahan'  => $kk->biayaTambahans->isEmpty() ? 'Tidak ada' : $kk->biayaTambahans->map(fn ($b) => "{$b->nama} {$rp($b->nominal)}" . ((float) $b->potongan > 0 ? " (potongan promo {$rp($b->potongan)})" : ''))->implode(', '),
             'Promo'           => $kk->promo_nama_gabungan ?? 'Tidak ada',
             'Diskon'          => $kk->diskon_mode ? ($kk->diskon_mode === 'persen' ? rtrim(rtrim(number_format((float) $kk->diskon_nilai, 2, ',', ''), '0'), ',') . '% (' . $rp($kk->diskon_nominal) . ')' : $rp($kk->diskon_nominal)) : 'Tidak ada',
+            'Bonus'           => $kk->bonuses->isEmpty() ? 'Tidak ada' : $kk->bonuses->pluck('nama')->implode(', '),
             'Program All In'  => $kk->programAllInPreset?->nama ?? 'Tidak ada',
             'Titipan Biaya Akad' => (float) $kk->titipan_biaya_akad_nominal > 0
                 ? $rp($kk->titipan_biaya_akad_nominal) . ((float) $kk->titipan_biaya_akad_potongan > 0 ? ' (potongan promo ' . $rp($kk->titipan_biaya_akad_potongan) . ')' : '')

@@ -6,6 +6,7 @@ use App\Models\Concerns\HasFinanceTotals;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
@@ -145,6 +146,12 @@ class KavlingKonsumen extends Model
         return $this->belongsTo(PromoPreset::class);
     }
 
+    /** Bonus saat booking (tandon, kipas, ...): label saja, tanpa dampak keuangan. */
+    public function bonuses(): BelongsToMany
+    {
+        return $this->belongsToMany(BonusPreset::class, 'kavling_konsumen_bonus')->withTimestamps()->orderBy('bonus_presets.urutan')->orderBy('bonus_presets.id');
+    }
+
     public function diskonPromo(): BelongsTo
     {
         return $this->belongsTo(PromoPreset::class, 'diskon_promo_id');
@@ -182,6 +189,26 @@ class KavlingKonsumen extends Model
     public function promoIdBiayaTambahan(KavlingKonsumenBiayaTambahan $bt): ?int
     {
         return $bt->promo_preset_id ?? ((float) $bt->potongan > 0 ? $this->promo_preset_id : null);
+    }
+
+    /**
+     * Keterangan mengapa Titipan Biaya Akad lebih kecil dari nominal Program All In: 'DP', 'Booking Fee', atau 'Booking Fee & DP' bila
+     * preset All In mencakupnya dan transaksi ini memang punya nominal itu. Null bila tidak ada pengurangan. Relasi programAllInPreset
+     * harus sudah dimuat.
+     */
+    public function titipanTermasuk(float $dpNominal): ?string
+    {
+        $p = $this->programAllInPreset;
+        if (!$p) return null;
+        $bf = $p->include_booking_fee && (float) $this->booking_fee > 0;
+        $dp = $p->include_dp && $dpNominal > 0;
+
+        return match (true) {
+            $bf && $dp => 'Booking Fee & DP',
+            $bf        => 'Booking Fee',
+            $dp        => 'DP',
+            default    => null,
+        };
     }
 
     /** Nama promo untuk id tertentu dari relasi yang sudah dimuat (promo label, promo per biaya). */

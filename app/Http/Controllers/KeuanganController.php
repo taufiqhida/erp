@@ -508,7 +508,7 @@ class KeuanganController extends Controller
         $this->authorizeProjectAccess($kk->kavling->project);
 
         $kk->load([
-            'konsumen:id,nama,no_hp', 'kavling.project:id,nama', 'skemaDpPreset', 'salesAgent:id,nama', 'promoPreset:id,nama', 'diskonPromo:id,nama', 'tanahPromo:id,nama', 'titipanPromo:id,nama', 'programAllInPreset:id,nama', 'pembayarans',
+            'konsumen:id,nama,no_hp', 'kavling.project:id,nama', 'skemaDpPreset', 'salesAgent:id,nama', 'promoPreset:id,nama', 'diskonPromo:id,nama', 'tanahPromo:id,nama', 'titipanPromo:id,nama', 'programAllInPreset', 'bonuses:id,nama', 'pembayarans',
             'jadwalTagihans' => fn($q) => $q->orderBy('jenis')->orderBy('nomor_cicilan'),
             'jadwalTagihans.pembayaran',
             'biayaTambahans.pembayarans', 'biayaTambahans.promoPreset:id,nama',
@@ -562,6 +562,8 @@ class KeuanganController extends Controller
                 'titipan_biaya_akad_nominal' => $kk->titipan_biaya_akad_nominal,
                 'titipan_biaya_akad_potongan' => $kk->titipan_biaya_akad_potongan,
                 'titipan_biaya_akad_ditagih' => $kk->titipan_biaya_akad_ditagih,
+                'titipan_termasuk' => $kk->titipanTermasuk($dpTotal),
+                'bonus_nama'       => $kk->bonuses->pluck('nama')->all(),
                 'skema_dp_preset' => $kk->skemaDpPreset ? [
                     'nama'                         => $kk->skemaDpPreset->nama,
                     'booking_fee_aktif'            => $kk->skemaDpPreset->booking_fee_aktif,

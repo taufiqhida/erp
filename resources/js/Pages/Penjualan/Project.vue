@@ -4,6 +4,8 @@ import InlineSiteplanSvg from '@/Components/InlineSiteplanSvg.vue';
 import SiteplanLapis from '@/Components/SiteplanLapis.vue';
 import SearchSelect from '@/Components/SearchSelect.vue';
 import PromoBiayaBaris from '@/Components/PromoBiayaBaris.vue';
+import RincianPemesanan from '@/Components/RincianPemesanan.vue';
+import BonusPicker from '@/Components/BonusPicker.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
@@ -19,6 +21,7 @@ const props = defineProps({
     salesAgents: { type: Array, default: () => [] },
     biayaTambahanPresets: { type: Array, default: () => [] },
     promoPresets: { type: Array, default: () => [] },
+    bonusPresets: { type: Array, default: () => [] },
     skemaDpPresets: { type: Array, default: () => [] },
     statusBangunStages: { type: Array, default: () => [] },
     sumberLeadPresets: { type: Array, default: () => [] },
@@ -41,7 +44,6 @@ const STATUS_PERNIKAHAN_OPTIONS = {
 };
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
-const basisLabels = { harga_dasar: 'Harga Dasar', harga_netto: 'Harga Jual Netto' };
 
 const page = usePage();
 
@@ -195,6 +197,7 @@ const bookForm = useForm({
     promo_tanah_id:  null,
     promo_titipan_id: null,
     promo_biaya:     {},   // { [presetId]: promoId }
+    bonus_ids:       [],   // bonus saat booking (label saja)
     diskon_mode:     '', // '' | 'persen' | 'nominal'
     diskon_nilai:    '',
     potongan_tanah:  { mode: 'persen', nilai: '' },
@@ -273,7 +276,6 @@ const potonganNominal = (bruto, p) => {
 };
 const potonganTanah = computed(() => lawanTanahAktif.value ? potonganNominal(biayaKelebihanTanahBruto.value, bookForm.potongan_tanah) : 0);
 const potonganBiaya = (id) => lawanBiayaIds.value.includes(id) ? potonganNominal(Number(bookForm.biaya_tambahan_nominals[id]) || 0, bookForm.potongan_biaya[id]) : 0;
-const totalPotongan = computed(() => potonganTanah.value + bookForm.biaya_tambahan_selected.reduce((s, id) => s + potonganBiaya(id), 0));
 
 // Yang ditagih (setelah potongan promo)
 const biayaKelebihanTanahNominal = computed(() => biayaKelebihanTanahBruto.value - potonganTanah.value);
@@ -286,11 +288,10 @@ const totalBiayaTambahan = computed(() => biayaKelebihanTanahNominal.value + bia
 
 const subtotalSebelumDiskon = computed(() => hargaDasar.value + totalBiayaTambahan.value);
 
+// Diskon harga jual dihitung dari HARGA DASAR saja (biaya tambahan punya promonya sendiri) dan dibatasi 0..harga dasar.
 const diskonNominal = computed(() => {
     if (!bookForm.diskon_promo_id || !bookForm.diskon_mode || !bookForm.diskon_nilai) return 0;
-    return bookForm.diskon_mode === 'persen'
-        ? subtotalSebelumDiskon.value * (Number(bookForm.diskon_nilai) / 100)
-        : Number(bookForm.diskon_nilai);
+    return potonganNominal(hargaDasar.value, { mode: bookForm.diskon_mode, nilai: bookForm.diskon_nilai });
 });
 
 const hargaJualNetto = computed(() => subtotalSebelumDiskon.value - diskonNominal.value);
@@ -299,6 +300,55 @@ const hargaJualNetto = computed(() => subtotalSebelumDiskon.value - diskonNomina
 const diskonModel = computed({
     get: () => ({ mode: bookForm.diskon_mode || 'persen', nilai: bookForm.diskon_nilai }),
     set: (v) => { bookForm.diskon_mode = v.mode; bookForm.diskon_nilai = v.nilai; },
+});
+
+// ── Isi otomatis promo kombinasi: memilih preset di satu baris juga mengisi baris lain yang kosong dan memang lawan preset itu ──
+const pilihPromo = (baris, id) => {
+    if (baris === 'diskon') bookForm.diskon_promo_id = id;
+    else if (baris === 'tanah') bookForm.promo_tanah_id = id;
+    else if (baris === 'titipan') bookForm.promo_titipan_id = id;
+    else bookForm.promo_biaya[baris] = id;                       // baris = id preset biaya tambahan
+    const p = id ? props.promoPresets.find(x => x.id === id) : null;
+    if (!p) return;
+    if (p.lawan_harga_jual && !bookForm.diskon_promo_id) bookForm.diskon_promo_id = id;
+    if (p.lawan_tanah && bookForm.biaya_kelebihan_tanah_aktif && !bookForm.promo_tanah_id) bookForm.promo_tanah_id = id;
+    if (p.lawan_titipan_biaya_akad && titipanBruto.value > 0 && !bookForm.promo_titipan_id) bookForm.promo_titipan_id = id;
+    bookForm.biaya_tambahan_selected.forEach(bid => {
+        if (!bookForm.promo_biaya[bid] && p.lawan_biaya_tambahan?.includes(bid)) bookForm.promo_biaya[bid] = id;
+    });
+};
+
+// ── Rincian Pemesanan (paling bawah form): angka turun dari harga dasar sampai Titipan Biaya Akad ──
+const promoNamaById = (id) => props.promoPresets.find(p => p.id === id)?.nama ?? null;
+const caraBayarLabel = { cash: 'Cash', cash_bertahap: 'Cash Bertahap', kpr_subsidi: 'KPR Subsidi', kpr_komersil: 'KPR Komersil' };
+const rincianData = computed(() => {
+    const skema = selectedSkemaPreset.value;
+    const bf = skema?.booking_fee_aktif ? Number(bookForm.booking_fee) || 0 : 0;
+    const dp = skema?.dp_aktif ? Number(bookForm.dp_nominal) || 0 : 0;
+    const allIn = allInTerpilih.value;
+    const termasukBf = !!allIn?.include_booking_fee && bf > 0;
+    const termasukDp = !!allIn?.include_dp && dp > 0;
+    return {
+        header: skema ? { caraBayar: caraBayarLabel[bookForm.cara_bayar], skemaNama: skema.nama, allInNama: allIn?.nama ?? null } : null,
+        hargaDasar: hargaDasar.value,
+        diskon: { nominal: diskonNominal.value, mode: bookForm.diskon_mode, nilai: bookForm.diskon_nilai, promoNama: promoNamaById(bookForm.diskon_promo_id) },
+        tanah: bookForm.biaya_kelebihan_tanah_aktif
+            ? { bruto: biayaKelebihanTanahBruto.value, potongan: potonganTanah.value, promoNama: promoNamaById(bookForm.promo_tanah_id) } : null,
+        biaya: bookForm.biaya_tambahan_selected.map(id => ({
+            nama: biayaPresetNama(id), nominal: Number(bookForm.biaya_tambahan_nominals[id]) || 0, potongan: potonganBiaya(id), promoNama: promoNamaById(bookForm.promo_biaya[id]),
+        })),
+        netto: hargaJualNetto.value,
+        bonus: props.bonusPresets.filter(b => bookForm.bonus_ids.includes(b.id)).map(b => b.nama),
+        skema, skemaBelumDipilih: !skema,
+        bookingFee: bf, dp,
+        akad: titipanBruto.value > 0
+            ? {
+                nominal: titipanBruto.value,
+                potongan: lawanTitipanAktif.value ? potonganNominal(titipanBruto.value, bookForm.potongan_titipan) : 0,
+                promoNama: promoNamaById(bookForm.promo_titipan_id),
+                termasuk: termasukBf && termasukDp ? 'Booking Fee & DP' : termasukBf ? 'Booking Fee' : termasukDp ? 'DP' : null,
+            } : null,
+    };
 });
 
 // ── Section 3: Skema Pembayaran — dropdown difilter oleh cara bayar ──────
@@ -1028,18 +1078,18 @@ const isBookable = (k) => k.status_jual === 'available';
                             <h4 class="text-slate-300 text-sm font-medium border-b border-slate-800 pb-2">Promo</h4>
                             <p class="text-slate-500 text-[0.6875rem]">Pilih promo untuk tiap biaya yang ingin dipotong. Tiap biaya hanya menampilkan promo yang memang berlaku untuknya.</p>
                             <div class="space-y-3">
-                                <PromoBiayaBaris v-if="opsiHargaJual.length" label="Harga Jual (diskon)" :bruto="subtotalSebelumDiskon" :options="opsiHargaJual"
-                                    v-model:promo-id="bookForm.diskon_promo_id" v-model:potongan="diskonModel" />
+                                <PromoBiayaBaris v-if="opsiHargaJual.length" label="Harga Jual (diskon)" :bruto="hargaDasar" :options="opsiHargaJual"
+                                    :promo-id="bookForm.diskon_promo_id" @update:promo-id="v => pilihPromo('diskon', v)" v-model:potongan="diskonModel" />
                                 <p v-if="bookForm.diskon_promo_id && (bookForm.cara_bayar === 'kpr_subsidi' || bookForm.cara_bayar === 'kpr_komersil')" class="text-slate-500 text-[0.6875rem]">
                                     Potongan pada Harga Jual hanya mengurangi harga jual; tagihan KPR tidak berubah. Untuk memotong biaya tertentu, pakai promo pada Kelebihan Tanah / Biaya Tambahan / Titipan Biaya Akad.
                                 </p>
                                 <PromoBiayaBaris v-if="bookForm.biaya_kelebihan_tanah_aktif && opsiTanah.length" label="Kelebihan Tanah" :bruto="biayaKelebihanTanahBruto" :options="opsiTanah"
-                                    v-model:promo-id="bookForm.promo_tanah_id" v-model:potongan="bookForm.potongan_tanah" />
+                                    :promo-id="bookForm.promo_tanah_id" @update:promo-id="v => pilihPromo('tanah', v)" v-model:potongan="bookForm.potongan_tanah" />
                                 <PromoBiayaBaris v-for="id in bookForm.biaya_tambahan_selected.filter(i => opsiBiaya(i).length)" :key="`promo-${id}`" :label="biayaPresetNama(id)"
                                     :bruto="Number(bookForm.biaya_tambahan_nominals[id]) || 0" :options="opsiBiaya(id)"
-                                    v-model:promo-id="bookForm.promo_biaya[id]" v-model:potongan="bookForm.potongan_biaya[id]" />
+                                    :promo-id="bookForm.promo_biaya[id]" @update:promo-id="v => pilihPromo(id, v)" v-model:potongan="bookForm.potongan_biaya[id]" />
                                 <PromoBiayaBaris v-if="titipanBruto > 0 && opsiTitipan.length" label="Titipan Biaya Akad" :bruto="titipanBruto" :options="opsiTitipan"
-                                    v-model:promo-id="bookForm.promo_titipan_id" v-model:potongan="bookForm.potongan_titipan" />
+                                    :promo-id="bookForm.promo_titipan_id" @update:promo-id="v => pilihPromo('titipan', v)" v-model:potongan="bookForm.potongan_titipan" />
                             </div>
                             <div v-if="opsiLabel.length" class="flex items-center gap-2">
                                 <span class="text-slate-400 text-xs w-36 shrink-0">Promo label</span>
@@ -1051,24 +1101,11 @@ const isBookable = (k) => k.status_jual === 'available';
                             </div>
                         </div>
 
-                        <!-- Summary Harga Netto -->
-                        <div class="bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border border-violet-500/20 rounded-xl p-4 space-y-1.5 text-sm">
-                            <div class="flex justify-between text-slate-400">
-                                <span>Harga Dasar</span>
-                                <span class="text-slate-300">{{ formatRupiah(hargaDasar) }}</span>
-                            </div>
-                            <div class="flex justify-between text-slate-400">
-                                <span>+ Total Biaya Tambahan<span v-if="totalPotongan > 0" class="text-emerald-300 text-xs"> (sudah dipotong promo {{ formatRupiah(totalPotongan) }})</span></span>
-                                <span class="text-slate-300">{{ formatRupiah(totalBiayaTambahan) }}</span>
-                            </div>
-                            <div class="flex justify-between text-slate-400">
-                                <span>− Diskon</span>
-                                <span class="text-slate-300">{{ formatRupiah(diskonNominal) }}</span>
-                            </div>
-                            <div class="flex justify-between pt-1.5 border-t border-violet-500/20 font-semibold">
-                                <span class="text-violet-300">Harga Jual Netto</span>
-                                <span class="text-violet-300 text-base">{{ formatRupiah(hargaJualNetto) }}</span>
-                            </div>
+                        <!-- Bonus (label saja) -->
+                        <div v-if="bonusPresets.length" class="space-y-2">
+                            <h4 class="text-slate-300 text-sm font-medium border-b border-slate-800 pb-2">Bonus</h4>
+                            <p class="text-slate-500 text-[0.6875rem]">Hanya penanda (mis. tandon, kipas) — tidak mempengaruhi harga maupun tagihan.</p>
+                            <BonusPicker :options="bonusPresets" v-model="bookForm.bonus_ids" />
                         </div>
 
                         <!-- ═══ SECTION 3: Skema Pembayaran (baru terbuka setelah harga netto selesai) ═══ -->
@@ -1099,30 +1136,13 @@ const isBookable = (k) => k.status_jual === 'available';
                                 <p v-if="bookForm.errors.skema_dp_preset_id" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.skema_dp_preset_id }}</p>
                             </div>
 
-                            <!-- Kolom dinamis sesuai atribut preset yang dipilih — nominal dikunci dari preset, tidak bisa diedit manual -->
-                            <template v-if="selectedSkemaPreset">
-                                <div v-if="selectedSkemaPreset.booking_fee_aktif">
-                                    <label class="block text-slate-400 text-xs mb-1.5">Booking Fee / UTJ</label>
-                                    <div class="flex items-center justify-between px-3 py-2.5 bg-slate-800/60 border border-slate-700 rounded-lg">
-                                        <span class="text-slate-200 text-sm font-medium">{{ formatRupiah(bookForm.booking_fee) }}</span>
-                                        <span class="text-slate-500 text-xs">
-                                            {{ selectedSkemaPreset.booking_fee_tipe === 'persen' ? `${selectedSkemaPreset.booking_fee_nilai}% dari ${basisLabels[selectedSkemaPreset.booking_fee_basis]}` : 'Nominal tetap' }} · terkunci
-                                        </span>
-                                    </div>
-                                </div>
-                                <div v-if="selectedSkemaPreset.dp_aktif">
-                                    <label class="block text-slate-400 text-xs mb-1.5">DP</label>
-                                    <div class="flex items-center justify-between px-3 py-2.5 bg-slate-800/60 border border-slate-700 rounded-lg">
-                                        <span class="text-slate-200 text-sm font-medium">{{ formatRupiah(bookForm.dp_nominal) }}</span>
-                                        <span class="text-slate-500 text-xs">
-                                            {{ selectedSkemaPreset.dp_tipe === 'persen' ? `${selectedSkemaPreset.dp_nilai}% dari ${basisLabels[selectedSkemaPreset.dp_basis]}` : 'Nominal tetap' }} · terkunci
-                                        </span>
-                                    </div>
-                                </div>
-                                <p v-if="!selectedSkemaPreset.booking_fee_aktif && !selectedSkemaPreset.dp_aktif" class="text-slate-500 text-xs">
-                                    Skema ini tidak ada booking fee maupun DP.
-                                </p>
-                            </template>
+                            <!-- Nominal Booking Fee/DP dikunci dari preset (tidak bisa diedit); angkanya tampil di Rincian Pemesanan paling bawah -->
+                            <p v-if="selectedSkemaPreset && !selectedSkemaPreset.booking_fee_aktif && !selectedSkemaPreset.dp_aktif" class="text-slate-500 text-xs">
+                                Skema ini tidak ada booking fee maupun DP.
+                            </p>
+                            <p v-else-if="selectedSkemaPreset" class="text-slate-500 text-xs">
+                                Nominal Booking Fee dan DP dikunci dari preset skema dan ditampilkan di Rincian Pemesanan di bawah.
+                            </p>
 
                             <!-- Cicilan Kali (jika Cash Bertahap) -->
                             <div v-if="bookForm.cara_bayar === 'cash_bertahap'">
@@ -1141,6 +1161,12 @@ const isBookable = (k) => k.status_jual === 'available';
                             <label class="block text-slate-400 text-xs mb-1.5">Catatan</label>
                             <textarea v-model="bookForm.catatan" rows="2" placeholder="Catatan tambahan (opsional)"
                                 class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none" />
+                        </div>
+
+                        <!-- Rincian Pemesanan (paling bawah, tepat sebelum konfirmasi) -->
+                        <div class="bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border border-violet-500/20 rounded-xl p-4 space-y-2">
+                            <h4 class="text-slate-300 text-sm font-medium">🧾 Rincian Pemesanan</h4>
+                            <RincianPemesanan :d="rincianData" />
                         </div>
                     </div>
 

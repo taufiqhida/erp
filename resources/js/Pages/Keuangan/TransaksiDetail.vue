@@ -4,6 +4,8 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import CatatPembayaran from '@/Components/CatatPembayaran.vue';
 import StatusPembayaranBadge from '@/Components/StatusPembayaranBadge.vue';
 import TutupSelisihDajam from '@/Components/TutupSelisihDajam.vue';
+import RincianPemesanan from '@/Components/RincianPemesanan.vue';
+import { rincianDariTransaksi } from '@/Composables/rincianPemesanan';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, reactive, computed } from 'vue';
 
@@ -250,71 +252,7 @@ const deleteCicilanLain = async (c) => {
             <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-2">
                 <h2 class="text-slate-300 font-medium text-sm">Rincian Pembayaran</h2>
                 <div class="bg-slate-800/40 rounded-lg p-3 space-y-1.5 text-sm">
-                    <div class="flex justify-between text-slate-400">
-                        <span>Harga Dasar</span>
-                        <span class="text-slate-300">{{ formatRp(transaksi.harga_dasar) }}</span>
-                    </div>
-                    <div v-if="transaksi.biaya_kelebihan_tanah_aktif" class="flex justify-between text-slate-400">
-                        <span>+ Biaya Kelebihan Tanah</span>
-                        <span class="text-slate-300">{{ formatRp(transaksi.biaya_kelebihan_tanah_nominal) }}</span>
-                    </div>
-                    <div v-if="transaksi.biaya_kelebihan_tanah_aktif && Number(transaksi.biaya_kelebihan_tanah_potongan) > 0" class="flex justify-between text-slate-400 pl-3">
-                        <span>− Potongan promo{{ transaksi.tanah_promo_nama ? ` (${transaksi.tanah_promo_nama})` : '' }}</span>
-                        <span class="text-emerald-300">{{ formatRp(transaksi.biaya_kelebihan_tanah_potongan) }}</span>
-                    </div>
-                    <template v-for="(bt, i) in transaksi.biaya_tambahan" :key="`bt-${i}`">
-                        <div class="flex justify-between text-slate-400">
-                            <span>+ {{ bt.nama }}</span>
-                            <span class="text-slate-300">{{ formatRp(bt.nominal) }}</span>
-                        </div>
-                        <div v-if="Number(bt.potongan) > 0" class="flex justify-between text-slate-400 pl-3">
-                            <span>− Potongan promo{{ bt.promo_nama ? ` (${bt.promo_nama})` : '' }}</span>
-                            <span class="text-emerald-300">{{ formatRp(bt.potongan) }}</span>
-                        </div>
-                    </template>
-                    <div v-if="transaksi.diskon_nominal > 0" class="flex justify-between text-slate-400">
-                        <span>− Diskon{{ transaksi.diskon_promo_nama ? ` (${transaksi.diskon_promo_nama})` : '' }}{{ transaksi.diskon_mode === 'persen' ? ` ${transaksi.diskon_nilai}%` : '' }}</span>
-                        <span class="text-rose-400">{{ formatRp(transaksi.diskon_nominal) }}</span>
-                    </div>
-                    <div class="flex justify-between pt-1.5 border-t border-slate-700 font-semibold">
-                        <span class="text-violet-300">Total Harga</span>
-                        <span class="text-violet-300">{{ formatRp(transaksi.harga_deal) }}</span>
-                    </div>
-
-                    <div class="pt-2 mt-1 border-t border-slate-700/60">
-                        <div class="text-slate-500 text-[0.6875rem] uppercase tracking-wide mb-1">
-                            Cara Pembayaran: {{ transaksi.cara_bayar_label }}
-                            <span v-if="transaksi.skema_dp_preset" class="text-slate-500 normal-case">· Skema: {{ transaksi.skema_dp_preset.nama }}</span>
-                            <span v-if="transaksi.program_all_in_nama" class="text-slate-500 normal-case">· Program All In: {{ transaksi.program_all_in_nama }}</span>
-                        </div>
-                        <div v-if="transaksi.booking_fee > 0" class="flex justify-between text-slate-400">
-                            <span>
-                                Booking Fee
-                                <span v-if="transaksi.skema_dp_preset?.booking_fee_aktif" class="text-slate-500 text-xs ml-1">
-                                    ({{ transaksi.skema_dp_preset.booking_fee_tipe === 'persen' ? transaksi.skema_dp_preset.booking_fee_nilai + '%' : 'nominal tetap' }},
-                                    {{ transaksi.skema_dp_preset.booking_fee_tenor }}x,
-                                    {{ transaksi.skema_dp_preset.booking_fee_masuk_harga_jual ? 'masuk harga jual' : 'di luar harga jual' }})
-                                </span>
-                            </span>
-                            <span class="text-slate-300">{{ formatRp(transaksi.booking_fee) }}</span>
-                        </div>
-                        <div v-if="transaksi.dp_nominal > 0" class="flex justify-between text-slate-400">
-                            <span>
-                                DP
-                                <span v-if="transaksi.skema_dp_preset?.dp_aktif" class="text-slate-500 text-xs ml-1">
-                                    ({{ transaksi.skema_dp_preset.dp_tipe === 'persen' ? transaksi.skema_dp_preset.dp_nilai + '%' : 'nominal tetap' }},
-                                    {{ transaksi.skema_dp_preset.dp_tenor }}x,
-                                    {{ transaksi.skema_dp_preset.dp_masuk_harga_jual ? 'masuk harga jual' : 'di luar harga jual' }})
-                                </span>
-                            </span>
-                            <span class="text-slate-300">{{ formatRp(transaksi.dp_nominal) }}</span>
-                        </div>
-                        <div v-if="transaksi.titipan_biaya_akad_nominal > 0" class="flex justify-between text-slate-400">
-                            <span>Titipan Biaya Akad<span class="text-slate-500 text-xs ml-1">(dari Program All In)</span></span>
-                            <span class="text-slate-300">{{ formatRp(transaksi.titipan_biaya_akad_ditagih ?? transaksi.titipan_biaya_akad_nominal) }}<span v-if="Number(transaksi.titipan_biaya_akad_potongan) > 0" class="text-emerald-300 text-xs ml-1">(potongan promo {{ formatRp(transaksi.titipan_biaya_akad_potongan) }}{{ transaksi.titipan_promo_nama ? ` · ${transaksi.titipan_promo_nama}` : '' }})</span></span>
-                        </div>
-                        <div v-if="!(transaksi.booking_fee > 0) && !(transaksi.dp_nominal > 0) && !(transaksi.titipan_biaya_akad_nominal > 0)" class="text-slate-500 text-xs">Tidak ada booking fee maupun DP.</div>
-                    </div>
+                    <RincianPemesanan :d="rincianDariTransaksi(transaksi)" />
                 </div>
             </div>
 
