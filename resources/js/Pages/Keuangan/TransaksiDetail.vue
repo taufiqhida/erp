@@ -54,6 +54,19 @@ const totalKartuPiutang = computed(() => (props.transaksi.kartu_piutang_static |
 // ── Edit tanggal jatuh tempo cicilan ──────────────────────────────────
 const editingTanggal = ref(null);
 const tanggalForm = useForm({ tanggal_jatuh_tempo: '' });
+// Jatuh tempo cicilan: tanggal sendiri, atau (cash, tanpa tanggal) mengikuti tanggal rencana akad.
+const teksTempo = (j) => {
+    if (!j.mengikuti_rencana_akad) return `jatuh tempo ${j.tanggal_jatuh_tempo}`;
+    return j.tanggal_jatuh_tempo ? `jatuh tempo ${j.tanggal_jatuh_tempo} (mengikuti rencana akad)` : 'jatuh tempo: menunggu rencana akad';
+};
+// Hanya cicilan DP/Pelunasan cash yang boleh dikembalikan ke "mengikuti rencana akad".
+const bisaIkutiRencana = (j) => !props.transaksi.is_kpr && ['dp', 'pelunasan'].includes(j.jenis) && !j.mengikuti_rencana_akad;
+const ikutiRencanaAkad = (j) => {
+    router.patch(route('jadwal-tagihan.update-tanggal', j.id), { ikuti_rencana_akad: true }, {
+        preserveScroll: true,
+        onSuccess: () => { editingTanggal.value = null; },
+    });
+};
 const openEditTanggal = (j) => {
     editingTanggal.value = j.id;
     tanggalForm.tanggal_jatuh_tempo = j.tanggal_jatuh_tempo_raw;
@@ -78,7 +91,7 @@ const updateCicilanJumlah = (j, jumlah) => {
 // restrukturisasi. Booking Fee/DP tetap terkunci ke skema, tidak ada
 // tombol tambah utk grup itu (lihat kondisi row.type di template).
 const showTambahCicilan = ref(false);
-const tambahCicilanForm = useForm({ jumlah: '', tanggal_jatuh_tempo: '' });
+const tambahCicilanForm = useForm({ jumlah: '', tanggal_jatuh_tempo: '', dari_cicilan_terakhir: true });
 const submitTambahCicilan = () => {
     tambahCicilanForm.post(route('pelunasan.cicilan.store', props.transaksi.id), {
         preserveScroll: true,
@@ -283,7 +296,7 @@ const deleteCicilanLain = async (c) => {
                                     :class="['w-3 h-3 text-slate-500 transition-transform flex-shrink-0', isRowExpanded(row) ? 'rotate-90' : '']">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                                 </svg>
-                                <span class="text-slate-300">{{ row.nama }}</span>
+                                <span class="text-slate-300">{{ row.label || row.nama }}</span>
                                 <span class="text-slate-500 text-xs ml-2">{{ row.subjek }}</span>
                                 <span v-if="row.progress" class="text-slate-500 text-xs ml-2">({{ row.progress }})</span>
                                 <span v-if="Number(row.potongan) > 0" class="text-emerald-300 text-xs ml-2">biaya {{ formatRp(row.bruto) }} − potongan promo {{ formatRp(row.potongan) }}</span>
@@ -321,10 +334,11 @@ const deleteCicilanLain = async (c) => {
                                         <input v-model="tanggalForm.tanggal_jatuh_tempo" type="date"
                                             class="ml-2 px-1.5 py-0.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
                                         <button @click="submitEditTanggal(j)" class="ml-1 text-emerald-400 hover:text-emerald-300 text-xs">✓</button>
+                                        <button v-if="bisaIkutiRencana(j)" @click="ikutiRencanaAkad(j)" class="ml-1 text-slate-400 hover:text-violet-300 text-xs underline" title="Hapus tanggal sendiri; jatuh tempo mengikuti tanggal rencana akad">Ikuti rencana akad</button>
                                         <button @click="editingTanggal = null" class="ml-0.5 text-slate-500 hover:text-slate-300 text-xs" aria-label="Batal mengubah">✕</button>
                                     </template>
                                     <template v-else>
-                                        <span class="text-slate-500 text-xs ml-2">{{ j.tanggal_jatuh_tempo ? `jatuh tempo ${j.tanggal_jatuh_tempo}` : 'jatuh tempo: menunggu rencana akad' }}</span>
+                                        <span class="text-slate-500 text-xs ml-2">{{ teksTempo(j) }}</span>
                                         <button v-if="j.status === 'belum_bayar' && canPayItem" @click="openEditTanggal(j)"
                                             class="text-slate-500 hover:text-violet-400 text-xs ml-1" title="Ubah tanggal jatuh tempo">✎</button>
                                     </template>
@@ -411,22 +425,33 @@ const deleteCicilanLain = async (c) => {
                                 </div>
                             </template>
 
+                            <div v-if="row.type === 'pelunasan_group' && Math.abs(row.selisih_jadwal || 0) > 0.5"
+                                class="mx-3 my-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+                                Jumlah semua cicilan {{ formatRp(row.nominal) }} {{ row.selisih_jadwal > 0 ? 'lebih' : 'kurang' }} {{ formatRp(Math.abs(row.selisih_jadwal)) }}
+                                dari Pelunasan seharusnya {{ formatRp(row.nominal_seharusnya) }}. Sesuaikan nominal cicilan yang belum dibayar.
+                            </div>
                             <div v-if="row.type === 'pelunasan_group' && canPayItem" class="pl-8 pr-3 py-2">
                                 <button v-if="!showTambahCicilan" @click="showTambahCicilan = true"
                                     class="text-xs text-violet-400 hover:text-violet-300 transition-colors">
-                                    + Tambah Cicilan Custom
+                                    + Tambah Cicilan
                                 </button>
                                 <div v-else class="flex flex-wrap items-center gap-1.5">
                                     <MoneyInput v-model="tambahCicilanForm.jumlah" placeholder="Jumlah"
                                         class="w-32 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
-                                    <input v-model="tambahCicilanForm.tanggal_jatuh_tempo" type="date"
+                                    <input v-model="tambahCicilanForm.tanggal_jatuh_tempo" type="date" title="Kosongkan = mengikuti tanggal rencana akad"
                                         class="px-2 py-1 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                    <label class="flex items-center gap-1 text-xs text-slate-400" title="Nominal dipotong dari cicilan terakhir yang belum dibayar, jadi total Pelunasan tidak berubah">
+                                        <input v-model="tambahCicilanForm.dari_cicilan_terakhir" type="checkbox" class="rounded border-slate-600 bg-slate-900" />
+                                        Pecah dari cicilan terakhir
+                                    </label>
                                     <button @click="submitTambahCicilan"
-                                        :disabled="!tambahCicilanForm.jumlah || !tambahCicilanForm.tanggal_jatuh_tempo || tambahCicilanForm.processing"
+                                        :disabled="!tambahCicilanForm.jumlah || tambahCicilanForm.processing"
                                         class="px-2.5 py-1 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
                                         Simpan
                                     </button>
                                     <button @click="showTambahCicilan = false; tambahCicilanForm.reset()" class="px-2 py-1 text-slate-400 hover:text-slate-200 text-xs">Batal</button>
+                                    <p v-if="tambahCicilanForm.errors.jumlah" class="basis-full text-rose-400 text-xs">{{ tambahCicilanForm.errors.jumlah }}</p>
+                                    <p v-else class="basis-full text-slate-500 text-xs">Tanggal boleh kosong: jatuh tempo mengikuti tanggal rencana akad.</p>
                                 </div>
                             </div>
                         </div>

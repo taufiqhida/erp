@@ -25,6 +25,7 @@ trait HasFinanceTotals
         'harga_dasar', 'harga_deal', 'booking_fee', 'cara_bayar', 'skema_dp_preset_id', 'plafon_kpr',
         'biaya_kelebihan_tanah_aktif', 'biaya_kelebihan_tanah_nominal', 'biaya_kelebihan_tanah_potongan', 'total_biaya_tambahan',
         'titipan_biaya_akad_nominal', 'titipan_biaya_akad_potongan', 'diskon_nominal',
+        'tanggal_rencana_akad',     // cicilan tanpa tanggal mengikuti rencana akad: jatuh tempo terdekat ikut berubah
     ];
 
     public static function withoutFinanceRefresh(callable $callback)
@@ -74,7 +75,7 @@ trait HasFinanceTotals
             'fin_piutang_bank'      => round($b['total_piutang_bank'], 2),
             'fin_terbayar_bank'     => round($b['total_terbayar_bank'], 2),
             'fin_sisa_bank'         => round($b['total_piutang_bank'] - $b['total_terbayar_bank'], 2),
-            'fin_jatuh_tempo_berikutnya' => $this->jadwalTagihans->where('status', '!=', 'lunas')->min('tanggal_jatuh_tempo')?->format('Y-m-d'),
+            'fin_jatuh_tempo_berikutnya' => $this->jadwalTagihans->where('status', '!=', 'lunas')->map->tanggal_tempo->filter()->sort()->first()?->format('Y-m-d'),
             'fin_updated_at'        => now(),
         ];
 

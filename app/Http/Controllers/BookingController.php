@@ -447,7 +447,8 @@ class BookingController extends Controller
             // dibayar) — pencatatan pembayaran aktual tetap lewat alur
             // Keuangan terpisah (finance yang konfirmasi uang diterima).
             $tanggalBooking = \Carbon\Carbon::parse($validated['tanggal_booking']);
-            $generateJadwalTagihan = function (string $jenis, float $totalNominal, int $tenor) use ($transaksi, $tanggalBooking) {
+            // $tanpaTanggalBilaSekali: cicilan tunggal tanpa tanggal sendiri = jatuh tempo mengikuti tanggal rencana akad (cash).
+            $generateJadwalTagihan = function (string $jenis, float $totalNominal, int $tenor, bool $tanpaTanggalBilaSekali = false) use ($transaksi, $tanggalBooking) {
                 if ($totalNominal <= 0 || $tenor < 1) return;
                 $perCicilan = round($totalNominal / $tenor, 2);
                 $sisa = $totalNominal;
@@ -459,11 +460,12 @@ class BookingController extends Controller
                         'jenis'               => $jenis,
                         'nomor_cicilan'       => $i + 1,
                         'jumlah'              => $jumlah,
-                        'tanggal_jatuh_tempo' => $tanggalBooking->copy()->addMonths($i),
+                        'tanggal_jatuh_tempo' => $tanpaTanggalBilaSekali && $tenor === 1 ? null : $tanggalBooking->copy()->addMonths($i),
                         'status'              => 'belum_bayar',
                     ]);
                 }
             };
+            $isCash = in_array($validated['cara_bayar'], ['cash', 'cash_bertahap'], true);
 
             if ($skemaPreset?->booking_fee_aktif) {
                 $generateJadwalTagihan('booking_fee', $bookingFee, max(1, $skemaPreset->booking_fee_tenor));
@@ -490,7 +492,7 @@ class BookingController extends Controller
                 }
             }
             if ($skemaPreset?->dp_aktif) {
-                $generateJadwalTagihan('dp', $dpNominal, max(1, $skemaPreset->dp_tenor));
+                $generateJadwalTagihan('dp', $dpNominal, max(1, $skemaPreset->dp_tenor), $isCash);
             }
 
             // Cash & Cash Bertahap: Pelunasan juga dapat jadwal cicilan
@@ -506,7 +508,7 @@ class BookingController extends Controller
                 $pelunasanTenor = $validated['cara_bayar'] === 'cash_bertahap'
                     ? max(1, (int) ($validated['cicilan_kali'] ?? 1))
                     : 1;
-                $generateJadwalTagihan('pelunasan', $pelunasanNominal, $pelunasanTenor);
+                $generateJadwalTagihan('pelunasan', $pelunasanNominal, $pelunasanTenor, true);
             }
 
             // Auto-generate checklist dokumen dari template

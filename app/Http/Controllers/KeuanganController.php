@@ -617,8 +617,9 @@ class KeuanganController extends Controller
                     'jenis_label'             => $j->jenis_label,
                     'nomor_cicilan'           => $j->nomor_cicilan,
                     'jumlah'                  => $j->jumlah,
-                    'tanggal_jatuh_tempo'     => $j->tanggal_jatuh_tempo?->format('d M Y'),       // null = menunggu rencana akad
+                    'tanggal_jatuh_tempo'     => $j->tanggal_tempo?->format('d M Y'),             // efektif; null = menunggu rencana akad
                     'tanggal_jatuh_tempo_raw' => $j->tanggal_jatuh_tempo?->format('Y-m-d'),
+                    'mengikuti_rencana_akad'  => $j->mengikuti_rencana_akad,
                     'status'                  => $j->status,
                     'is_terlambat'            => $j->is_terlambat,
                     'jumlah_dibayar'          => $j->pembayaran?->jumlah,
@@ -816,7 +817,21 @@ class KeuanganController extends Controller
         $validated = $request->validate([
             'tanggal_jatuh_tempo' => 'nullable|date',
             'jumlah'              => 'nullable|numeric|min:1',
+            'ikuti_rencana_akad'  => 'nullable|boolean',
         ]);
+
+        // Cicilan DP/Pelunasan cash boleh tanpa tanggal sendiri: jatuh temponya mengikuti tanggal rencana akad.
+        if ($request->boolean('ikuti_rencana_akad')) {
+            abort_unless(
+                in_array($kk->cara_bayar, ['cash', 'cash_bertahap'], true) && in_array($jadwal->jenis, ['dp', 'pelunasan'], true),
+                422,
+                'Mengikuti rencana akad hanya untuk cicilan DP/Pelunasan cash. Booking Fee dan transaksi KPR memakai tanggal sendiri.'
+            );
+            $jadwal->update(['tanggal_jatuh_tempo' => null]);
+
+            return back()->with('success', 'Jatuh tempo cicilan kini mengikuti tanggal rencana akad.');
+        }
+        unset($validated['ikuti_rencana_akad']);
 
         // Nominal Booking Fee/DP wajib ikut skema pembayaran yang dipilih —
         // cuma cicilan Pelunasan (cash/cash bertahap, tidak ada preset yang
@@ -847,21 +862,35 @@ class KeuanganController extends Controller
         $this->assertTransactionEditable($kk, 'Tambah cicilan Pelunasan');
 
         $validated = $request->validate([
-            'jumlah'              => 'required|numeric|min:1',
-            'tanggal_jatuh_tempo' => 'required|date',
+            'jumlah'                 => 'required|numeric|min:1',
+            'tanggal_jatuh_tempo'    => 'nullable|date',          // kosong = mengikuti tanggal rencana akad
+            'dari_cicilan_terakhir'  => 'nullable|boolean',       // true: nominal ini DIPECAH dari cicilan terakhir yang belum dibayar (total Pelunasan tetap)
         ]);
 
-        $nomorBerikutnya = 1 + (int) $kk->jadwalTagihans()->where('jenis', 'pelunasan')->max('nomor_cicilan');
+        return DB::transaction(function () use ($kk, $validated, $request) {
+            $jumlah = (float) $validated['jumlah'];
 
-        $kk->jadwalTagihans()->create([
-            'jenis'               => 'pelunasan',
-            'nomor_cicilan'       => $nomorBerikutnya,
-            'jumlah'              => $validated['jumlah'],
-            'tanggal_jatuh_tempo' => $validated['tanggal_jatuh_tempo'],
-            'status'              => 'belum_bayar',
-        ]);
+            if ($request->boolean('dari_cicilan_terakhir')) {
+                $sumber = $kk->jadwalTagihans()->where('jenis', 'pelunasan')->where('status', 'belum_bayar')->whereNull('pembayaran_konsumen_id')
+                    ->orderByDesc('nomor_cicilan')->lockForUpdate()->first();
+                if (!$sumber || (float) $sumber->jumlah <= $jumlah) {
+                    return back()->withErrors(['jumlah' => 'Nominal harus lebih kecil dari cicilan terakhir yang belum dibayar'
+                        . ($sumber ? ' (Rp ' . number_format((float) $sumber->jumlah, 0, ',', '.') . ')' : ' (tidak ada)') . '. Matikan opsi "pecah dari cicilan terakhir" bila ini tagihan tambahan.']);
+                }
+                $sumber->update(['jumlah' => round((float) $sumber->jumlah - $jumlah, 2)]);
+            }
 
-        return back()->with('success', 'Cicilan Pelunasan berhasil ditambahkan.');
+            $nomorBerikutnya = 1 + (int) $kk->jadwalTagihans()->where('jenis', 'pelunasan')->max('nomor_cicilan');
+            $kk->jadwalTagihans()->create([
+                'jenis'               => 'pelunasan',
+                'nomor_cicilan'       => $nomorBerikutnya,
+                'jumlah'              => $jumlah,
+                'tanggal_jatuh_tempo' => $validated['tanggal_jatuh_tempo'] ?? null,
+                'status'              => 'belum_bayar',
+            ]);
+
+            return back()->with('success', 'Cicilan Pelunasan berhasil ditambahkan.');
+        });
     }
 
     /**

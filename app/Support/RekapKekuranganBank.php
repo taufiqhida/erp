@@ -188,7 +188,7 @@ class RekapKekuranganBank
             $sel = self::sel($a['nominal'], min($a['cair'], $a['nominal']), isset($a['tanggal']) ? date('d M Y', strtotime($a['tanggal'])) : null);
             if ($sel['sisa'] > 0.5 && isset(self::JADWAL[$kunci])) {
                 $sel['jatuh_tempo'] = $kk->jadwalTagihans->where('jenis', self::JADWAL[$kunci])->where('status', '!=', 'lunas')
-                    ->map(fn ($j) => $j->tanggal_jatuh_tempo?->format('Y-m-d'))->filter()->min();
+                    ->map(fn ($j) => $j->tanggal_tempo?->format('Y-m-d'))->filter()->min();
             }
             $hasil[$kunci] = $sel;
         }
@@ -303,7 +303,8 @@ class RekapKekuranganBank
 
         $tetap = [];
         foreach (self::KONSUMEN_TETAP[$tampilan] as $kunci) {
-            $tetap[$kunci] = ['key' => $kunci, 'label' => self::LABEL_KONSUMEN[$kunci], 'grup' => 'konsumen', 'jumlah' => $jumlah[$kunci] ?? 0];
+            $label = $kunci === 'k:dp' && $tampilan === self::TAMPILAN_CASH ? 'DP / Pengikatan' : self::LABEL_KONSUMEN[$kunci];
+            $tetap[$kunci] = ['key' => $kunci, 'label' => $label, 'grup' => 'konsumen', 'jumlah' => $jumlah[$kunci] ?? 0];
         }
         $tambahan = [];
         foreach ($jumlah as $kunci => $n) {

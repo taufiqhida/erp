@@ -194,7 +194,7 @@ class DashboardController extends Controller
                 $kejarKonsumen = $kprAktif
                     ? (in_array($kk->status_penjualan, ['sp3k', 'rencana_akad', 'akad', 'bast'], true) ? $sisaKonsumen : 0.0)
                     : min($sisaKonsumen, (float) $kk->jadwalTagihans
-                        ->filter(fn ($j) => $j->status !== 'lunas' && $j->tanggal_jatuh_tempo && $j->tanggal_jatuh_tempo->lt($hariIni))
+                        ->filter(fn ($j) => $j->status !== 'lunas' && $j->tanggal_tempo && $j->tanggal_tempo->lt($hariIni))
                         ->sum(fn ($j) => max(0.0, (float) $j->jumlah - (float) ($j->pembayaran?->jumlah ?? 0))));
                 if ($kejarKonsumen > 0.009) {
                     $bisaDikejar['konsumen']['nominal'] += $kejarKonsumen;
@@ -273,14 +273,14 @@ class DashboardController extends Controller
         // Hitung total lewat SQL (count/sum); hanya 10 teratas yang dimuat lengkap dengan relasi.
         $overdueQuery = fn() => JadwalTagihan::query()
             ->whereIn('status', ['belum_bayar', 'sebagian'])
-            ->where('tanggal_jatuh_tempo', '<', now()->toDateString())
+            ->whereRaw(JadwalTagihan::sqlTempoEfektif() . ' < ?', [now()->toDateString()])
             ->whereHas('kavlingKonsumen', function ($q) use ($scopeViaKavling) {
                 $scopeViaKavling($q->where('status', '!=', 'cancelled'));
             });
         $overdueTotals = $overdueQuery()->selectRaw('count(*) as total_count, coalesce(sum(jumlah), 0) as total_nominal')->first();
         $overdueJadwal = $overdueQuery()
             ->with(['kavlingKonsumen.konsumen:id,nama', 'kavlingKonsumen.kavling.project:id,nama'])
-            ->orderBy('tanggal_jatuh_tempo')
+            ->orderByRaw(JadwalTagihan::sqlTempoEfektif())
             ->limit(10)
             ->get();
 
@@ -294,9 +294,9 @@ class DashboardController extends Controller
                 'project'             => $j->kavlingKonsumen->kavling->project->nama,
                 'jenis_label'         => $j->jenis_label,
                 'jumlah'              => $j->jumlah,
-                // Query di atas sudah membuang jatuh tempo kosong; ?-> hanya pengaman.
-                'tanggal_jatuh_tempo' => $j->tanggal_jatuh_tempo?->format('d M Y'),
-                'hari_terlambat'      => $j->tanggal_jatuh_tempo ? (int) abs(now()->startOfDay()->diffInDays($j->tanggal_jatuh_tempo)) : 0,
+                // Query di atas sudah membuang jatuh tempo efektif yang kosong; ?-> hanya pengaman.
+                'tanggal_jatuh_tempo' => $j->tanggal_tempo?->format('d M Y'),
+                'hari_terlambat'      => $j->tanggal_tempo ? (int) abs(now()->startOfDay()->diffInDays($j->tanggal_tempo)) : 0,
                 'transaksi_id'        => $j->kavling_konsumen_id,
             ]),
         ];
@@ -462,7 +462,7 @@ class DashboardController extends Controller
         // Tambahan & Biaya Tanah belum ada struktur tanggal jatuh temponya).
         $jatuhTempoPiutangKonsumen = JadwalTagihan::query()
             ->whereIn('status', ['belum_bayar', 'sebagian'])
-            ->whereBetween('tanggal_jatuh_tempo', [$periodFrom, $periodTo])
+            ->whereRaw(JadwalTagihan::sqlTempoEfektif() . ' BETWEEN ? AND ?', [$periodFrom, $periodTo])
             ->whereHas('kavlingKonsumen', fn($q) => $scopeViaKavling($q->where('status', '!=', 'cancelled')))
             ->sum('jumlah');
 

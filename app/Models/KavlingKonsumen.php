@@ -312,7 +312,8 @@ class KavlingKonsumen extends Model
 
     public function jadwalTagihans(): HasMany
     {
-        return $this->hasMany(JadwalTagihan::class);
+        // chaperone: relasi balik terisi otomatis, supaya jatuh tempo efektif (butuh tanggal rencana akad) tidak memicu N+1.
+        return $this->hasMany(JadwalTagihan::class)->chaperone('kavlingKonsumen');
     }
 
     public function rincianBiayaAkad(): HasMany
@@ -624,7 +625,8 @@ class KavlingKonsumen extends Model
             $terbayarKonsumen += $dibayar;
             $kartuPiutangStatic->push([
                 'type' => 'dp_group', 'id' => null, 'status' => $groupStatus($cicilan),
-                'nama' => 'DP', 'subjek' => 'Konsumen', 'nominal' => $dpTotal,
+                // Pada cash, DP lazimnya berupa uang pengikatan; 'nama' tetap 'DP' (dipakai pengelompokan Dashboard), 'label' untuk tampilan.
+                'nama' => 'DP', 'label' => $isKpr ? 'DP' : 'DP / Pengikatan', 'subjek' => 'Konsumen', 'nominal' => $dpTotal,
                 'jumlah_dibayar' => $dibayar,
                 'progress' => $lunas->count() . '/' . $cicilan->count() . ' lunas',
             ]);
@@ -832,6 +834,9 @@ class KavlingKonsumen extends Model
                 'type' => 'pelunasan_group', 'id' => null, 'status' => $statusPelunasan,
                 'nama' => 'Pelunasan', 'subjek' => 'Konsumen',
                 'nominal' => $nominalPelunasan,
+                // Jumlah semua cicilan harus sama dengan Pelunasan yang seharusnya; selisihnya ditandai di layar (tidak diubah diam-diam).
+                'nominal_seharusnya' => $pelunasanTotal,
+                'selisih_jadwal' => $pelunasanJadwal->isNotEmpty() ? round($nominalPelunasan - $pelunasanTotal, 2) : 0.0,
                 'jumlah_dibayar' => $dibayarPelunasan > 0 ? $dibayarPelunasan : null,
                 'progress' => $totalCicilanCount > 0 ? "{$lunasCicilanCount}/{$totalCicilanCount} lunas" : null,
                 'legacy_pembayaran' => $pelunasanLegacy ? [
@@ -987,14 +992,14 @@ class KavlingKonsumen extends Model
         foreach ($this->jadwalTagihans->where('jenis', 'booking_fee')->sortBy('nomor_cicilan') as $j) {
             $rows[] = [
                 'tahap'         => 'Uang Tanda Jadi',
-                'tanggal_bayar' => $j->tanggal_jatuh_tempo?->format('d-m-Y') ?? '',
+                'tanggal_bayar' => $j->tanggal_tempo?->format('d-m-Y') ?? '',
                 'jumlah_bayar'  => $rupiah($j->jumlah),
             ];
         }
         foreach ($this->jadwalTagihans->where('jenis', 'dp')->sortBy('nomor_cicilan') as $j) {
             $rows[] = [
                 'tahap'         => 'Pembayaran ' . $j->nomor_cicilan,
-                'tanggal_bayar' => $j->tanggal_jatuh_tempo?->format('d-m-Y') ?? '',
+                'tanggal_bayar' => $j->tanggal_tempo?->format('d-m-Y') ?? '',
                 'jumlah_bayar'  => $rupiah($j->jumlah),
             ];
         }
