@@ -71,7 +71,7 @@ class RekapKekuranganBank
     /** Kolom tetap per tampilan (yang selalu ada di panel kolom, juga bila belum ada konsumen yang memilikinya). */
     private const KONSUMEN_TETAP = [
         self::TAMPILAN_KPR  => ['k:booking_fee', 'k:dp', 'k:biaya_tanah', 'k:tum', 'k:titipan'],
-        self::TAMPILAN_CASH => ['k:booking_fee', 'k:dp', 'k:pelunasan', 'k:titipan'],
+        self::TAMPILAN_CASH => ['k:booking_fee', 'k:dp', 'k:biaya_tanah', 'k:pelunasan', 'k:titipan'],
     ];
 
     private const TIPE_KARTU = [

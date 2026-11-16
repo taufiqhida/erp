@@ -65,7 +65,8 @@ class RincianDariSkema
         if (!$isKpr) {
             $bfPengurang = $skema->booking_fee_masuk_harga_jual ? $bookingFee : 0;
             $dpPengurang = $skema->dp_masuk_harga_jual ? $dp : 0;
-            $pelunasan = max(0, $netto - $bfPengurang - $dpPengurang);
+            // Biaya tanah & biaya tambahan (total_biaya_tambahan, sudah neto promo) jadi baris terpisah, bukan bagian Pelunasan.
+            $pelunasan = max(0, $netto - (float) $kk->total_biaya_tambahan - $bfPengurang - $dpPengurang);
         }
 
         $tglBooking = $kk->tanggal_booking ?? now();

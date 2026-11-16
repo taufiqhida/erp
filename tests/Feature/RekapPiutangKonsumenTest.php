@@ -191,7 +191,7 @@ class RekapPiutangKonsumenTest extends TestCase
         $this->assertSame([], $this->nama($tidakDikenal));                               // nilai di luar pipeline dibuang
     }
 
-    public function test_tampilan_cash_hanya_cash_dengan_kolom_booking_fee_dp_pelunasan_titipan(): void
+    public function test_tampilan_cash_hanya_cash_dengan_kolom_booking_fee_dp_tanah_pelunasan_titipan(): void
     {
         $this->kpr('Kpr');
         $c = $this->cash('Cash Bertahap', 'booking', 'cash_bertahap', ['biaya_kelebihan_tanah_aktif' => true, 'biaya_kelebihan_tanah_nominal' => 8400000, 'titipan_biaya_akad_nominal' => 700000]);
@@ -199,14 +199,14 @@ class RekapPiutangKonsumenTest extends TestCase
 
         $p = $this->props(['tampilan' => 'piutang_cash', 'mode' => 'semua']);
         $this->assertEqualsCanonicalizing(['Cash Bertahap', 'Cash'], $this->nama($p));          // semua tahap, KPR tidak ikut
-        $this->assertSame(['k:booking_fee', 'k:dp', 'k:pelunasan', 'k:titipan'], collect($p['kolom'])->pluck('key')->all());
+        $this->assertSame(['k:booking_fee', 'k:dp', 'k:biaya_tanah', 'k:pelunasan', 'k:titipan'], collect($p['kolom'])->pluck('key')->all());
 
         $sel = $this->baris($p, 'Cash Bertahap')['sel'];
         $this->assertEquals(160000000, $sel['k:pelunasan']['nominal']);
         $this->assertSame('belum', $sel['k:pelunasan']['status']);
         $this->assertNotEmpty($sel['k:pelunasan']['jatuh_tempo_label']);                       // cicilan terdekat
         $this->assertEquals(700000, $sel['k:titipan']['nominal']);
-        $this->assertArrayNotHasKey('k:biaya_tanah', $sel);                                    // sudah termasuk dalam Pelunasan
+        $this->assertEquals(8400000, $sel['k:biaya_tanah']['nominal']);                           // baris sendiri, bukan bagian Pelunasan
 
         $this->assertSame(['cash'], collect($this->props(['tampilan' => 'piutang_cash', 'cara_bayar' => 'cash'])['rows']['data'])->pluck('cara_bayar_label')->map(fn ($l) => strtolower($l))->unique()->values()->all());
         $this->assertEqualsCanonicalizing(['Cash Bertahap', 'Cash'], $this->nama($this->props(['tampilan' => 'piutang_cash', 'cara_bayar' => 'kpr_subsidi'])));   // cara bayar di luar tampilan diabaikan

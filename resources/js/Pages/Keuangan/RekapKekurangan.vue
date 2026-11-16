@@ -125,7 +125,7 @@ const exportUrl = computed(() => {
 const tampilanList = [
     { key: 'piutang_kpr',    label: 'Piutang Konsumen KPR', info: 'Yang masih harus dibayar konsumen KPR: Booking Fee, DP, biaya tanah, biaya tambahan, Tambahan UM.' },
     { key: 'pencairan_bank', label: 'Pencairan Bank',       info: 'Dana bank yang masih ditahan untuk KPR yang sudah akad: Dajam, SBUM, pencairan netto. Cocok untuk pengajuan ke bank.' },
-    { key: 'piutang_cash',   label: 'Piutang Konsumen Cash', info: 'Yang masih harus dibayar konsumen Cash dan Cash Bertahap: Booking Fee, DP, Pelunasan.' },
+    { key: 'piutang_cash',   label: 'Piutang Konsumen Cash', info: 'Yang masih harus dibayar konsumen Cash dan Cash Bertahap: Booking Fee, DP, biaya tanah dan biaya tambahan, Pelunasan, Titipan Biaya Akad.' },
 ];
 const infoTampilan = computed(() => tampilanList.find(t => t.key === tampilan.value)?.info);
 const chips = [

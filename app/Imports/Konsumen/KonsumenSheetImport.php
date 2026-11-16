@@ -292,7 +292,7 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
             $bfPengurang = ($skemaPreset?->booking_fee_masuk_harga_jual ?? false) ? $bookingFee : 0;
             $dpPengurang = ($skemaPreset?->dp_masuk_harga_jual ?? false) ? $dpNominal : 0;
             $pelTargetInput = $num('pel_target');
-            $pelunasanNominal = $pelTargetInput ?? max(0, $hargaJualNetto - $bfPengurang - $dpPengurang);
+            $pelunasanNominal = $pelTargetInput ?? max(0, $hargaJualNetto - $totalBiayaTambahan - $bfPengurang - $dpPengurang);
             if ($this->caraBayar === 'cash_bertahap') {
                 $tenorInput = $num('tenor');
                 $pelunasanTenor = $tenorInput !== null ? max(1, (int) $tenorInput) : 1;
@@ -549,9 +549,9 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                     $applySaldoAwalJadwal('pelunasan', $pelBayar, $pelTgl);
                 }
 
-                // Cicilan bebas (bukan berjadwal): Titipan Biaya Akad (semua cara bayar),
-                // Biaya Tanah & Biaya Tambahan Lain (khusus KPR — untuk cash sudah baku
-                // di dalam nominal Pelunasan, lihat KavlingKonsumen::kartuPiutangBreakdown()).
+                // Cicilan bebas (bukan berjadwal): Titipan Biaya Akad, Biaya Tanah & Biaya Tambahan Lain
+                // (semua cara bayar — di cash pun ketiganya baris terpisah dari Pelunasan,
+                // lihat KavlingKonsumen::kartuPiutangBreakdown()). Tambahan UM khusus KPR.
                 $payFree = function (string $jenis, ?float $jumlah, $tanggal, ?int $btId = null) use ($trx) {
                     if (!$jumlah || $jumlah <= 0) return;
                     $trx->pembayarans()->create([
@@ -561,17 +561,15 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                     ]);
                 };
                 $payFree('titipan_biaya_akad', $titipanBayar, $titipanTgl);
-                if ($this->isKpr) {
-                    $payFree('biaya_tanah', $tanahBayar, $tanahTgl);
-                    $payFree('tambahan_um', $tumBayar, $tumTgl);
-                    foreach ($btRows as $row) {
-                        if (($row['bayar'] ?? 0) > 0) {
-                            $payFree('biaya_tambahan', $row['bayar'], $row['tgl'], $row['model']->id);
-                            $row['model']->update([
-                                'status' => $row['bayar'] >= (float) $row['model']->nominal ? 'lunas' : 'belum_bayar',
-                                'pembayaran_konsumen_id' => $trx->pembayarans()->where('kavling_konsumen_biaya_tambahan_id', $row['model']->id)->latest('id')->value('id'),
-                            ]);
-                        }
+                $payFree('biaya_tanah', $tanahBayar, $tanahTgl);
+                if ($this->isKpr) $payFree('tambahan_um', $tumBayar, $tumTgl);
+                foreach ($btRows as $row) {
+                    if (($row['bayar'] ?? 0) > 0) {
+                        $payFree('biaya_tambahan', $row['bayar'], $row['tgl'], $row['model']->id);
+                        $row['model']->update([
+                            'status' => $row['bayar'] >= (float) $row['model']->nominal ? 'lunas' : 'belum_bayar',
+                            'pembayaran_konsumen_id' => $trx->pembayarans()->where('kavling_konsumen_biaya_tambahan_id', $row['model']->id)->latest('id')->value('id'),
+                        ]);
                     }
                 }
 

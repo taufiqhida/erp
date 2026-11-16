@@ -629,52 +629,50 @@ class KavlingKonsumen extends Model
                 'progress' => $lunas->count() . '/' . $cicilan->count() . ' lunas',
             ]);
         }
-        // Biaya Tanah & Biaya Tambahan cuma jadi baris terpisah yang bisa
-        // dibayar sendiri untuk KPR — karena Plafon KPR dihitung dari
-        // harga_dasar (tidak termasuk komponen ini), jadi aman ditagih
-        // terpisah. Untuk cash/cash bertahap, Pelunasan dihitung dari
-        // harga_deal yang SUDAH termasuk kedua komponen ini — kalau tetap
-        // ditampilkan sebagai baris terpisah maka konsumen tercatat bayar
-        // dua kali (double) untuk komponen yang sama.
-        if ($isKpr) {
-            if ($this->biaya_kelebihan_tanah_aktif) {
-                [$cicilan, $dibayar, $status] = $cicilanLain('biaya_tanah', $this->biaya_kelebihan_tanah_ditagih);
-                $terbayarKonsumen += $dibayar;
-                $kartuPiutangStatic->push([
-                    'type' => 'biaya_tanah_group', 'id' => null, 'status' => $status,
-                    'nama' => 'Biaya Penambahan Tanah', 'subjek' => 'Konsumen',
-                    'nominal' => $this->biaya_kelebihan_tanah_ditagih,
-                    'bruto' => (float) $this->biaya_kelebihan_tanah_nominal,
-                    'potongan' => (float) $this->biaya_kelebihan_tanah_potongan,
-                    'jumlah_dibayar' => $dibayar > 0 ? $dibayar : null,
-                    'cicilan' => $cicilan,
-                ]);
-            }
-            // Biaya Tambahan: satu transaksi bisa punya banyak item berbeda
-            // (multi-preset), jadi tiap item jadi baris grup sendiri (id diisi
-            // id item, beda dari Biaya Tanah/dst yang singleton per transaksi
-            // & id-nya null) — cicilannya discope lewat FK
-            // kavling_konsumen_biaya_tambahan_id, bukan cuma `jenis`.
-            foreach ($this->biayaTambahans as $bt) {
-                $items = $bt->pembayarans;
-                $dibayar = (float) $items->sum('jumlah');
-                $target = $bt->ditagih;
-                $status = $target <= 0 ? 'lunas' : ($dibayar <= 0 ? 'belum_bayar' : ($dibayar >= $target ? 'lunas' : 'sebagian'));
-                $terbayarKonsumen += $dibayar;
-                $kartuPiutangStatic->push([
-                    'type' => 'biaya_tambahan_group', 'id' => $bt->id, 'status' => $status,
-                    'nama' => $bt->nama, 'subjek' => 'Konsumen', 'nominal' => $target,
-                    'bruto' => (float) $bt->nominal, 'potongan' => (float) $bt->potongan,
-                    'jumlah_dibayar' => $dibayar > 0 ? $dibayar : null,
-                    'cicilan' => $items->map(fn($p) => [
-                        'id'                => $p->id,
-                        'jumlah'            => (float) $p->jumlah,
-                        'tanggal_bayar'     => $p->tanggal_bayar?->format('d M Y'),
-                        'tanggal_bayar_raw' => $p->tanggal_bayar?->format('Y-m-d'),
-                        'keterangan'        => $p->keterangan,
-                    ])->values(),
-                ]);
-            }
+        // Biaya Tanah & Biaya Tambahan jadi baris terpisah yang dibayar sendiri,
+        // untuk KPR maupun cash: Plafon KPR dan Pelunasan cash sama-sama dihitung
+        // dari harga dasar (dikurangi diskon), jadi komponen ini tidak masuk ke
+        // keduanya dan tidak ada tagihan ganda. Total piutang tetap harga_deal.
+        $komponenTerpisah = 0.0;
+        if ($this->biaya_kelebihan_tanah_aktif) {
+            $komponenTerpisah += (float) $this->biaya_kelebihan_tanah_ditagih;
+            [$cicilan, $dibayar, $status] = $cicilanLain('biaya_tanah', $this->biaya_kelebihan_tanah_ditagih);
+            $terbayarKonsumen += $dibayar;
+            $kartuPiutangStatic->push([
+                'type' => 'biaya_tanah_group', 'id' => null, 'status' => $status,
+                'nama' => 'Biaya Penambahan Tanah', 'subjek' => 'Konsumen',
+                'nominal' => $this->biaya_kelebihan_tanah_ditagih,
+                'bruto' => (float) $this->biaya_kelebihan_tanah_nominal,
+                'potongan' => (float) $this->biaya_kelebihan_tanah_potongan,
+                'jumlah_dibayar' => $dibayar > 0 ? $dibayar : null,
+                'cicilan' => $cicilan,
+            ]);
+        }
+        // Biaya Tambahan: satu transaksi bisa punya banyak item berbeda
+        // (multi-preset), jadi tiap item jadi baris grup sendiri (id diisi
+        // id item, beda dari Biaya Tanah/dst yang singleton per transaksi
+        // & id-nya null) — cicilannya discope lewat FK
+        // kavling_konsumen_biaya_tambahan_id, bukan cuma `jenis`.
+        foreach ($this->biayaTambahans as $bt) {
+            $items = $bt->pembayarans;
+            $dibayar = (float) $items->sum('jumlah');
+            $target = $bt->ditagih;
+            $komponenTerpisah += (float) $target;
+            $status = $target <= 0 ? 'lunas' : ($dibayar <= 0 ? 'belum_bayar' : ($dibayar >= $target ? 'lunas' : 'sebagian'));
+            $terbayarKonsumen += $dibayar;
+            $kartuPiutangStatic->push([
+                'type' => 'biaya_tambahan_group', 'id' => $bt->id, 'status' => $status,
+                'nama' => $bt->nama, 'subjek' => 'Konsumen', 'nominal' => $target,
+                'bruto' => (float) $bt->nominal, 'potongan' => (float) $bt->potongan,
+                'jumlah_dibayar' => $dibayar > 0 ? $dibayar : null,
+                'cicilan' => $items->map(fn($p) => [
+                    'id'                => $p->id,
+                    'jumlah'            => (float) $p->jumlah,
+                    'tanggal_bayar'     => $p->tanggal_bayar?->format('d M Y'),
+                    'tanggal_bayar_raw' => $p->tanggal_bayar?->format('Y-m-d'),
+                    'keterangan'        => $p->keterangan,
+                ])->values(),
+            ]);
         }
 
         // Titipan Biaya Akad (dari Program All In) — nominal sudah dihitung &
@@ -799,11 +797,9 @@ class KavlingKonsumen extends Model
                 ]);
             }
         } else {
-            // Pelunasan = harga_deal (sudah termasuk biaya tanah & biaya
-            // tambahan, makanya keduanya TIDAK ditampilkan terpisah di atas)
-            // dikurangi Booking Fee/DP yang masuk harga jual — persis pola
-            // Plafon KPR, cuma basisnya harga_deal (bukan harga_dasar).
-            $pelunasanTotal = max(0, (float) $this->harga_deal - $bookingFeePengurang - $dpPengurang);
+            // Pelunasan = harga_deal dikurangi biaya tanah & biaya tambahan (keduanya baris terpisah di atas, jadi hasilnya
+            // harga dasar - diskon) dan Booking Fee/DP yang masuk harga jual — persis pola Plafon KPR.
+            $pelunasanTotal = max(0, (float) $this->harga_deal - $komponenTerpisah - $bookingFeePengurang - $dpPengurang);
             $pelunasanJadwal = $this->jadwalTagihans->where('jenis', 'pelunasan');
 
             // Legacy: pembayaran Pelunasan yang dicatat SEBELUM fitur jadwal

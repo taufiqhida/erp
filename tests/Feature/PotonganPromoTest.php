@@ -187,7 +187,8 @@ class PotonganPromoTest extends TestCase
 
         $this->assertEquals(166000000 + 5000000, $kk->harga_deal);
         $pelunasan = $kk->jadwalTagihans()->where('jenis', 'pelunasan')->sum('jumlah');
-        $this->assertEquals(171000000 - 1000000 - 1660000, $pelunasan);            // pelunasan memakai harga deal bersih
+        $this->assertEquals(166000000 - 1000000 - 1660000, $pelunasan);            // pelunasan = harga dasar (Hook 5 jt jadi baris sendiri, tanah nol)
+        $this->assertEquals(5000000, $this->baris($this->breakdown($kk), 'Kavling Hook')['nominal']);
         $this->assertEquals(171000000, $this->breakdown($kk)['total_piutang_konsumen']);
     }
 

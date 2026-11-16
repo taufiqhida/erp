@@ -494,15 +494,15 @@ class BookingController extends Controller
             }
 
             // Cash & Cash Bertahap: Pelunasan juga dapat jadwal cicilan
-            // sendiri (bukan cuma booking_fee/dp) — basisnya harga_deal
-            // (sudah termasuk biaya tanah & biaya tambahan) dikurangi
-            // Booking Fee/DP yang masuk harga jual, persis pola Plafon KPR
-            // tapi pakai harga_deal. Tenor cash bertahap ikut cicilan_kali,
+            // sendiri (bukan cuma booking_fee/dp) — basisnya harga dasar
+            // dikurangi diskon (biaya tanah & biaya tambahan jadi baris
+            // terpisah di Kartu Piutang, seperti KPR) dan Booking Fee/DP yang
+            // masuk harga jual. Tenor cash bertahap ikut cicilan_kali,
             // cash biasa selalu 1x (lunas sekaligus).
             if (in_array($validated['cara_bayar'], ['cash', 'cash_bertahap'])) {
                 $bookingFeePengurang = ($skemaPreset?->booking_fee_masuk_harga_jual ?? false) ? $bookingFee : 0;
                 $dpPengurang = ($skemaPreset?->dp_masuk_harga_jual ?? false) ? $dpNominal : 0;
-                $pelunasanNominal = max(0, $hargaJualNetto - $bookingFeePengurang - $dpPengurang);
+                $pelunasanNominal = max(0, $hargaJualNetto - $totalBiayaTambahan - $bookingFeePengurang - $dpPengurang);
                 $pelunasanTenor = $validated['cara_bayar'] === 'cash_bertahap'
                     ? max(1, (int) ($validated['cicilan_kali'] ?? 1))
                     : 1;

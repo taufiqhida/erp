@@ -214,7 +214,7 @@ class KonsumenImportSpec
             if ($caraBayar === 'cash_bertahap') {
                 $c[] = ['tenor', 'Tenor Pelunasan (kali)', 'k', 'Jumlah cicilan pelunasan.'];
             }
-            $c[] = ['pel_target', 'Pelunasan - Target', 'k', 'Kosong = Harga Deal dikurangi komponen lain.'];
+            $c[] = ['pel_target', 'Pelunasan - Target', 'k', 'Kosong = Harga Dasar dikurangi diskon dan Booking Fee/DP yang masuk harga jual (biaya tanah, biaya tambahan, titipan = baris sendiri).'];
             $c[] = ['pel_bayar', 'Pelunasan - Terbayar', 'k', 'Rekap total terbayar (Saldo Awal).'];
             $c[] = ['pel_tgl', 'Pelunasan - Tgl Terakhir', 'k', 'Wajib kalau Terbayar terisi.'];
         }
