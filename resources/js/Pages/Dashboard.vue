@@ -350,7 +350,7 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                             <button @click="toggleFinansial('konsumen')" class="text-slate-500 hover:text-slate-300 text-[0.6875rem] transition-colors">{{ expandedFinansial.konsumen ? '▲ Tutup' : '▼ Rincian' }}</button>
                         </div>
                         <Link :href="route('keuangan.rekap-kekurangan', { tampilan: 'piutang_kpr' })"
-                            title="Yang realistis ditagih sekarang: KPR yang sudah SP3K / rencana akad / akad, dan cash yang cicilannya sudah jatuh tempo. Sisanya masih potensi."
+                            title="Yang realistis ditagih sekarang: KPR yang sudah SP3K / rencana akad / akad, dan cash yang cicilannya sudah atau segera (≤ 30 hari) jatuh tempo; cicilan tanpa tanggal mengikuti rencana akad. Sisanya masih potensi."
                             class="flex flex-wrap items-baseline justify-between gap-x-2 mt-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
                             <span class="whitespace-nowrap">Bisa dikejar {{ formatRp(financials?.bisa_dikejar?.konsumen?.nominal) }}</span>
                             <span class="text-slate-500 text-[0.6875rem] whitespace-nowrap">{{ financials?.bisa_dikejar?.konsumen?.jumlah ?? 0 }} transaksi ›</span>

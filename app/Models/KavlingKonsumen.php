@@ -545,6 +545,33 @@ class KavlingKonsumen extends Model
     }
 
     /**
+     * Baris Kartu Piutang sisi konsumen yang belum lunas (tiap komponen dinilai sendiri-sendiri: Booking Fee, DP, Pelunasan, biaya
+     * tanah, tiap biaya tambahan, Titipan Biaya Akad, Tambahan UM). Dipakai gerbang Rencana Akad cash dan konfirmasi BAST; sisi bank
+     * (Plafon KPR, SBUM, Dajam) sengaja tidak ikut. Toleransi Rp 0,5 sama dengan lunasPenuh().
+     *
+     * @return array<int, array{label: string, sisa: float}>
+     */
+    public function komponenKonsumenBelumLunas(?array $breakdown = null): array
+    {
+        $b = $breakdown ?? $this->kartuPiutangBreakdown();
+
+        return collect($b['kartu_piutang_static'])
+            ->map(fn ($item) => [
+                'label' => (string) ($item['label'] ?? $item['nama']),
+                'sisa'  => round(max(0, (float) $item['nominal'] - (float) ($item['jumlah_dibayar'] ?? 0)), 2),
+            ])
+            ->filter(fn ($r) => $r['sisa'] > 0.5)
+            ->values()
+            ->all();
+    }
+
+    /** Ringkasan teks komponen belum lunas, mis. "DP / Pengikatan (sisa Rp 1.000.000), Pelunasan (sisa Rp 5.000.000)". */
+    public static function ringkasKomponenBelumLunas(array $komponen): string
+    {
+        return collect($komponen)->map(fn ($r) => $r['label'] . ' (sisa Rp ' . number_format($r['sisa'], 0, ',', '.') . ')')->implode(', ');
+    }
+
+    /**
      * Breakdown Kartu Piutang + Pencairan KPR + total agregat pembayaran —
      * dipakai bareng oleh KonsumenController::show() (detail per transaksi)
      * dan KeuanganController (tabel monitoring & detail Keuangan), supaya

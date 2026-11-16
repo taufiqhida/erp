@@ -590,7 +590,7 @@ class BookingController extends Controller
             // Dokumen wajib boleh belum lengkap — sales tetap bisa lanjut,
             // tapi wajib isi catatan alasannya (soft gate, bukan blokir keras).
             abort_if(
-                !$kk->dokumen_wajib_lengkap && blank($validated['catatan'] ?? null),
+                !$kk->dokumen_wajib_lengkap && $catatanLanjut === '',
                 422,
                 'Dokumen wajib belum lengkap — isi catatan alasan untuk tetap lanjut.'
             );
@@ -616,14 +616,17 @@ class BookingController extends Controller
             abort_if($isBankFlow, 422, 'Cara bayar KPR harus melalui Proses Bank & SP3K terlebih dahulu.');
             abort_unless($kk->status_penjualan === 'pemberkasan', 422, 'Transaksi tidak sedang di tahap Pemberkasan.');
             abort_if(
-                !$kk->dokumen_wajib_lengkap && blank($validated['catatan'] ?? null),
+                !$kk->dokumen_wajib_lengkap && $catatanLanjut === '',
                 422,
                 'Dokumen wajib belum lengkap — isi catatan alasan untuk tetap lanjut.'
             );
-            abort_unless(
-                $kk->piutang_lunas,
+            // Lunak: akad boleh dijadwalkan walau konsumen belum melunasi semuanya (mis. Pelunasan dibayar saat akad, atau akad dulu dengan
+            // surat pernyataan) asal ada catatan alasannya. Kuncinya ada di konfirmasi BAST, yang tetap menuntut semua lunas.
+            $belumLunas = $kk->komponenKonsumenBelumLunas();
+            abort_if(
+                $belumLunas && $catatanLanjut === '',
                 422,
-                'Seluruh Kartu Piutang harus lunas terlebih dahulu sebelum lanjut ke Rencana Akad.'
+                'Masih ada tagihan konsumen yang belum lunas: ' . KavlingKonsumen::ringkasKomponenBelumLunas($belumLunas) . '. Isi catatan alasan untuk tetap lanjut ke Rencana Akad.'
             );
         }
 

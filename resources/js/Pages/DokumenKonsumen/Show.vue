@@ -157,12 +157,19 @@ const dokumenIncomplete = computed(() =>
     ['proses_bank', 'rencana_akad'].includes(nextStage.value?.key) && !props.transaksi.dokumen_wajib_lengkap
 );
 
-// Menuju proses_bank digerbangi Bank Rekanan KPR terisi; menuju rencana_akad
-// (cash) digerbangi seluruh Kartu Piutang lunas; menuju akad digerbangi
-// (menuju akad tidak digerbangi lagi: tanggal akad dipilih di modal, default Tanggal Rencana Akad bila sudah ada)
+// Cash menuju Rencana Akad dengan tagihan konsumen yang belum lunas: tidak diblokir, tetapi wajib catatan alasan (kuncinya di BAST).
+const piutangBelumLunasRencana = computed(() =>
+    nextStage.value?.key === 'rencana_akad' && !isBankFlow.value && (props.transaksi.komponen_belum_lunas ?? []).length > 0
+);
+const perluAlasan = computed(() => dokumenIncomplete.value || piutangBelumLunasRencana.value);
+const ringkasBelumLunas = computed(() =>
+    (props.transaksi.komponen_belum_lunas ?? []).map(k => `${k.label} (sisa ${formatRp(k.sisa)})`).join(', ')
+);
+
+// Menuju proses_bank digerbangi Bank Rekanan KPR terisi. Menuju rencana_akad (cash) dan akad tidak digerbangi keras lagi:
+// kekurangan bayar cukup diberi catatan alasan, tanggal akad dipilih di modal (default Tanggal Rencana Akad bila sudah ada).
 const advanceBlockedReason = computed(() => {
     if (nextStage.value?.key === 'proses_bank' && !props.transaksi.bank_rekanan_preset_id) return 'Isi Bank Rekanan KPR dulu';
-    if (nextStage.value?.key === 'rencana_akad' && !isBankFlow.value && !props.transaksi.piutang_lunas) return 'Seluruh Kartu Piutang harus lunas dulu';
     return '';
 });
 const advanceBlocked = computed(() => advanceBlockedReason.value !== '');
@@ -228,7 +235,7 @@ const openAdvance = () => {
 };
 
 const submitAdvance = () => {
-    if (dokumenIncomplete.value && !advanceForm.catatan.trim()) return;
+    if (perluAlasan.value && !advanceForm.catatan.trim()) return;
     advanceForm.patch(route('bookings.update-status', props.transaksi.id), {
         onSuccess: () => { showAdvanceModal.value = false; }
     });
@@ -323,18 +330,32 @@ const submitRencanaAkad = () => {
 // ── BAST ──────────────────────────────────────────────────────────────
 // BAST cuma relevan begitu pipeline sampai tahap Akad/BAST. Syaratnya
 // disederhanakan jadi 2: bangunan siap serah terima (status_bangun kavling
-// — bukan checklist manual) & form sudah ditandatangani, plus DP lunas
-// (dipindah dari gerbang Proses Bank).
+// — bukan checklist manual) & form sudah ditandatangani, plus SEMUA tagihan konsumen lunas
+// (DP/Pengikatan, Pelunasan, biaya tanah, biaya tambahan, Titipan, Tambahan UM). Kekurangan hanya bisa dilewati lewat override beralasan.
 const showBast = computed(() => currentStageIndex.value >= 5); // 5 = index 'akad'
 const bastSelesai = computed(() => props.transaksi.status_penjualan === 'bast');
 const bangunanSiap = computed(() => props.kavling.status_bangun_is_final === true);
-const bastReadyToConfirm = computed(() =>
-    bangunanSiap.value && bastForm.status_ttd === 'sudah_ttd' && props.transaksi.dp_lunas && !bastSelesai.value
-);
+// Syarat teknis (di luar pembayaran): bangunan siap + BAST sudah ditandatangani.
+const bastSiapTeknis = computed(() => bangunanSiap.value && bastForm.status_ttd === 'sudah_ttd' && !bastSelesai.value);
+// SPV/Leader/Superadmin (pemegang override) juga boleh mengonfirmasi BAST, selain Admin Sales.
+const canKonfirmBast = computed(() => (props.transaksi.can_pipeline_sales || props.transaksi.bisa_override_bast) && lockOk.value);
+const bastReadyToConfirm = computed(() => bastSiapTeknis.value && props.transaksi.pembayaran_lunas);
+const bastButuhOverride = computed(() => bastSiapTeknis.value && !props.transaksi.pembayaran_lunas && props.transaksi.bisa_override_bast);
 
 const confirmBastSelesai = async () => {
     if (!await konfirmasi('Konfirmasi transaksi ini Selesai? Serah terima dianggap tuntas sepenuhnya.')) return;
     router.patch(route('bast.confirm-selesai', props.transaksi.id), {}, { preserveScroll: true });
+};
+
+// Override: konfirmasi BAST walau tagihan belum lunas (SPV/Leader/Superadmin), alasan wajib dan tercatat di Audit Trail + Catatan Transaksi.
+const showOverrideBast = ref(false);
+const overrideBastForm = useForm({ alasan_override: '' });
+const submitOverrideBast = () => {
+    if (overrideBastForm.alasan_override.trim().length < 5) return;
+    overrideBastForm.patch(route('bast.confirm-selesai', props.transaksi.id), {
+        preserveScroll: true,
+        onSuccess: () => { showOverrideBast.value = false; overrideBastForm.reset(); },
+    });
 };
 
 const bastForm = useForm({
@@ -689,13 +710,19 @@ const submitBast = () => {
                         </span>
                     </div>
                     <div class="flex items-center justify-between px-3 py-2.5 bg-slate-800/60 rounded-lg">
-                        <span class="text-slate-300 text-sm">DP lunas</span>
-                        <span :class="transaksi.dp_lunas ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'"
+                        <span class="text-slate-300 text-sm">Pembayaran konsumen lunas</span>
+                        <span :class="transaksi.pembayaran_lunas ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'"
                             class="text-xs px-2 py-0.5 rounded-full font-medium">
-                            {{ transaksi.dp_lunas ? 'Lunas' : 'Belum Lunas' }}
+                            {{ transaksi.pembayaran_lunas ? 'Lunas' : 'Belum Lunas' }}
                         </span>
                     </div>
                 </div>
+                <ul v-if="!transaksi.pembayaran_lunas" class="mb-4 space-y-1 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                    <li v-for="k in transaksi.komponen_belum_lunas" :key="k.label" class="flex justify-between gap-3">
+                        <span>{{ k.label }}</span><span class="font-medium">sisa {{ formatRp(k.sisa) }}</span>
+                    </li>
+                    <li class="text-slate-400 pt-1">Rumah belum bisa diserahterimakan sebelum semuanya lunas.{{ transaksi.bisa_override_bast ? ' Anda dapat mengonfirmasi dengan override beralasan.' : ' Pengecualian hanya lewat SPV/Leader/Superadmin.' }}</li>
+                </ul>
                 <p v-if="!bangunanSiap" class="text-slate-500 text-xs mb-4">Ubah status bangunan jadi "Siap Serah Terima" di halaman Kavling untuk memenuhi syarat ini.</p>
 
                 <div class="mb-4">
@@ -724,12 +751,16 @@ const submitBast = () => {
                         class="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors">
                         {{ bastForm.processing ? 'Menyimpan...' : 'Simpan BAST' }}
                     </button>
-                    <button v-if="canPipelineSales && bastReadyToConfirm" @click="confirmBastSelesai"
+                    <button v-if="canKonfirmBast && bastReadyToConfirm" @click="confirmBastSelesai"
                         class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors">
                         ✅ Konfirmasi Transaksi Selesai
                     </button>
-                    <span v-else-if="canPipelineSales && !bastSelesai" class="text-slate-500 text-xs">
-                        Checklist & tanda tangan harus lengkap dulu untuk konfirmasi selesai
+                    <button v-else-if="canKonfirmBast && bastButuhOverride" @click="showOverrideBast = true"
+                        class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded-lg transition-colors">
+                        Konfirmasi dengan Override…
+                    </button>
+                    <span v-else-if="canKonfirmBast && !bastSelesai" class="text-slate-500 text-xs">
+                        Bangunan siap, tanda tangan BAST, dan pembayaran konsumen lunas harus terpenuhi dulu untuk konfirmasi selesai
                     </span>
                 </div>
             </div>
@@ -819,6 +850,36 @@ const submitBast = () => {
             </div>
         </div>
 
+        <!-- Modal: Override konfirmasi BAST (tagihan belum lunas) -->
+        <Teleport to="body">
+            <div v-if="showOverrideBast" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showOverrideBast = false" />
+                <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+                    <div class="p-5 border-b border-slate-800">
+                        <h3 class="text-white font-semibold">Konfirmasi BAST dengan override</h3>
+                    </div>
+                    <div class="p-5 space-y-3">
+                        <p class="text-amber-300 text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                            Belum lunas: {{ ringkasBelumLunas }}. Alasan ini tercatat di Audit Trail dan Catatan Transaksi.
+                        </p>
+                        <div>
+                            <label class="block text-slate-400 text-xs font-medium mb-1.5">Alasan override (wajib, min. 5 karakter)</label>
+                            <textarea v-model="overrideBastForm.alasan_override" rows="3"
+                                class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                            <p v-if="overrideBastForm.errors.alasan_override" class="text-rose-400 text-xs mt-1">{{ overrideBastForm.errors.alasan_override }}</p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-3 p-5 border-t border-slate-800">
+                        <button @click="showOverrideBast = false" class="px-4 py-2.5 text-slate-400 hover:text-slate-200 text-sm">Batal</button>
+                        <button @click="submitOverrideBast" :disabled="overrideBastForm.processing || overrideBastForm.alasan_override.trim().length < 5"
+                            class="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors">
+                            {{ overrideBastForm.processing ? 'Menyimpan...' : 'Konfirmasi Selesai' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
         <!-- Modal: Lanjutkan Tahap Pipeline -->
         <Teleport to="body">
             <div v-if="showAdvanceModal" role="dialog" aria-modal="true" class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -833,6 +894,10 @@ const submitBast = () => {
                     <div class="p-5 space-y-4">
                         <p v-if="dokumenIncomplete" class="text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                             ⚠ Dokumen wajib belum lengkap. Tetap bisa lanjut, tapi wajib isi catatan alasannya di bawah.
+                        </p>
+                        <p v-if="piutangBelumLunasRencana" class="text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                            ⚠ Tagihan konsumen belum lunas: {{ ringkasBelumLunas }}. Tetap bisa lanjut ke Rencana Akad, tapi wajib isi catatan alasannya di bawah.
+                            Konfirmasi BAST nanti tetap menuntut semuanya lunas.
                         </p>
                         <div v-if="advanceForm.status_penjualan === 'akad'" class="bg-violet-500/10 border border-violet-500/20 rounded-xl px-3 py-3">
                             <label class="block text-violet-300 text-sm font-medium mb-1.5">Tanggal Akad terlaksana</label>
@@ -849,13 +914,13 @@ const submitBast = () => {
                             Tanggal pengajuan ke bank otomatis diisi {{ transaksi.tanggal_pengajuan_bank ? 'dengan tanggal pengajuan sebelumnya' : 'hari ini' }} dan bisa dikoreksi di kartu Proses Bank setelahnya.
                         </p>
                         <div>
-                            <label class="block text-slate-400 text-xs font-medium mb-1.5">Catatan {{ dokumenIncomplete ? '(wajib)' : '(opsional)' }}</label>
+                            <label class="block text-slate-400 text-xs font-medium mb-1.5">Catatan {{ perluAlasan ? '(wajib)' : '(opsional)' }}</label>
                             <textarea v-model="advanceForm.catatan" rows="2" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-violet-500" />
                         </div>
                     </div>
                     <div class="flex justify-end gap-3 p-5 border-t border-slate-800">
                         <button @click="showAdvanceModal = false" class="px-4 py-2.5 text-slate-400 hover:text-slate-200 text-sm">Batal</button>
-                        <button @click="submitAdvance" :disabled="advanceForm.processing || (dokumenIncomplete && !advanceForm.catatan.trim()) || (advanceForm.status_penjualan === 'akad' && !advanceForm.tanggal_akad)"
+                        <button @click="submitAdvance" :disabled="advanceForm.processing || (perluAlasan && !advanceForm.catatan.trim()) || (advanceForm.status_penjualan === 'akad' && !advanceForm.tanggal_akad)"
                             class="px-5 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-violet-500/20">
                             {{ advanceForm.processing ? 'Menyimpan...' : (advanceForm.status_penjualan === 'akad' ? 'Konfirmasi Akad' : 'Konfirmasi') }}
                         </button>

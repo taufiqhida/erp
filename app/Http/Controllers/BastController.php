@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AuthorizesProjectAccess;
 use App\Models\BastRecord;
+use App\Models\CatatanTransaksi;
 use App\Models\KavlingKonsumen;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -42,14 +43,18 @@ class BastController extends Controller
 
     /**
      * Konfirmasi transaksi Selesai. Syarat: bangunan sudah siap serah terima
-     * (status_bangun kavling), form BAST sudah ditandatangani, dan seluruh
-     * Kartu Piutang booking_fee/DP sudah lunas (dipindah dari gerbang Proses
-     * Bank — lihat BookingController::updateStatus()).
+     * (status_bangun kavling), form BAST sudah ditandatangani, dan SEMUA tagihan
+     * konsumen lunas (Booking Fee, DP/Pengikatan, Pelunasan, biaya tanah, tiap
+     * biaya tambahan, Titipan Biaya Akad, Tambahan UM; sisi bank tidak ikut).
+     * Rumah belum diserahterimakan kalau belum lunas — pengecualiannya hanya lewat
+     * override pemegang izin 'override transaction lock' dengan alasan tercatat.
      */
-    public function confirmSelesai(KavlingKonsumen $kk): RedirectResponse
+    public function confirmSelesai(Request $request, KavlingKonsumen $kk): RedirectResponse
     {
         $this->authorizeProjectAccess($kk->kavling->project);
-        abort_unless(Auth::user()->can('kelola pipeline sales'), 403);
+        // Admin Sales mengonfirmasi BAST; SPV/Leader/Superadmin (pemegang override) juga boleh, supaya pengecualian pembayaran bisa
+        // diputuskan oleh mereka tanpa harus meminjam akun Admin Sales.
+        abort_unless(Auth::user()->can('kelola pipeline sales') || Auth::user()->can('override transaction lock'), 403);
 
         $bast = $kk->bastRecord;
         abort_unless(
@@ -62,11 +67,27 @@ class BastController extends Controller
             422,
             'Form BAST harus sudah ditandatangani sebelum bisa dikonfirmasi Selesai.'
         );
-        abort_unless(
-            $kk->dp_lunas,
-            422,
-            'DP harus lunas terlebih dahulu sebelum transaksi bisa dikonfirmasi Selesai.'
-        );
+
+        $belumLunas = $kk->komponenKonsumenBelumLunas();
+        if ($belumLunas) {
+            $ringkas = KavlingKonsumen::ringkasKomponenBelumLunas($belumLunas);
+            abort_unless(
+                Auth::user()->can('override transaction lock'),
+                422,
+                "Pembayaran konsumen belum lunas: {$ringkas}. Lunasi dulu, atau minta SPV/Leader/Superadmin mengonfirmasi dengan alasan."
+            );
+            $alasan = trim((string) $request->input('alasan_override', ''));
+            abort_if(
+                mb_strlen($alasan) < 5,
+                422,
+                "Pembayaran konsumen belum lunas: {$ringkas}. Isi alasan override (minimal 5 karakter) untuk tetap mengonfirmasi BAST."
+            );
+
+            CatatanTransaksi::tulis($kk, 'pemberkasan', "BAST dikonfirmasi walau pembayaran konsumen belum lunas ({$ringkas}). Alasan: {$alasan}", 'BAST');
+            activity('transaksi')->performedOn($kk)
+                ->withProperties(['komponen_belum_lunas' => $belumLunas, 'alasan' => $alasan])
+                ->log("Override gerbang BAST: dikonfirmasi dengan pembayaran belum lunas ({$ringkas}). Alasan: {$alasan}");
+        }
 
         $kk->update([
             'status_penjualan' => 'bast',

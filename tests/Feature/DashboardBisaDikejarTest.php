@@ -17,7 +17,7 @@ use Tests\TestCase;
 
 /**
  * Dashboard: Piutang Konsumen & Piutang Bank punya dua angka — potensi (semua transaksi aktif, sudah ada) dan "bisa dikejar" (yang realistis
- * ditagih sekarang): bank = sisa pencairan KPR sudah akad/BAST; konsumen KPR = sudah SP3K/rencana akad/akad/BAST; cash = cicilan lewat jatuh tempo.
+ * ditagih sekarang): bank = sisa pencairan KPR sudah akad/BAST; konsumen KPR = sudah SP3K/rencana akad/akad/BAST; cash = cicilan lewat jatuh tempo atau ≤ 30 hari lagi (cicilan tanpa tanggal mengikuti rencana akad).
  */
 class DashboardBisaDikejarTest extends TestCase
 {
@@ -47,7 +47,7 @@ class DashboardBisaDikejarTest extends TestCase
             'status_penjualan' => $tahap, 'cara_bayar' => $cara, 'tanggal_booking' => '2026-09-01', 'harga_dasar' => 166000000, 'harga_deal' => 166000000]);
     }
 
-    private function jadwal(KavlingKonsumen $trx, string $jenis, float $jumlah, string $tempo, bool $lunas = false): void
+    private function jadwal(KavlingKonsumen $trx, string $jenis, float $jumlah, ?string $tempo, bool $lunas = false): void
     {
         $data = ['jenis' => $jenis, 'nomor_cicilan' => $trx->jadwalTagihans()->where('jenis', $jenis)->count() + 1, 'jumlah' => $jumlah, 'tanggal_jatuh_tempo' => $tempo, 'status' => $lunas ? 'lunas' : 'belum_bayar'];
         if ($lunas) {
@@ -108,20 +108,38 @@ class DashboardBisaDikejarTest extends TestCase
         $this->assertEquals($rekap['total'], $f['bisa_dikejar']['konsumen']['nominal']);   // sama dengan Rekap Kekurangan (tahap bawaan)
     }
 
-    public function test_cash_hanya_cicilan_yang_sudah_lewat_jatuh_tempo(): void
+    public function test_cash_cicilan_lewat_jatuh_tempo_atau_dalam_30_hari_termasuk_yang_mengikuti_rencana_akad(): void
     {
-        $telat = $this->trx('booking', 'cash_bertahap');
-        $this->jadwal($telat, 'pelunasan', 80000000, now()->subDays(3)->toDateString());       // lewat -> bisa dikejar
-        $this->jadwal($telat, 'pelunasan', 80000000, now()->addDays(27)->toDateString());      // belum -> potensi
-        $this->jadwal($telat, 'dp', 5000000, now()->addDays(5)->toDateString());
-        $belum = $this->trx('pemberkasan', 'cash');
-        $this->jadwal($belum, 'pelunasan', 160000000, now()->addDays(10)->toDateString());     // belum jatuh tempo -> tidak ikut
+        $a = $this->trx('booking', 'cash_bertahap');
+        $this->jadwal($a, 'pelunasan', 80000000, now()->subDays(3)->toDateString());           // lewat -> bisa dikejar
+        $this->jadwal($a, 'pelunasan', 80000000, now()->addDays(27)->toDateString());          // ≤ 30 hari -> bisa dikejar
+        $this->jadwal($a, 'dp', 5000000, now()->addDays(5)->toDateString());                   // ≤ 30 hari -> bisa dikejar
+        $this->jadwal($a, 'pelunasan', 10000000, now()->addDays(45)->toDateString());          // masih jauh -> potensi saja
+        $jauh = $this->trx('pemberkasan', 'cash');
+        $this->jadwal($jauh, 'pelunasan', 160000000, now()->addDays(45)->toDateString());      // jauh -> tidak ikut
+
+        // Tanpa tanggal sendiri: mengikuti rencana akad (20 hari lagi) -> ikut, begitu juga Titipan yang tidak punya jadwal.
+        $akadDekat = $this->trx('pemberkasan', 'cash', ['tanggal_rencana_akad' => now()->addDays(20)->toDateString(), 'titipan_biaya_akad_nominal' => 3000000]);
+        $this->jadwal($akadDekat, 'pelunasan', 100000000, null);
+        // Rencana akad masih 90 hari lagi, atau belum ada: menunggu.
+        $akadJauh = $this->trx('pemberkasan', 'cash', ['tanggal_rencana_akad' => now()->addDays(90)->toDateString(), 'titipan_biaya_akad_nominal' => 3000000]);
+        $this->jadwal($akadJauh, 'pelunasan', 100000000, null);
+        $tanpaRencana = $this->trx('pemberkasan', 'cash');
+        $this->jadwal($tanpaRencana, 'pelunasan', 100000000, null);
 
         $f = $this->dash();
 
-        $this->assertEquals(80000000, $f['bisa_dikejar']['konsumen']['nominal']);
-        $this->assertSame(1, $f['bisa_dikejar']['konsumen']['jumlah']);
-        $this->assertGreaterThan(80000000, $f['sisa_piutang_konsumen']);
+        $this->assertEquals(165000000 + 103000000, $f['bisa_dikejar']['konsumen']['nominal']);
+        $this->assertSame(2, $f['bisa_dikejar']['konsumen']['jumlah']);
+        $this->assertGreaterThan(268000000, $f['sisa_piutang_konsumen']);
+    }
+
+    public function test_cash_tagihan_tanpa_jadwal_ikut_bila_sudah_rencana_akad_atau_akad(): void
+    {
+        $this->trx('akad', 'cash', ['titipan_biaya_akad_nominal' => 2000000]);                // Titipan 2 jt belum dibayar, sudah tahap akad
+        $this->trx('pemberkasan', 'cash', ['titipan_biaya_akad_nominal' => 2000000]);         // belum tahap itu, tanpa rencana akad: tidak ikut
+
+        $this->assertEquals(2000000, $this->dash()['bisa_dikejar']['konsumen']['nominal']);
     }
 
     public function test_kosong_bila_tidak_ada_transaksi_yang_memenuhi(): void

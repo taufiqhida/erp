@@ -28,7 +28,8 @@ class DokumenKonsumenController extends Controller
     {
         $this->authorizeProjectAccess($kk->kavling->project);
 
-        $kk->load(['konsumen', 'kavling.project', 'kavling.statusBangunStage', 'dokumens.verifiedBy', 'dokumens.template', 'bastRecord', 'catatans.penyelesai', 'jadwalTagihans']);
+        $kk->load(['konsumen', 'kavling.project', 'kavling.statusBangunStage', 'dokumens.verifiedBy', 'dokumens.template', 'bastRecord', 'catatans.penyelesai', 'jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans', 'rincianBiayaAkad.pembayaran', 'skemaDpPreset', 'pembayarans', 'pencairanKprTahaps']);
+        $komponenBelumLunas = $kk->komponenKonsumenBelumLunas();
 
         $pendingRequest = CancellationRequest::where('kavling_konsumen_id', $kk->id)->where('type', '!=', 'rincian_change')->pending()->first();
         $pendingRincian = CancellationRequest::where('kavling_konsumen_id', $kk->id)->where('type', 'rincian_change')->pending()->exists();
@@ -65,6 +66,10 @@ class DokumenKonsumenController extends Controller
                 'can_manage_dokumen'   => Auth::user()->can('manage dokumen'),
                 'dokumen_wajib_lengkap' => $kk->dokumen_wajib_lengkap,
                 'dp_lunas'             => $kk->dp_lunas,
+                // Semua tagihan konsumen (bukan hanya DP): syarat konfirmasi BAST dan alasan wajib menuju Rencana Akad cash.
+                'pembayaran_lunas'     => empty($komponenBelumLunas),
+                'komponen_belum_lunas' => $komponenBelumLunas,
+                'bisa_override_bast'   => Auth::user()->can('override transaction lock'),
                 'piutang_lunas'        => $kk->piutang_lunas,
                 'is_locked'            => $kk->is_locked,
                 'bank_rekanan_kpr'     => $kk->bank_rekanan_kpr,

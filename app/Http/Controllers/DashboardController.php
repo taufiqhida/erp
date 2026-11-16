@@ -146,6 +146,7 @@ class DashboardController extends Controller
             //  - Konsumen Cash: hanya cicilan yang sudah lewat jatuh tempo.
             $bisaDikejar = ['bank' => ['nominal' => 0.0, 'jumlah' => 0], 'konsumen' => ['nominal' => 0.0, 'jumlah' => 0]];
             $hariIni = now()->startOfDay();
+            $batasKejar = $hariIni->copy()->addDays(30);
 
             foreach ($activeTransaksi as $kk) {
                 $promoHargaJual = (float) $kk->diskon_nominal;
@@ -191,11 +192,19 @@ class DashboardController extends Controller
                     $bisaDikejar['bank']['nominal'] += $sisaBank;
                     $bisaDikejar['bank']['jumlah']++;
                 }
+                // Cash: cicilan yang sudah lewat jatuh tempo ATAU jatuh temponya ≤ 30 hari lagi (jatuh tempo efektif: cicilan tanpa tanggal
+                // mengikuti rencana akad). Tagihan tanpa jadwal (biaya tanah, biaya tambahan, Titipan) ikut bila transaksi sudah rencana
+                // akad/akad/BAST atau rencana akadnya ≤ 30 hari lagi, karena semuanya harus lunas sebelum BAST.
                 $kejarKonsumen = $kprAktif
                     ? (in_array($kk->status_penjualan, ['sp3k', 'rencana_akad', 'akad', 'bast'], true) ? $sisaKonsumen : 0.0)
                     : min($sisaKonsumen, (float) $kk->jadwalTagihans
-                        ->filter(fn ($j) => $j->status !== 'lunas' && $j->tanggal_tempo && $j->tanggal_tempo->lt($hariIni))
-                        ->sum(fn ($j) => max(0.0, (float) $j->jumlah - (float) ($j->pembayaran?->jumlah ?? 0))));
+                        ->filter(fn ($j) => $j->status !== 'lunas' && $j->tanggal_tempo && $j->tanggal_tempo->lte($batasKejar))
+                        ->sum(fn ($j) => max(0.0, (float) $j->jumlah - (float) ($j->pembayaran?->jumlah ?? 0)))
+                        + (in_array($kk->status_penjualan, ['rencana_akad', 'akad', 'bast'], true) || ($kk->tanggal_rencana_akad && $kk->tanggal_rencana_akad->lte($batasKejar))
+                            ? (float) collect($breakdown['kartu_piutang_static'])
+                                ->whereIn('type', ['biaya_tanah_group', 'biaya_tambahan_group', 'titipan_biaya_akad_group'])
+                                ->sum(fn ($r) => max(0.0, (float) $r['nominal'] - (float) ($r['jumlah_dibayar'] ?? 0)))
+                            : 0.0));
                 if ($kejarKonsumen > 0.009) {
                     $bisaDikejar['konsumen']['nominal'] += $kejarKonsumen;
                     $bisaDikejar['konsumen']['jumlah']++;
