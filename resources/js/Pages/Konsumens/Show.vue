@@ -5,7 +5,7 @@ import LengkapiRincianModal from '@/Components/LengkapiRincianModal.vue';
 import PromoBiayaBaris from '@/Components/PromoBiayaBaris.vue';
 import RincianPemesanan from '@/Components/RincianPemesanan.vue';
 import BonusPicker from '@/Components/BonusPicker.vue';
-import { rincianDariTransaksi } from '@/Composables/rincianPemesanan';
+import { rincianDariTransaksi, titipanBrutoAllIn } from '@/Composables/rincianPemesanan';
 import TutupSelisihDajam from '@/Components/TutupSelisihDajam.vue';
 import { konfirmasi } from '@/Composables/useConfirm';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -125,8 +125,7 @@ const lawanBtForm = (form, bt) => !bt.locked && !!bt.promo_preset_id;
 // Titipan Biaya Akad bruto = nominal Program All In dikurangi Booking Fee/DP yang sudah tercakup (sama dengan rumus server).
 const titipanBrutoForm = (trx, form) => {
     const p = props.programAllInPresets.find(x => String(x.id) === String(form.program_all_in_preset_id));
-    if (!p) return 0;
-    return Math.max(0, Number(p.nominal) - (p.include_booking_fee ? Number(trx.booking_fee) || 0 : 0) - (p.include_dp ? Number(trx.dp_nominal) || 0 : 0));
+    return titipanBrutoAllIn(p, trx.booking_fee, trx.dp_nominal);
 };
 const lawanTitipanForm = (trx, form) => !!form.promo_titipan_id && !titipanBiayaAkadLocked(trx) && titipanBrutoForm(trx, form) > 0;
 // Bonus yang bisa dipilih: yang aktif, ditambah bonus yang sudah melekat di transaksi ini walau kini nonaktif.

@@ -162,7 +162,7 @@ class BookingController extends Controller
             ]),
             'statusBangunStages' => StatusBangunStage::ordered()->get(['id', 'nama', 'warna', 'urutan']),
             'sumberLeadPresets' => SumberLead::where('is_active', true)->ordered()->get(['id', 'nama', 'is_referral']),
-            'programAllInPresets' => ProgramAllInPreset::where('is_active', true)->ordered()->get(['id', 'nama', 'nominal', 'include_booking_fee', 'include_dp']),
+            'programAllInPresets' => ProgramAllInPreset::where('is_active', true)->ordered()->get(['id', 'nama', 'nominal', 'include_booking_fee', 'include_dp', 'dp_nominal_tetap']),
         ]);
     }
 
@@ -378,10 +378,7 @@ class BookingController extends Controller
                 : null;
             $titipanBiayaAkadNominal = 0;
             if ($allInPreset) {
-                $titipanBiayaAkadNominal = (float) $allInPreset->nominal;
-                if ($allInPreset->include_booking_fee) $titipanBiayaAkadNominal -= $bookingFee;
-                if ($allInPreset->include_dp) $titipanBiayaAkadNominal -= $dpNominal;
-                $titipanBiayaAkadNominal = max(0, $titipanBiayaAkadNominal);
+                $titipanBiayaAkadNominal = $allInPreset->titipanBruto((float) $bookingFee, (float) $dpNominal);
             }
             // Potongan promo pada Titipan Biaya Akad (lawan promo "titipan_biaya_akad"): bruto tetap disimpan, yang ditagih = bruto - potongan.
             $promoTitipanId = $titipanBiayaAkadNominal > 0 ? $promoBaris->titipan() : null;

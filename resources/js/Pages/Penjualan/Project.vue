@@ -7,6 +7,7 @@ import PromoBiayaBaris from '@/Components/PromoBiayaBaris.vue';
 import RincianPemesanan from '@/Components/RincianPemesanan.vue';
 import BonusPicker from '@/Components/BonusPicker.vue';
 import Pagination from '@/Components/Pagination.vue';
+import { potonganDpAllIn, titipanBrutoAllIn } from '@/Composables/rincianPemesanan';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 
@@ -263,11 +264,7 @@ const lawanTanahAktif = computed(() => !!bookForm.promo_tanah_id && bookForm.bia
 const lawanBiayaIds = computed(() => bookForm.biaya_tambahan_selected.filter(id => !!bookForm.promo_biaya[id]));
 // Titipan Biaya Akad bruto = nominal Program All In dikurangi Booking Fee/DP yang sudah tercakup (rumus sama dengan server).
 const allInTerpilih = computed(() => props.programAllInPresets.find(p => String(p.id) === String(bookForm.program_all_in_preset_id)) ?? null);
-const titipanBruto = computed(() => {
-    const p = allInTerpilih.value;
-    if (!p) return 0;
-    return Math.max(0, Number(p.nominal) - (p.include_booking_fee ? Number(bookForm.booking_fee) || 0 : 0) - (p.include_dp ? Number(bookForm.dp_nominal) || 0 : 0));
-});
+const titipanBruto = computed(() => titipanBrutoAllIn(allInTerpilih.value, bookForm.booking_fee, bookForm.dp_nominal));
 const lawanTitipanAktif = computed(() => !!bookForm.promo_titipan_id && titipanBruto.value > 0);
 const potonganNominal = (bruto, p) => {
     const n = Number(p?.nilai);
@@ -327,7 +324,7 @@ const rincianData = computed(() => {
     const dp = skema?.dp_aktif ? Number(bookForm.dp_nominal) || 0 : 0;
     const allIn = allInTerpilih.value;
     const termasukBf = !!allIn?.include_booking_fee && bf > 0;
-    const termasukDp = !!allIn?.include_dp && dp > 0;
+    const termasukDp = potonganDpAllIn(allIn, dp) > 0;
     return {
         header: skema ? { caraBayar: caraBayarLabel[bookForm.cara_bayar], skemaNama: skema.nama, allInNama: allIn?.nama ?? null } : null,
         hargaDasar: hargaDasar.value,

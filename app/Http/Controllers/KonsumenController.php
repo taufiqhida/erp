@@ -589,7 +589,7 @@ class KonsumenController extends Controller
             'biayaTambahanPresets' => BiayaTambahanPreset::where('is_active', true)->ordered()->get(['id', 'nama']),
             'promoPresets' => PromoPreset::untukForm(),
             'bonusPresets' => \App\Models\BonusPreset::ordered()->get(['id', 'nama', 'is_active']),
-            'programAllInPresets' => ProgramAllInPreset::where('is_active', true)->ordered()->get(['id', 'nama', 'nominal', 'include_booking_fee', 'include_dp']),
+            'programAllInPresets' => ProgramAllInPreset::where('is_active', true)->ordered()->get(['id', 'nama', 'nominal', 'include_booking_fee', 'include_dp', 'dp_nominal_tetap']),
             'suratTemplates' => SuratTemplate::orderBy('nama')->get(['id', 'nama']),
         ]);
     }

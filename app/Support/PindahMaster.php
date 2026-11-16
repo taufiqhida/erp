@@ -100,8 +100,8 @@ class PindahMaster
             ],
             'program_all_in' => [
                 'label' => 'Program All In', 'model' => ProgramAllInPreset::class, 'cocok' => ['nama'], 'urut' => 'ordered',
-                'kolom' => ['nama', 'nominal', 'include_booking_fee', 'include_dp', 'is_active'],
-                'aturan' => ['nama' => 'required|string|max:255', 'nominal' => 'nullable|numeric|min:0', 'include_booking_fee' => $bool, 'include_dp' => $bool, 'is_active' => $bool],
+                'kolom' => ['nama', 'nominal', 'include_booking_fee', 'include_dp', 'dp_nominal_tetap', 'is_active'],
+                'aturan' => ['nama' => 'required|string|max:255', 'nominal' => 'nullable|numeric|min:0', 'include_booking_fee' => $bool, 'include_dp' => $bool, 'dp_nominal_tetap' => 'nullable|numeric|min:0', 'is_active' => $bool],
             ],
             'biaya_tambahan' => [
                 'label' => 'Biaya Tambahan', 'model' => BiayaTambahanPreset::class, 'cocok' => ['nama'], 'urut' => 'ordered',

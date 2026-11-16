@@ -201,7 +201,7 @@ class KavlingKonsumen extends Model
         $p = $this->programAllInPreset;
         if (!$p) return null;
         $bf = $p->include_booking_fee && (float) $this->booking_fee > 0;
-        $dp = $p->include_dp && $dpNominal > 0;
+        $dp = $p->potonganDp($dpNominal) > 0;
 
         return match (true) {
             $bf && $dp => 'Booking Fee & DP',

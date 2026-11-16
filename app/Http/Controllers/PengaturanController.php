@@ -735,7 +735,10 @@ class PengaturanController extends Controller
             'nominal'              => 'required|numeric|min:0',
             'include_booking_fee'  => 'boolean',
             'include_dp'           => 'boolean',
+            'dp_nominal_tetap'     => 'nullable|numeric|min:0',
         ]);
+        // Nominal DP tetap hanya bermakna bila DP termasuk.
+        if (empty($validated['include_dp'])) $validated['dp_nominal_tetap'] = null;
 
         ProgramAllInPreset::create($validated);
 
@@ -749,8 +752,10 @@ class PengaturanController extends Controller
             'nominal'              => 'required|numeric|min:0',
             'include_booking_fee'  => 'boolean',
             'include_dp'           => 'boolean',
+            'dp_nominal_tetap'     => 'nullable|numeric|min:0',
             'is_active'            => 'boolean',
         ]);
+        if (array_key_exists('include_dp', $validated) && !$validated['include_dp']) $validated['dp_nominal_tetap'] = null;
 
         $programAllIn->update($validated);
 

@@ -1,3 +1,18 @@
+// Program All In: DP yang dikurangkan dari nominal All In. 0 bila DP tidak termasuk; nominal tetap preset bila diisi (mis. 1,66 jt di dalam
+// paket 10,5 jt, apa pun DP skemanya); selain itu DP skema. Sama dengan ProgramAllInPreset::potonganDp() di server.
+export function potonganDpAllIn(p, dpSkema) {
+    if (!p?.include_dp) return 0;
+    return p.dp_nominal_tetap !== null && p.dp_nominal_tetap !== undefined && p.dp_nominal_tetap !== ''
+        ? Number(p.dp_nominal_tetap) || 0
+        : Number(dpSkema) || 0;
+}
+
+// Titipan Biaya Akad bruto = nominal All In - Booking Fee (bila termasuk) - DP (lihat potonganDpAllIn). Sama dengan ProgramAllInPreset::titipanBruto().
+export function titipanBrutoAllIn(p, bookingFee, dpSkema) {
+    if (!p) return 0;
+    return Math.max(0, Number(p.nominal) - (p.include_booking_fee ? Number(bookingFee) || 0 : 0) - potonganDpAllIn(p, dpSkema));
+}
+
 // Menyusun data untuk komponen RincianPemesanan dari payload transaksi (dipakai tab Konsumen dan Detail Transaksi Keuangan,
 // yang memakai nama kolom yang sama).
 export function rincianDariTransaksi(t) {

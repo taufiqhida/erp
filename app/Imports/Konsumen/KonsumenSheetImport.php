@@ -305,10 +305,7 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
         // ── Program All In / Titipan Biaya Akad ──
         $titipanNominal = 0.0;
         if ($allInPreset) {
-            $titipanNominal = (float) $allInPreset->nominal;
-            if ($allInPreset->include_booking_fee) $titipanNominal -= $bookingFee;
-            if ($allInPreset->include_dp) $titipanNominal -= $dpNominal;
-            $titipanNominal = max(0, $titipanNominal);
+            $titipanNominal = $allInPreset->titipanBruto((float) $bookingFee, (float) $dpNominal);
         }
         $titipanBayar = $num('titipan_bayar');
         $titipanTgl = $dateOf('titipan_tgl');

@@ -149,10 +149,7 @@ class PerubahanRincian
             $allInPreset = !empty($u['program_all_in_preset_id']) ? ProgramAllInPreset::find($u['program_all_in_preset_id']) : null;
             $titipan = 0;
             if ($allInPreset) {
-                $titipan = (float) $allInPreset->nominal;
-                if ($allInPreset->include_booking_fee) $titipan -= (float) $kk->booking_fee;
-                if ($allInPreset->include_dp) $titipan -= (float) $kk->jadwalTagihans()->where('jenis', 'dp')->sum('jumlah');
-                $titipan = max(0, $titipan);
+                $titipan = $allInPreset->titipanBruto((float) $kk->booking_fee, (float) $kk->jadwalTagihans()->where('jenis', 'dp')->sum('jumlah'));
             }
             $kk->program_all_in_preset_id   = $allInPreset?->id;
             $kk->titipan_biaya_akad_nominal = $titipan;
