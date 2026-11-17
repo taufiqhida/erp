@@ -103,6 +103,35 @@ class CancellationRequest extends Model
         return $query->where('status', CancellationStatus::Pending);
     }
 
+    /**
+     * Pengajuan yang boleh dilihat pengguna: lintas proyek bagi pemegang 'view all projects', selain itu hanya proyek yang di-assign;
+     * bila ada proyek aktif (Halaman Utama), dipersempit ke proyek itu. Satu aturan untuk halaman Pengajuan dan penanda di menu.
+     */
+    public function scopeTerlihat($query, User $user, ?int $projectId = null)
+    {
+        return $query
+            ->when(!$user->can('view all projects'), fn ($q) => $q->whereHas('kavling.project.users', fn ($q2) => $q2->where('users.id', $user->id)))
+            ->when($projectId, fn ($q) => $q->whereHas('kavling', fn ($q2) => $q2->where('project_id', $projectId)));
+    }
+
+    /** Tab halaman Pengajuan: kunci => label dan tipe yang ditampilkan. */
+    public const TAB = [
+        'pembatalan'   => ['label' => 'Pembatalan',      'tipe' => ['cancellation']],
+        'alih_pembeli' => ['label' => 'Alih Pembeli',    'tipe' => ['buyer_transfer']],
+        'tukar_unit'   => ['label' => 'Tukar Unit',      'tipe' => ['unit_swap']],
+        'rincian'      => ['label' => 'Rincian & Promo', 'tipe' => ['rincian_change']],
+    ];
+
+    /** Tab yang memuat tipe tertentu (dipakai tautan lama ?type=...). */
+    public static function tabUntukTipe(?string $tipe): ?string
+    {
+        foreach (self::TAB as $kunci => $t) {
+            if (in_array($tipe, $t['tipe'], true)) return $kunci;
+        }
+
+        return null;
+    }
+
     /* ---------------------------------------------------------------
      | Helpers
      --------------------------------------------------------------- */

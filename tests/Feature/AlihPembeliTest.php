@@ -281,11 +281,18 @@ class AlihPembeliTest extends TestCase
         $this->actingAs($spv)->patch(route('cancellation-requests.approve', $this->pengajuan()), [])->assertSessionHas('success');
 
         $this->assertSame($this->a->id, $this->pengajuan()->konsumen_id);                      // salinan pembeli saat diajukan
-        $this->actingAs($spv)->get(route('cancellation-requests.index'))->assertOk()->assertInertia(function ($page) {
+        // Halaman Pengajuan kini bertab: tiap jenis dibuka di tabnya sendiri (status "semua" karena keduanya sudah diputuskan).
+        $this->actingAs($spv)->get(route('cancellation-requests.index', ['tab' => 'alih_pembeli', 'status' => 'semua']))->assertOk()->assertInertia(function ($page) {
             $baris = collect($page->toArray()['props']['requests']['data'])->keyBy('type');
 
             $this->assertSame('Anton', $baris['buyer_transfer']['konsumen']);                  // bukan Budi
             $this->assertSame('Budi', $baris['buyer_transfer']['konsumen_baru']);
+
+            return $page;
+        });
+        $this->actingAs($spv)->get(route('cancellation-requests.index', ['tab' => 'pembatalan', 'status' => 'semua']))->assertOk()->assertInertia(function ($page) {
+            $baris = collect($page->toArray()['props']['requests']['data'])->keyBy('type');
+
             $this->assertSame('Anton', $baris['cancellation']['konsumen']);                    // pengajuan lama A tidak ikut berganti nama
 
             return $page;

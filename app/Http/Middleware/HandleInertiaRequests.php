@@ -65,7 +65,18 @@ class HandleInertiaRequests extends Middleware
             'branding'       => fn () => \App\Support\Branding::data(),
             'currentProject' => fn () => $this->resolveCurrentProject($request),
             'statusColors'   => $request->user() ? StatusColor::allMapped() : null,
+            // Penanda di menu Pengajuan: jumlah yang menunggu keputusan (hanya untuk peninjau).
+            'pengajuanMenunggu' => fn () => $this->pengajuanMenunggu($request),
         ];
+    }
+
+    private function pengajuanMenunggu(Request $request): int
+    {
+        $user = $request->user();
+        if (!$user || !$user->can('review cancellation')) return 0;
+        $projectId = $request->session()->get('current_project_id');
+
+        return \App\Models\CancellationRequest::query()->terlihat($user, $projectId ? (int) $projectId : null)->pending()->count();
     }
 
     /**

@@ -2,20 +2,38 @@
 import Pagination from '@/Components/Pagination.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     requests: Object,
     filters: Object,
-    statusOptions: Array,
-    typeOptions: Array,
+    tabs: Array,
 });
 
-const statusFilter = ref(props.filters?.status ?? '');
-const typeFilter = ref(props.filters?.type ?? '');
-watch([statusFilter, typeFilter], ([status, type]) => {
-    router.get(route('cancellation-requests.index'), { status: status || undefined, type: type || undefined }, { preserveState: true, replace: true });
-});
+// Tab (jenis pengajuan) dan status ditentukan server; bawaan status = Menunggu supaya yang tampil adalah yang perlu tindakan.
+const tabAktif = computed(() => props.filters?.tab);
+const statusAktif = computed(() => props.filters?.status);
+const statusPilihan = [
+    { key: 'pending', label: 'Menunggu' },
+    { key: 'approved', label: 'Disetujui' },
+    { key: 'rejected', label: 'Ditolak' },
+    { key: 'semua', label: 'Semua' },
+];
+const buka = (tab, status) => {
+    router.get(route('cancellation-requests.index'), { tab, status }, { preserveScroll: true });
+};
+const infoTab = {
+    pembatalan: 'Permintaan membatalkan transaksi dan mengembalikan unit ke stok.',
+    alih_pembeli: 'Pergantian pembeli pada transaksi yang sama (UTJ dan pembayaran tetap).',
+    tukar_unit: 'Permintaan pindah ke unit lain beserta penyesuaian harga.',
+    rincian: 'Usulan mengubah rincian pemesanan (tanah, biaya tambahan, promo, All In, bonus) dan promo yang diberikan saat booking.',
+};
+const labelKosong = computed(() => ({
+    pending: 'Tidak ada pengajuan yang menunggu.',
+    approved: 'Belum ada pengajuan yang disetujui.',
+    rejected: 'Belum ada pengajuan yang ditolak.',
+    semua: 'Tidak ada pengajuan.',
+}[statusAktif.value]));
 
 // Modal state
 const showReviewModal = ref(false);
@@ -62,27 +80,33 @@ const statusBadgeClass = {
         </template>
 
         <div class="p-6 space-y-5">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h1 class="text-white font-bold text-xl">Pengajuan</h1>
-                    <p class="text-slate-400 text-sm mt-0.5">Review dan kelola permintaan pembatalan &amp; tukar unit kavling</p>
-                </div>
-                <div class="flex items-center gap-2">
-                    <select
-                        v-model="typeFilter"
-                        class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
-                    >
-                        <option value="">Semua Tipe</option>
-                        <option v-for="opt in typeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                    </select>
-                    <select
-                        v-model="statusFilter"
-                        class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
-                    >
-                        <option value="">Semua Status</option>
-                        <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                    </select>
-                </div>
+            <div>
+                <h1 class="text-white font-bold text-xl">Pengajuan</h1>
+                <p class="text-slate-400 text-sm mt-0.5">Tinjau dan putuskan permintaan pembatalan, alih pembeli, tukar unit, serta perubahan rincian dan promo.</p>
+            </div>
+
+            <!-- Tab jenis pengajuan -->
+            <div class="flex flex-wrap gap-1.5" role="tablist" aria-label="Jenis pengajuan">
+                <button v-for="t in tabs" :key="t.key" type="button" role="tab" :aria-selected="tabAktif === t.key"
+                    @click="buka(t.key, statusAktif)"
+                    :class="tabAktif === t.key ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20' : 'bg-slate-900 border border-slate-700 text-slate-300 hover:bg-slate-800'"
+                    class="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors">
+                    {{ t.label }}
+                    <span v-if="t.menunggu > 0"
+                        :class="tabAktif === t.key ? 'bg-white/25 text-white' : 'bg-yellow-500/15 text-yellow-400'"
+                        class="min-w-[1.25rem] text-center px-1.5 py-0.5 rounded-full text-[0.6875rem] font-semibold"
+                        :title="`${t.menunggu} menunggu keputusan`">{{ t.menunggu }}</span>
+                </button>
+            </div>
+            <p class="text-slate-500 text-xs -mt-2">{{ infoTab[tabAktif] }}</p>
+
+            <!-- Status -->
+            <div class="flex flex-wrap items-center gap-1.5">
+                <button v-for="s in statusPilihan" :key="s.key" type="button" @click="buka(tabAktif, s.key)"
+                    :class="statusAktif === s.key ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
+                    {{ s.label }}
+                </button>
             </div>
 
             <!-- Table -->
@@ -91,9 +115,9 @@ const statusBadgeClass = {
                     <table class="w-full text-sm">
                         <thead class="border-b border-slate-800 text-xs text-slate-500 uppercase tracking-wide">
                             <tr>
-                                <th class="px-4 py-3 text-left font-medium">Tipe</th>
                                 <th class="px-4 py-3 text-left font-medium">Kavling / Proyek</th>
-                                <th class="px-4 py-3 text-left font-medium">Konsumen</th>
+                                <th class="px-4 py-3 text-left font-medium">{{ tabAktif === 'alih_pembeli' ? 'Pembeli' : 'Konsumen' }}</th>
+                                <th class="px-4 py-3 text-left font-medium">Detail</th>
                                 <th class="px-4 py-3 text-left font-medium">Alasan</th>
                                 <th class="px-4 py-3 text-left font-medium">Pengaju</th>
                                 <th class="px-4 py-3 text-center font-medium">Status</th>
@@ -102,19 +126,13 @@ const statusBadgeClass = {
                         </thead>
                         <tbody class="divide-y divide-slate-800/70">
                             <tr v-if="!requests.data.length">
-                                <td colspan="7" class="text-center py-12 text-slate-500">Tidak ada pengajuan.</td>
+                                <td colspan="7" class="text-center py-12 text-slate-500">{{ labelKosong }}</td>
                             </tr>
                             <tr
                                 v-for="req in requests.data"
                                 :key="req.id"
                                 class="hover:bg-slate-800/20 transition-colors"
                             >
-                                <td class="px-4 py-4">
-                                    <span :class="req.type === 'unit_swap' ? 'bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/25' : req.type === 'buyer_transfer' ? 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/25' : req.type === 'rincian_change' ? 'bg-teal-500/15 text-teal-300 ring-1 ring-teal-500/25' : 'bg-slate-700/50 text-slate-300 ring-1 ring-slate-600'"
-                                        class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium">
-                                        {{ req.type_label }}
-                                    </span>
-                                </td>
                                 <td class="px-5 py-4">
                                     <div class="text-slate-200 font-medium text-sm">{{ req.kavling }}<span v-if="req.kavling_baru" class="text-slate-500"> → {{ req.kavling_baru }}</span></div>
                                     <div class="text-slate-500 text-xs">{{ req.project }}</div>
@@ -123,9 +141,39 @@ const statusBadgeClass = {
                                 <td class="px-4 py-4">
                                     <div class="text-slate-300 text-sm">{{ req.konsumen }}<span v-if="req.konsumen_baru" class="text-sky-300"> → {{ req.konsumen_baru }}</span></div>
                                     <div v-if="req.hubungan" class="text-slate-500 text-xs">{{ req.hubungan }}</div>
-                                    <div v-if="req.tahap_batal" class="text-slate-500 text-xs">Tahap saat batal: {{ req.tahap_batal }}</div>
-                                    <div v-else-if="req.tahap_sekarang" class="text-slate-500 text-xs">Tahap sekarang: {{ req.tahap_sekarang }}</div>
-                                    <div v-if="req.peringatan?.length" class="text-rose-400 text-[0.6875rem] mt-0.5">⛔ {{ req.peringatan.length }} hal perlu diperiksa</div>
+                                </td>
+                                <!-- Detail: isinya menyesuaikan jenis pengajuan -->
+                                <td class="px-4 py-4 text-xs">
+                                    <template v-if="req.type === 'cancellation'">
+                                        <div v-if="req.tahap_batal" class="text-slate-400">Tahap saat batal: {{ req.tahap_batal }}</div>
+                                        <div v-else-if="req.tahap_sekarang" class="text-slate-400">Tahap sekarang: {{ req.tahap_sekarang }}</div>
+                                        <div v-if="req.peringatan?.length" class="text-rose-400 mt-0.5">⛔ {{ req.peringatan.length }} hal perlu diperiksa</div>
+                                        <div v-if="req.status === 'approved'" class="text-slate-500 mt-0.5">
+                                            Dikembalikan {{ formatRupiah(req.nominal_dikembalikan) }} · Hangus {{ formatRupiah(req.nominal_hangus) }}
+                                        </div>
+                                    </template>
+                                    <template v-else-if="req.type === 'unit_swap'">
+                                        <div v-if="req.harga && !req.harga.sama" class="text-slate-400">
+                                            Selisih harga <span :class="req.harga.selisih > 0 ? 'text-rose-400' : 'text-emerald-400'">{{ req.harga.selisih > 0 ? '+' : '−' }}{{ formatRupiah(Math.abs(req.harga.selisih)) }}</span>
+                                        </div>
+                                        <div v-else-if="req.harga" class="text-slate-500">Harga unit sama</div>
+                                    </template>
+                                    <template v-else-if="req.type === 'rincian_change'">
+                                        <span :class="req.asal === 'booking' ? 'bg-amber-500/15 text-amber-300 ring-amber-500/25' : 'bg-teal-500/15 text-teal-300 ring-teal-500/25'"
+                                            class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ring-1">
+                                            {{ req.asal === 'booking' ? 'Promo Booking' : 'Ubah Rincian' }}
+                                        </span>
+                                        <div v-if="req.perubahan?.konflik" class="text-rose-400 mt-1">⚠️ {{ req.perubahan.konflik }}</div>
+                                        <ul v-else-if="req.perubahan?.baris?.length" class="mt-1 space-y-0.5">
+                                            <li v-for="b in req.perubahan.baris.slice(0, 3)" :key="b.label" class="text-slate-400">
+                                                <span class="text-slate-500">{{ b.label }}:</span> <span class="line-through">{{ b.lama }}</span> <span class="text-emerald-400">→ {{ b.baru }}</span>
+                                            </li>
+                                            <li v-if="req.perubahan.baris.length > 3" class="text-slate-500">+{{ req.perubahan.baris.length - 3 }} perubahan lain (lihat saat meninjau)</li>
+                                        </ul>
+                                    </template>
+                                    <template v-else>
+                                        <span class="text-slate-500">—</span>
+                                    </template>
                                 </td>
                                 <td class="px-4 py-4 max-w-xs">
                                     <p class="text-slate-400 text-xs line-clamp-2">{{ req.alasan }}</p>

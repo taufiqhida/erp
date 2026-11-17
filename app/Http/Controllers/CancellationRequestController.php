@@ -27,7 +27,24 @@ class CancellationRequestController extends Controller
     {
         $user = Auth::user();
         abort_unless($user->can('request cancellation') || $user->can('review cancellation') || $user->can('swap kavling') || $user->can('ajukan alih pembeli'), 403);
-        $isGlobal = $user->can('view all projects');
+
+        // Proyek aktif (Halaman Utama Pilih Proyek) — kosong berarti mode "Semua Proyek", data lintas-proyek (tetap dibatasi RBAC).
+        $projectId = session('current_project_id') ? (int) session('current_project_id') : null;
+
+        // Jumlah yang menunggu per tab (tidak terpengaruh filter), untuk angka di tab.
+        $menunggu = CancellationRequest::query()->terlihat($user, $projectId)->pending()
+            ->selectRaw('type, count(*) as n')->groupBy('type')->pluck('n', 'type');
+        $tabs = collect(CancellationRequest::TAB)->map(fn ($t, $kunci) => [
+            'key' => $kunci, 'label' => $t['label'], 'menunggu' => (int) collect($t['tipe'])->sum(fn ($x) => (int) ($menunggu[$x] ?? 0)),
+        ])->values();
+
+        // Tab: parameter ?tab=, atau tautan lama ?type=; bila tidak ada, tab pertama yang punya pengajuan menunggu.
+        $tab = $request->tab && isset(CancellationRequest::TAB[$request->tab]) ? $request->tab
+            : (CancellationRequest::tabUntukTipe($request->type)
+                ?? ($tabs->firstWhere(fn ($t) => $t['menunggu'] > 0)['key'] ?? 'pembatalan'));
+
+        // Status: bawaan "Menunggu"; 'semua' menampilkan semuanya.
+        $status = in_array($request->status, CancellationStatus::values(), true) ? $request->status : ($request->status === 'semua' ? 'semua' : 'pending');
 
         $requests = CancellationRequest::with([
             'kavling.project',
@@ -39,16 +56,9 @@ class CancellationRequestController extends Controller
             'requester:id,name',
             'reviewer:id,name',
         ])
-        ->when(!$isGlobal, fn($q) =>
-            $q->whereHas('kavling.project.users', fn($q2) => $q2->where('users.id', $user->id))
-        )
-        // Proyek aktif (Halaman Utama Pilih Proyek) — kosong berarti mode
-        // "Semua Proyek", data lintas-proyek (tetap dibatasi RBAC di atas).
-        ->when(session('current_project_id'), fn($q) =>
-            $q->whereHas('kavling', fn($q2) => $q2->where('project_id', session('current_project_id')))
-        )
-        ->when($request->status, fn($q) => $q->where('status', $request->status))
-        ->when($request->type, fn($q) => $q->where('type', $request->type))
+        ->terlihat($user, $projectId)
+        ->whereIn('type', CancellationRequest::TAB[$tab]['tipe'])
+        ->when($status !== 'semua', fn ($q) => $q->where('status', $status))
         ->orderByDesc('created_at')
         ->paginate($this->perPage($request, 20))
         ->withQueryString()
@@ -79,6 +89,7 @@ class CancellationRequestController extends Controller
             'nominal_hangus'        => $r->nominal_hangus,
             'harga'                 => $r->isUnitSwap() && $r->isPending() ? $this->pratinjauHargaTukar($r) : null,
             // Usulan perubahan rincian: perbedaan sebelum/sesudah dihitung SEKARANG (bukan saat diajukan) supaya SPV melihat dampak yang sebenarnya.
+            'asal'                  => ($r->payload['asal'] ?? null) === 'booking' ? 'booking' : 'rincian',   // Promo Booking atau Ubah Rincian
             'tahap_batal'           => $r->tahap_batal_label,
             // Hanya untuk pembatalan yang masih menunggu: tahap transaksi sekarang dan hal yang perlu diperiksa SPV sebelum menyetujui.
             'tahap_sekarang'        => $r->type === CancellationRequestType::Cancellation && $r->isPending() ? (CancellationRequest::TAHAP_LABEL[$r->kavlingKonsumen->status_penjualan] ?? null) : null,
@@ -88,9 +99,8 @@ class CancellationRequestController extends Controller
 
         return Inertia::render('CancellationRequests/Index', [
             'requests' => $requests,
-            'filters'  => $request->only(['status', 'type']),
-            'statusOptions' => array_map(fn($s) => ['value' => $s->value, 'label' => $s->label()], CancellationStatus::cases()),
-            'typeOptions'   => array_map(fn($t) => ['value' => $t->value, 'label' => $t->label()], CancellationRequestType::cases()),
+            'tabs'     => $tabs,
+            'filters'  => ['tab' => $tab, 'status' => $status],
         ]);
     }
 
