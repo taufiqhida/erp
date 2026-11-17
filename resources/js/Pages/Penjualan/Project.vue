@@ -48,6 +48,10 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 
 const page = usePage();
 
+// Persetujuan promo: Admin Sales yang memberi promo/potongan/diskon/bonus pada booking tidak langsung menerapkannya. Booking dibuat dengan
+// harga penuh dan usulannya masuk Pengajuan; pemegang izin override (Superadmin) langsung berlaku.
+const bisaLangsungPromo = computed(() => (page.props.auth.user?.permissions ?? []).includes('override transaction lock'));
+
 // ── View mode ────────────────────────────────────────────────────────
 const viewMode = ref(props.tampilan === 'tabel' ? 'table' : 'siteplan');
 
@@ -264,6 +268,12 @@ const lawanTanahAktif = computed(() => !!bookForm.promo_tanah_id && bookForm.bia
 const lawanBiayaIds = computed(() => bookForm.biaya_tambahan_selected.filter(id => !!bookForm.promo_biaya[id]));
 // Titipan Biaya Akad bruto = nominal Program All In dikurangi Booking Fee/DP yang sudah tercakup (rumus sama dengan server).
 const allInTerpilih = computed(() => props.programAllInPresets.find(p => String(p.id) === String(bookForm.program_all_in_preset_id)) ?? null);
+// Ada promo, potongan, diskon, label promo, atau bonus yang dipilih di form (sama dengan PromoBooking::ada di server).
+const adaPromoDiberikan = computed(() =>
+    !!(bookForm.promo_preset_id || bookForm.diskon_promo_id || bookForm.promo_tanah_id || bookForm.promo_titipan_id
+        || Object.values(bookForm.promo_biaya || {}).some(Boolean)
+        || (bookForm.bonus_ids || []).length)
+);
 const titipanBruto = computed(() => titipanBrutoAllIn(allInTerpilih.value, bookForm.booking_fee, bookForm.dp_nominal));
 const lawanTitipanAktif = computed(() => !!bookForm.promo_titipan_id && titipanBruto.value > 0);
 const potonganNominal = (bruto, p) => {
@@ -1159,6 +1169,12 @@ const isBookable = (k) => k.status_jual === 'available';
                             <textarea v-model="bookForm.catatan" rows="2" placeholder="Catatan tambahan (opsional)"
                                 class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none" />
                         </div>
+
+                        <!-- Promo/potongan/bonus yang diberikan perlu persetujuan SPV/Leader (kecuali pemegang izin override) -->
+                        <p v-if="adaPromoDiberikan && !bisaLangsungPromo" class="text-amber-300 text-xs bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2.5">
+                            ⏳ Promo, potongan, atau bonus yang Anda pilih <b>menunggu persetujuan SPV/Leader</b> di menu Pengajuan. Booking tetap tersimpan, tetapi
+                            tagihan memakai <b>harga penuh</b> sampai disetujui. Angka di Rincian Pemesanan di bawah adalah angka <b>setelah</b> promo disetujui.
+                        </p>
 
                         <!-- Rincian Pemesanan (paling bawah, tepat sebelum konfirmasi) -->
                         <div class="bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border border-violet-500/20 rounded-xl p-4 space-y-2">

@@ -203,6 +203,23 @@ class PerubahanRincian
     }
 
     /**
+     * Peringatan bila jumlah cicilan Pelunasan cash tidak lagi sama dengan Pelunasan seharusnya (mis. diskon harga jual baru disetujui,
+     * sedangkan jadwal cicilan yang sudah dibuat tidak ikut dihitung ulang). Tidak mengubah apa pun; null bila tidak ada selisih.
+     */
+    public static function peringatanJadwal(KavlingKonsumen $kk): ?string
+    {
+        $kk->unsetRelations()->load(['jadwalTagihans.pembayaran', 'biayaTambahans.pembayarans', 'rincianBiayaAkad.pembayaran', 'skemaDpPreset', 'pembayarans', 'pencairanKprTahaps']);
+        $pelunasan = collect($kk->kartuPiutangBreakdown()['kartu_piutang_static'])->firstWhere('type', 'pelunasan_group');
+        $selisih = (float) ($pelunasan['selisih_jadwal'] ?? 0);
+        if (abs($selisih) <= 0.5) return null;
+
+        $rp = fn ($n) => 'Rp ' . number_format(abs($n), 0, ',', '.');
+
+        return 'Jumlah cicilan Pelunasan ' . ($selisih > 0 ? 'lebih' : 'kurang') . ' ' . $rp($selisih) . ' dari Pelunasan seharusnya ('
+            . $rp($pelunasan['nominal_seharusnya']) . '). Sesuaikan nominal cicilan yang belum dibayar di Keuangan.';
+    }
+
+    /**
      * Pratinjau: terapkan lalu batalkan. Mengembalikan ['baris' => [[label, lama, baru]], 'konflik' => string|null].
      * Konflik (mis. komponen sudah terkunci pembayaran) tidak dilempar, tetapi dikembalikan sebagai pesan.
      */

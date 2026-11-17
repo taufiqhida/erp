@@ -237,7 +237,9 @@ class CancellationRequestController extends Controller
                 $cancellationRequest->update(['status' => CancellationStatus::Approved, 'reviewed_by' => Auth::id(), 'reviewed_at' => now(), 'catatan_reviewer' => $validated['catatan_reviewer'] ?? null]);
             });
 
-            return back()->with('success', 'Usulan perubahan rincian disetujui dan sudah diterapkan.');
+            $peringatan = PerubahanRincian::peringatanJadwal($cancellationRequest->kavlingKonsumen);
+
+            return back()->with('success', 'Usulan perubahan rincian disetujui dan sudah diterapkan.')->with($peringatan ? ['warning' => $peringatan] : []);
         }
 
         if ($cancellationRequest->isBuyerTransfer()) {

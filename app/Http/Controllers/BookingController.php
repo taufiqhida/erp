@@ -12,6 +12,7 @@ use App\Models\CatatanTransaksi;
 use App\Support\KoreksiTanggalBooking;
 use App\Support\PerubahanRincian;
 use App\Support\PotonganPromo;
+use App\Support\PromoBooking;
 use App\Support\PromoPerBiaya;
 use App\Models\DokumenTemplate;
 use App\Models\Kavling;
@@ -264,8 +265,15 @@ class BookingController extends Controller
             'biaya_tambahan.*.potongan.nilai' => 'nullable|numeric|min:0',
         ]);
 
+        // Persetujuan promo: Admin Sales yang memberi promo/potongan/bonus tidak langsung menerapkannya. Booking dibuat tanpa hal-hal itu
+        // (tagihan harga penuh) dan rincian lengkapnya menjadi usulan di Pengajuan. SPV/Leader/Superadmin (izin override) langsung.
+        $usulanPromo = null;
+        if (!Auth::user()->can('override transaction lock') && PromoBooking::ada($validated)) {
+            [$validated, $usulanPromo] = PromoBooking::pisahkan($validated);
+        }
+
         // Total keuangan tersimpan dihitung sekali di akhir (bukan tiap baris cicilan/pembayaran dibuat).
-        KavlingKonsumen::withoutFinanceRefresh(fn () => DB::transaction(function () use ($kavling, $validated) {
+        KavlingKonsumen::withoutFinanceRefresh(fn () => DB::transaction(function () use ($kavling, $validated, $usulanPromo) {
             // Lock baris kavling supaya dua request booking bersamaan tidak
             // lolos cek status yang sama sebelum salah satunya commit.
             $locked = Kavling::whereKey($kavling->id)->lockForUpdate()->firstOrFail();
@@ -438,6 +446,9 @@ class BookingController extends Controller
             if (!empty($validated['bonus_ids'])) {
                 $transaksi->bonuses()->sync(array_values(array_unique($validated['bonus_ids'])));
             }
+            if ($usulanPromo !== null) {
+                PromoBooking::buatUsulan($transaksi, $usulanPromo, Auth::user());
+            }
 
             // ── Kartu Piutang: generate jadwal tagihan booking fee & DP dari
             // tenor preset skema pembayaran. Ini rencana tagihan (belum
@@ -521,7 +532,8 @@ class BookingController extends Controller
             $locked->update(['status_jual' => StatusJual::Booked]);
         }));
 
-        return back()->with('success', "Kavling {$kavling->nomor_lengkap} berhasil dibooking.");
+        return back()->with('success', "Kavling {$kavling->nomor_lengkap} berhasil dibooking."
+            . ($usulanPromo !== null ? ' Promo/potongan/bonus menunggu persetujuan SPV/Leader di menu Pengajuan; sampai disetujui, tagihan memakai harga penuh.' : ''));
     }
 
     /**
@@ -948,7 +960,10 @@ class BookingController extends Controller
         if ($langsung) {
             PerubahanRincian::terapkanSemua($kk, $usulan, $alasan ?: 'Perubahan rincian pemesanan', $user);
 
-            return back()->with('success', 'Rincian pemesanan berhasil diperbarui. Catatan: Booking Fee/DP yang sudah digenerate tidak ikut berubah (selain pergeseran jatuh tempo bila tanggal booking diubah).');
+            $peringatan = PerubahanRincian::peringatanJadwal($kk);
+
+            return back()->with('success', 'Rincian pemesanan berhasil diperbarui. Catatan: Booking Fee/DP yang sudah digenerate tidak ikut berubah (selain pergeseran jatuh tempo bila tanggal booking diubah).')
+                ->with($peringatan ? ['warning' => $peringatan] : []);
         }
 
         // Admin Sales: kirim sebagai usulan. Satu usulan aktif per transaksi; tidak boleh bersamaan dengan pengajuan lain yang sedang menunggu.
