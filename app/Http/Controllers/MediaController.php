@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\SvgBersih;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -21,6 +22,12 @@ class MediaController extends Controller
             abort(404);
         }
 
-        return Storage::disk('public')->response($path);
+        // SVG unggahan bisa memuat skrip. Dibuka langsung (bukan lewat <img>/fetch) ia tidak boleh
+        // menjalankannya — siteplan inline tidak terpengaruh karena dimuat lewat fetch().
+        $headers = SvgBersih::adalahSvg($path)
+            ? ['Content-Security-Policy' => "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:"]
+            : [];
+
+        return Storage::disk('public')->response($path, null, $headers);
     }
 }

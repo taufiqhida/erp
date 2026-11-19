@@ -53,6 +53,7 @@ RUN apk add --no-cache \
 
 COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/zz-opcache.ini
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/zz-app.ini
+COPY docker/php/zzz-fpm-listen.conf /usr/local/etc/php-fpm.d/zzz-fpm-listen.conf
 COPY docker/nginx/default.conf /etc/nginx/http.d/default.conf
 COPY docker/supervisord.conf /etc/supervisord.conf
 

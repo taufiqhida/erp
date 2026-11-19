@@ -111,7 +111,7 @@ class ProjectController extends Controller
         // Handle siteplan upload
         if ($request->hasFile('siteplan_image')) {
             $request->validate(['siteplan_image' => 'image|mimes:png,jpg,jpeg,svg|max:10240']);
-            $validated['siteplan_image'] = $request->file('siteplan_image')->store('siteplan', 'public');
+            $validated['siteplan_image'] = \App\Support\SvgBersih::simpan($request->file('siteplan_image'), 'siteplan', 'siteplan_image');
         }
 
         // Handle foto sampul upload — foto cover yang tampil di kartu Beranda
@@ -318,10 +318,12 @@ class ProjectController extends Controller
         // Handle siteplan upload
         if ($request->hasFile('siteplan_image')) {
             $request->validate(['siteplan_image' => 'image|mimes:png,jpg,jpeg,svg|max:10240']);
+            // Simpan yang baru dulu: kalau SVG ditolak, siteplan lama tidak ikut terhapus.
+            $siteplanBaru = \App\Support\SvgBersih::simpan($request->file('siteplan_image'), 'siteplan', 'siteplan_image');
             if ($project->siteplan_image) {
                 Storage::disk('public')->delete($project->siteplan_image);
             }
-            $validated['siteplan_image'] = $request->file('siteplan_image')->store('siteplan', 'public');
+            $validated['siteplan_image'] = $siteplanBaru;
         }
 
         // Handle foto sampul upload
@@ -350,11 +352,13 @@ class ProjectController extends Controller
             'siteplan_image' => 'required|image|mimes:png,jpg,jpeg,svg|max:10240',
         ]);
 
+        // Simpan yang baru dulu: kalau SVG ditolak, siteplan lama tidak ikut terhapus.
+        $path = \App\Support\SvgBersih::simpan($request->file('siteplan_image'), 'siteplan', 'siteplan_image');
+
         if ($project->siteplan_image) {
             Storage::disk('public')->delete($project->siteplan_image);
         }
 
-        $path = $request->file('siteplan_image')->store('siteplan', 'public');
         $project->update(['siteplan_image' => $path]);
 
         return back()->with('success', 'Siteplan berhasil diupload.');

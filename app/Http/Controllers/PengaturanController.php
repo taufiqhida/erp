@@ -78,8 +78,10 @@ class PengaturanController extends Controller
 
         // Handle logo upload
         if ($request->hasFile('logo')) {
+            // Simpan yang baru dulu: kalau SVG ditolak, logo lama tidak ikut terhapus.
+            $logoBaru = \App\Support\SvgBersih::simpan($request->file('logo'), 'developer', 'logo');
             if ($profile->logo_path) Storage::disk('public')->delete($profile->logo_path);
-            $validated['logo_path'] = $request->file('logo')->store('developer', 'public');
+            $validated['logo_path'] = $logoBaru;
             \App\Support\Branding::buatFavicon($validated['logo_path']);
         }
         unset($validated['logo']);

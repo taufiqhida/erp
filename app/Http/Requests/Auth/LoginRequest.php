@@ -12,6 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 class LoginRequest extends FormRequest
 {
+    /** Batas gagal login per email+IP, dan (terpisah) per IP saja. */
+    private const MAKS_GAGAL_PER_EMAIL = 5;
+    private const MAKS_GAGAL_PER_IP = 20;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -44,6 +48,7 @@ class LoginRequest extends FormRequest
 
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
+            RateLimiter::hit($this->ipThrottleKey());
 
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),
@@ -59,6 +64,8 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        // Hanya hitungan email+IP yang direset. Hitungan per IP sengaja dibiarkan: kalau login benar
+        // ikut mereset, penyerang yang punya satu akun sah bisa menyegarkan batasnya terus-menerus.
         RateLimiter::clear($this->throttleKey());
     }
 
@@ -69,13 +76,20 @@ class LoginRequest extends FormRequest
      */
     public function ensureIsNotRateLimited(): void
     {
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
+        // Batas per email+IP menahan tebakan ke satu akun; batas per IP menahan password spraying
+        // (satu password umum ke banyak email dari satu IP, yang tidak pernah menyentuh batas pertama).
+        $terkunci = collect([
+            $this->throttleKey() => self::MAKS_GAGAL_PER_EMAIL,
+            $this->ipThrottleKey() => self::MAKS_GAGAL_PER_IP,
+        ])->filter(fn (int $maks, string $kunci) => RateLimiter::tooManyAttempts($kunci, $maks));
+
+        if ($terkunci->isEmpty()) {
             return;
         }
 
         event(new Lockout($this));
 
-        $seconds = RateLimiter::availableIn($this->throttleKey());
+        $seconds = $terkunci->keys()->map(fn (string $kunci) => RateLimiter::availableIn($kunci))->max();
 
         throw ValidationException::withMessages([
             'email' => trans('auth.throttle', [
@@ -91,5 +105,13 @@ class LoginRequest extends FormRequest
     public function throttleKey(): string
     {
         return Str::transliterate(Str::lower($this->string('email')).'|'.$this->ip());
+    }
+
+    /**
+     * Kunci pembatas per IP (tanpa email).
+     */
+    public function ipThrottleKey(): string
+    {
+        return 'login-ip|'.$this->ip();
     }
 }
