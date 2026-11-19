@@ -5,6 +5,7 @@ namespace App\Imports\Konsumen;
 use App\Enums\StatusJual;
 use App\Models\BankRekananPreset;
 use App\Models\BiayaTambahanPreset;
+use App\Models\BonusPreset;
 use App\Models\DajamSbumPreset;
 use App\Models\DokumenKonsumen;
 use App\Models\DokumenTemplate;
@@ -50,6 +51,8 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
     private array $tahapMap;
     private array $tahapOrder;
     private bool $isKpr;
+    /** Promo, potongan, diskon, dan bonus perlu persetujuan: lewat import hanya boleh oleh pemegang izin override. */
+    private bool $bolehPromo;
 
     public function __construct(
         private Project $project,
@@ -61,6 +64,7 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
         $this->tahapMap = KonsumenImportSpec::tahapMap($caraBayar);
         $this->tahapOrder = array_values($this->tahapMap);
         $this->isKpr = KonsumenImportSpec::isKpr($caraBayar);
+        $this->bolehPromo = (bool) Auth::user()?->can('override transaction lock');
     }
 
     public function collection(Collection $rows): void
@@ -166,6 +170,36 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
             if (!$promo) $errors[] = "Promo '{$promoLabel}' tidak dikenal.";
         }
 
+        $rp = fn ($n) => 'Rp ' . number_format((float) $n, 0, ',', '.');
+
+        // Promo per biaya = pasangan (Promo, Potongan Rp). Keduanya wajib berdua; promo harus punya lawan biaya itu; potongan
+        // tidak boleh negatif atau melebihi nilai biayanya. Mengembalikan [id promo yang berlaku (atau null), nominal potongan].
+        $potonganBiaya = function (string $nama, ?string $promoLabel, ?float $potongan, float $bruto, callable $lawan, string $namaLawan) use (&$errors, $rp): array {
+            $potongan = $potongan === null ? 0.0 : $potongan;
+            if ($promoLabel === null && $potongan <= 0) {
+                if ($potongan < 0) $errors[] = "{$nama}: Potongan tidak boleh negatif.";
+                return [null, 0.0];
+            }
+            if ($promoLabel === null) { $errors[] = "{$nama}: Potongan terisi tetapi Promo kosong."; return [null, 0.0]; }
+            $p = PromoPreset::with('lawan')->whereRaw('LOWER(nama) = ?', [mb_strtolower($promoLabel)])->first();
+            if (!$p) { $errors[] = "{$nama}: promo '{$promoLabel}' tidak dikenal."; return [null, 0.0]; }
+            if ($potongan <= 0) { $errors[] = "{$nama}: Promo terisi tetapi Potongan (Rp) kosong."; return [null, 0.0]; }
+            if (!$lawan($p)) { $errors[] = "{$nama}: promo '{$p->nama}' tidak punya lawan {$namaLawan} (atur di Pengaturan > Promo)."; return [null, 0.0]; }
+            if ($bruto <= 0) { $errors[] = "{$nama}: tidak ada biaya yang dipotong (nilainya kosong atau nol)."; return [null, 0.0]; }
+            if ($potongan > $bruto + 0.005) { $errors[] = "{$nama}: Potongan ({$rp($potongan)}) melebihi nilai biayanya ({$rp($bruto)})."; return [null, 0.0]; }
+
+            return [$p->id, round($potongan, 2)];
+        };
+
+        // Bonus (label saja): beberapa nama dipisah koma, semuanya harus ada di master Bonus.
+        $bonusIds = [];
+        if ($bonusRaw = $str('bonus')) {
+            foreach (array_filter(array_map('trim', explode(',', $bonusRaw)), fn ($x) => $x !== '') as $namaBonus) {
+                $b = BonusPreset::whereRaw('LOWER(nama) = ?', [mb_strtolower($namaBonus)])->first();
+                if (!$b) $errors[] = "Bonus '{$namaBonus}' tidak dikenal."; else $bonusIds[$b->id] = $b->id;
+            }
+        }
+
         $allInPreset = null;
         if ($allInLabel = $str('all_in')) {
             $allInPreset = ProgramAllInPreset::whereRaw('LOWER(nama) = ?', [mb_strtolower($allInLabel)])->first();
@@ -214,6 +248,13 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
         $diskonNilai = $num('diskon_nilai');
         if ($diskonMode && $diskonNilai === null) $errors[] = 'Nilai Diskon wajib diisi karena Mode Diskon terisi.';
         if (!$diskonMode && $diskonNilai !== null) $errors[] = 'Mode Diskon wajib diisi karena Nilai Diskon terisi.';
+        if ($diskonMode && $diskonNilai !== null && $diskonNilai > 0) {
+            if (!$promo) {
+                $errors[] = 'Diskon terisi tetapi Nama Promo kosong: diskon harus berasal dari promo yang punya lawan Harga Jual.';
+            } elseif (!$promo->lawanHargaJual()) {
+                $errors[] = "Promo '{$promo->nama}' tidak punya lawan Harga Jual, tidak bisa dipakai untuk diskon. Potongan tanah, biaya tambahan, atau titipan diisi di kolom Promo dan Potongan pada biaya itu.";
+            }
+        }
 
         // ── Biaya Kelebihan Tanah ──
         $tanahModeLabel = $str('tanah_mode');
@@ -237,6 +278,8 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                 $tanahNominal = $tanahTargetInput;
             }
         }
+        // Target tanah = nilai bruto; yang ditagih = bruto - potongan promo.
+        [$tanahPromoId, $tanahPotongan] = $potonganBiaya('Biaya Tanah', $str('tanah_promo'), $num('tanah_potongan'), $tanahNominal, fn ($p) => $p->lawanTanah(), 'Kelebihan Tanah');
         $tanahBayar = $num('tanah_bayar');
         $tanahTgl = $dateOf('tanah_tgl');
         if ($tanahBayar !== null && $tanahBayar > 0 && !$tanahTgl) $errors[] = 'Biaya Tanah Tgl Terakhir wajib diisi karena Terbayar terisi.';
@@ -246,15 +289,23 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
         $biayaTambahanTotal = 0.0;
         foreach (KonsumenImportSpec::biayaTambahanPresets() as $btNama) {
             $target = $num("bt:{$btNama}:t");
-            if ($target === null) continue;
+            $promoLabelBt = $str("bt:{$btNama}:p");
+            $potonganBt = $num("bt:{$btNama}:x");
+            if ($target === null) {
+                if ($promoLabelBt !== null || ($potonganBt !== null && $potonganBt != 0)) $errors[] = "Biaya Tambahan {$btNama}: Promo/Potongan terisi tetapi Target kosong (biaya ini dianggap tidak berlaku).";
+                continue;
+            }
+            $presetBtId = (int) BiayaTambahanPreset::where('nama', $btNama)->value('id');
+            [$promoBtId, $potBt] = $potonganBiaya("Biaya Tambahan {$btNama}", $promoLabelBt, $potonganBt, (float) $target, fn ($p) => in_array($presetBtId, $p->lawanBiayaTambahanIds(), true), "Biaya Tambahan {$btNama}");
             $bayar = $num("bt:{$btNama}:b");
             $tgl = $dateOf("bt:{$btNama}:d");
             if ($bayar !== null && $bayar > 0 && !$tgl) $errors[] = "Biaya Tambahan {$btNama} Tgl Terakhir wajib diisi karena Terbayar terisi.";
-            $biayaTambahanTotal += $target;
-            $biayaTambahanItems[] = ['nama' => $btNama, 'target' => $target, 'bayar' => $bayar, 'tgl' => $tgl];
+            $biayaTambahanTotal += $target - $potBt;      // yang ditagih (neto)
+            $biayaTambahanItems[] = ['nama' => $btNama, 'target' => $target, 'potongan' => $potBt, 'promo_id' => $promoBtId, 'bayar' => $bayar, 'tgl' => $tgl];
         }
 
-        $totalBiayaTambahan = $tanahNominal + $biayaTambahanTotal;
+        // total_biaya_tambahan = nilai NETO (setelah potongan promo), sama seperti booking lewat form.
+        $totalBiayaTambahan = ($tanahNominal - $tanahPotongan) + $biayaTambahanTotal;
         $subtotal = $hargaDasar + $totalBiayaTambahan;
         $diskonNominal = 0.0;
         if ($diskonMode && $diskonNilai !== null) {
@@ -307,6 +358,7 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
         if ($allInPreset) {
             $titipanNominal = $allInPreset->titipanBruto((float) $bookingFee, (float) $dpNominal);
         }
+        [$titipanPromoId, $titipanPotongan] = $potonganBiaya('Titipan Biaya Akad', $str('titipan_promo'), $num('titipan_potongan'), $titipanNominal, fn ($p) => $p->lawanTitipanBiayaAkad(), 'Titipan Biaya Akad');
         $titipanBayar = $num('titipan_bayar');
         $titipanTgl = $dateOf('titipan_tgl');
         if ($titipanBayar !== null && $titipanBayar > 0 && !$titipanTgl) $errors[] = 'Titipan Biaya Akad Tgl Terakhir wajib diisi karena Terbayar terisi.';
@@ -394,6 +446,12 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
             $docStatuses[$d->nama_dokumen] = ['status' => $key ?? 'belum_ada', 'sifat' => $d->sifat, 'template' => $d];
         }
 
+        $adaPromo = $promo !== null || ($diskonMode && $diskonNilai !== null) || $bonusIds || $tanahPromoId !== null || $titipanPromoId !== null
+            || collect($biayaTambahanItems)->contains(fn ($i) => $i['promo_id'] !== null);
+        if ($adaPromo && !$this->bolehPromo) {
+            $errors[] = 'Promo, potongan, diskon, atau bonus lewat import hanya boleh diisi oleh pemegang izin override (Superadmin/SPV/Leader), karena promo perlu persetujuan. Kosongkan kolom promo/potongan/bonus, atau minta Superadmin yang mengimpor.';
+        }
+
         $catatan = $str('catatan');
         $nik = $str('nik');
 
@@ -414,10 +472,10 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                 $skemaPreset, $sumberLead, $referralKeterangan, $pekerjaanKey, $nikahKey,
                 $salesAgent, $notaris, $promo, $allInPreset, $bankPreset, $hargaDasar, $hargaJualNetto,
                 $diskonMode, $diskonNilai, $diskonNominal, $tanahAktif, $tanahMode, $tanahLuas, $tanahHarga,
-                $tanahNominal, $tanahBayar, $tanahTgl, $totalBiayaTambahan, $biayaTambahanItems,
+                $tanahNominal, $tanahPotongan, $tanahPromoId, $tanahBayar, $tanahTgl, $totalBiayaTambahan, $biayaTambahanItems, $bonusIds,
                 $bookingFee, $bfBayar, $bfTgl, $dpNominal, $dpBayar, $dpTgl,
                 $pelunasanNominal, $pelunasanTenor, $pelBayar, $pelTgl,
-                $titipanNominal, $titipanBayar, $titipanTgl,
+                $titipanNominal, $titipanPotongan, $titipanPromoId, $titipanBayar, $titipanTgl,
                 $plafon, $tglAjuan, $sp3kKey, $tglSp3k, $tglExp, $sbumItems, $dajamItems,
                 $cairBayar, $cairTgl, $tumBayar, $tumTgl,
                 $tglRencana, $tglAkad, $tglBast, $docStatuses, $catatan, $alih,
@@ -467,6 +525,10 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                     'biaya_kelebihan_tanah_mode' => $tanahMode,
                     'biaya_kelebihan_tanah_harga_per_m2' => $tanahHarga,
                     'biaya_kelebihan_tanah_nominal' => $tanahNominal,
+                    'biaya_kelebihan_tanah_potongan' => $tanahPotongan,
+                    'biaya_kelebihan_tanah_potongan_mode' => $tanahPotongan > 0 ? 'nominal' : null,
+                    'biaya_kelebihan_tanah_potongan_nilai' => $tanahPotongan > 0 ? $tanahPotongan : null,
+                    'biaya_kelebihan_tanah_promo_id' => $tanahPotongan > 0 ? $tanahPromoId : null,
                     'promo_preset_id' => $promo?->id,
                     'diskon_mode' => $diskonMode,
                     'diskon_nilai' => $diskonNilai,
@@ -475,6 +537,10 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                     'total_biaya_tambahan' => $totalBiayaTambahan,
                     'program_all_in_preset_id' => $allInPreset?->id,
                     'titipan_biaya_akad_nominal' => $titipanNominal,
+                    'titipan_biaya_akad_potongan' => $titipanPotongan,
+                    'titipan_biaya_akad_potongan_mode' => $titipanPotongan > 0 ? 'nominal' : null,
+                    'titipan_biaya_akad_potongan_nilai' => $titipanPotongan > 0 ? $titipanPotongan : null,
+                    'titipan_biaya_akad_promo_id' => $titipanPotongan > 0 ? $titipanPromoId : null,
                     'status_penjualan' => $tahapKey,
                     'tanggal_rencana_akad' => $tglRencana,
                     'notaris_preset_id' => $notaris?->id,
@@ -487,6 +553,7 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                     'bank_rekanan_preset_id' => $bankPreset?->id,
                     'created_by' => Auth::id(),
                 ]);
+                if ($bonusIds) $trx->bonuses()->sync(array_values($bonusIds));
                 if (filled($catatan)) {
                     \App\Models\CatatanTransaksi::tulis($trx, 'booking', $catatan);
                 }
@@ -500,6 +567,10 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                         'biaya_tambahan_preset_id' => $preset?->id,
                         'nama' => $item['nama'],
                         'nominal' => $item['target'],
+                        'potongan' => $item['potongan'],
+                        'potongan_mode' => $item['potongan'] > 0 ? 'nominal' : null,
+                        'potongan_nilai' => $item['potongan'] > 0 ? $item['potongan'] : null,
+                        'promo_preset_id' => $item['potongan'] > 0 ? $item['promo_id'] : null,
                     ]);
                     $btRows[$item['nama']] = ['model' => $bt, 'bayar' => $item['bayar'], 'tgl' => $item['tgl']];
                 }
@@ -564,7 +635,7 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
                     if (($row['bayar'] ?? 0) > 0) {
                         $payFree('biaya_tambahan', $row['bayar'], $row['tgl'], $row['model']->id);
                         $row['model']->update([
-                            'status' => $row['bayar'] >= (float) $row['model']->nominal ? 'lunas' : 'belum_bayar',
+                            'status' => $row['bayar'] >= (float) $row['model']->ditagih ? 'lunas' : 'belum_bayar',
                             'pembayaran_konsumen_id' => $trx->pembayarans()->where('kavling_konsumen_biaya_tambahan_id', $row['model']->id)->latest('id')->value('id'),
                         ]);
                     }

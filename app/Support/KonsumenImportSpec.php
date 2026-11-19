@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\BankRekananPreset;
 use App\Models\BiayaTambahanPreset;
+use App\Models\BonusPreset;
 use App\Models\DajamSbumPreset;
 use App\Models\DokumenTemplate;
 use App\Models\Konsumen;
@@ -111,6 +112,12 @@ class KonsumenImportSpec
             ->get()->all();
     }
 
+    /** Nama promo yang punya "lawan" tertentu (isi dropdown per biaya). */
+    private static function namaPromoDenganLawan(callable $cocok): array
+    {
+        return PromoPreset::with('lawan')->orderBy('nama')->get()->filter($cocok)->pluck('nama')->values()->all();
+    }
+
     /** Daftar isi dropdown untuk sheet "Daftar" — nama list => array opsi. */
     public static function lists(): array
     {
@@ -125,6 +132,10 @@ class KonsumenImportSpec
             'Sales / Agent'       => SalesAgent::where('is_active', true)->ordered()->pluck('nama')->all(),
             'Notaris'             => NotarisPreset::where('is_active', true)->ordered()->pluck('nama')->all(),
             'Promo'               => PromoPreset::pluck('nama')->all(),
+            'Promo Tanah'         => self::namaPromoDenganLawan(fn ($p) => $p->lawanTanah()),
+            'Promo Titipan'       => self::namaPromoDenganLawan(fn ($p) => $p->lawanTitipanBiayaAkad()),
+            'Promo Biaya Tambahan' => self::namaPromoDenganLawan(fn ($p) => count($p->lawanBiayaTambahanIds()) > 0),
+            'Bonus'               => BonusPreset::ordered()->pluck('nama')->all(),
             'Mode Diskon'         => ['Persen', 'Nominal'],
             'Mode Biaya Tanah'    => ['Per M2', 'Nominal'],
             'Program All In'      => ProgramAllInPreset::ordered()->pluck('nama')->all(),
@@ -159,8 +170,12 @@ class KonsumenImportSpec
             'notaris' => 'Notaris', 'alih_hubungan' => 'Hubungan Peralihan',
         ];
 
+        // Promo per biaya: dropdown hanya berisi promo yang punya lawan biaya itu (importer tetap memeriksa lawan per preset).
+        $map += ['tanah_promo' => 'Promo Tanah', 'titipan_promo' => 'Promo Titipan'];
+
         if (isset($map[$key])) return $map[$key];
         if (str_starts_with($key, 'dok:')) return 'Status Dokumen';
+        if (str_starts_with($key, 'bt:') && str_ends_with($key, ':p')) return 'Promo Biaya Tambahan';
 
         return null;
     }
@@ -194,14 +209,17 @@ class KonsumenImportSpec
         $c[] = ['skema', 'Skema Pembayaran', 'w', 'Dropdown skema sesuai cara bayar sheet ini.'];
         $c[] = ['sales', 'Sales / Agent', 'o', 'Dropdown dari master Sales/Agent. Kosongkan kalau tidak ketahuan siapa yang jual dulu.'];
         $c[] = ['harga_dasar', 'Harga Dasar', 'o', 'KOSONG = otomatis pakai Harga di Stok Kavling untuk unit ini. WAJIB diisi kalau harga unit di Stok Kavling juga kosong.'];
-        $c[] = ['promo', 'Nama Promo', 'o', 'Dropdown master Promo.'];
-        // Harga Deal TIDAK diinput -- dihitung otomatis: Harga Dasar + Biaya Tanah + Biaya Tambahan Lain - Diskon.
+        $c[] = ['promo', 'Nama Promo', 'o', 'Dropdown master Promo: promo untuk potongan Harga Jual (diskon) dan/atau label transaksi. Kalau Mode/Nilai Diskon diisi, promo ini WAJIB punya lawan Harga Jual. Promo untuk tanah, biaya tambahan, dan titipan diisi di kolom Promo masing-masing biaya.'];
+        // Harga Deal TIDAK diinput -- dihitung otomatis: Harga Dasar + (Biaya Tanah - potongan) + (Biaya Tambahan Lain - potongan) - Diskon.
         $c[] = ['diskon_mode', 'Mode Diskon', 'k', 'Wajib kalau ada Nilai Diskon.'];
-        $c[] = ['diskon_nilai', 'Nilai Diskon', 'k', 'Persen atau nominal sesuai Mode Diskon.'];
+        $c[] = ['diskon_nilai', 'Nilai Diskon', 'k', 'Persen (dari harga dasar) atau nominal sesuai Mode Diskon.'];
+        $c[] = ['bonus', 'Bonus', 'o', 'Boleh lebih dari satu, pisahkan dengan KOMA (mis. Tandon Air, Kipas Angin). Nama harus ada di master Bonus (Pengaturan). Label saja, tidak mengubah harga.'];
         $c[] = ['tanah_mode', 'Biaya Tanah - Mode', 'o', 'Isi kalau unit punya biaya kelebihan tanah.'];
         $c[] = ['tanah_luas', 'Biaya Tanah - Luas (m2)', 'k', 'Wajib kalau mode Per M2.'];
         $c[] = ['tanah_harga', 'Biaya Tanah - Harga/m2', 'k', 'Wajib kalau mode Per M2.'];
-        $c[] = ['tanah_target', 'Biaya Tanah - Target', 'k', 'Wajib kalau mode Nominal.'];
+        $c[] = ['tanah_target', 'Biaya Tanah - Target', 'k', 'Wajib kalau mode Nominal. Nilai BRUTO (sebelum potongan promo); yang ditagih = Target dikurangi Potongan.'];
+        $c[] = ['tanah_promo', 'Biaya Tanah - Promo', 'k', 'Dropdown promo yang punya lawan Kelebihan Tanah. Wajib diisi bersama Potongan, dan sebaliknya.'];
+        $c[] = ['tanah_potongan', 'Biaya Tanah - Potongan (Rp)', 'k', 'Nominal potongan promo dari biaya tanah (maksimal sebesar biayanya). Tanah gratis: isi sebesar biaya tanah.'];
         $c[] = ['tanah_bayar', 'Biaya Tanah - Terbayar', 'k', 'Rekap total terbayar (Saldo Awal).'];
         $c[] = ['tanah_tgl', 'Biaya Tanah - Tgl Terakhir', 'k', 'Wajib kalau Terbayar terisi.'];
         $c[] = ['bf_target', 'Booking Fee - Target', 'k', 'Kosong = dihitung dari Skema Pembayaran.'];
@@ -219,11 +237,15 @@ class KonsumenImportSpec
             $c[] = ['pel_tgl', 'Pelunasan - Tgl Terakhir', 'k', 'Wajib kalau Terbayar terisi.'];
         }
         $c[] = ['all_in', 'Program All In', 'o', 'Dropdown master Program All In.'];
-        $c[] = ['titipan_target', 'Titipan Biaya Akad - Target', 'k', 'Muncul kalau Program All In dipilih.'];
+        $c[] = ['titipan_target', 'Titipan Biaya Akad - Target', 'k', 'Muncul kalau Program All In dipilih. Informasi saja: nilai dihitung sistem dari Program All In (dikurangi Booking Fee/DP yang tercakup).'];
+        $c[] = ['titipan_promo', 'Titipan Biaya Akad - Promo', 'k', 'Dropdown promo yang punya lawan Titipan Biaya Akad (mis. Diskon Biaya Akad, Notaris Sendiri). Wajib diisi bersama Potongan, dan sebaliknya.'];
+        $c[] = ['titipan_potongan', 'Titipan Biaya Akad - Potongan (Rp)', 'k', 'Nominal potongan promo dari Titipan Biaya Akad (maksimal sebesar titipannya).'];
         $c[] = ['titipan_bayar', 'Titipan Biaya Akad - Terbayar', 'k', 'Rekap total terbayar (Saldo Awal).'];
         $c[] = ['titipan_tgl', 'Titipan Biaya Akad - Tgl Terakhir', 'k', 'Wajib kalau Terbayar terisi.'];
         foreach (self::biayaTambahanPresets() as $bt) {
-            $c[] = ["bt:{$bt}:t", "* Biaya Tambahan: {$bt} - Target", 'k', 'KRUSIAL. Kosong = biaya ini tidak berlaku.'];
+            $c[] = ["bt:{$bt}:t", "* Biaya Tambahan: {$bt} - Target", 'k', 'KRUSIAL. Nilai BRUTO (sebelum potongan promo). Kosong = biaya ini tidak berlaku.'];
+            $c[] = ["bt:{$bt}:p", "* Biaya Tambahan: {$bt} - Promo", 'k', 'Dropdown promo yang punya lawan biaya ini. Wajib diisi bersama Potongan, dan sebaliknya.'];
+            $c[] = ["bt:{$bt}:x", "* Biaya Tambahan: {$bt} - Potongan (Rp)", 'k', 'Nominal potongan promo dari biaya ini (maksimal sebesar biayanya).'];
             $c[] = ["bt:{$bt}:b", "* Biaya Tambahan: {$bt} - Terbayar", 'k', 'Rekap total terbayar (Saldo Awal).'];
             $c[] = ["bt:{$bt}:d", "* Biaya Tambahan: {$bt} - Tgl Terakhir", 'k', 'Wajib kalau Terbayar terisi.'];
         }
