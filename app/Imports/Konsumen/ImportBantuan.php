@@ -8,6 +8,7 @@ use App\Models\AlihPembeliRiwayat;
 use App\Models\CancellationRequest;
 use App\Models\KavlingKonsumen;
 use App\Models\Konsumen;
+use App\Support\Nik;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 
@@ -60,7 +61,8 @@ class ImportBantuan
         if ($tanggal && $tglBooking && $tanggal->lt($tglBooking)) $errors[] = 'Tanggal Peralihan lebih awal dari Tanggal Booking.';
         if ($tanggal && $batasAtas && $tanggal->gt($batasAtas)) $errors[] = 'Tanggal Peralihan melewati Tanggal Batal.';
 
-        $nik = $str('alih_nik');
+        $nik = Nik::bersihkan($str('alih_nik'));
+        if ($pesanNik = Nik::periksa($nik)) $errors[] = 'Pembeli Sebelumnya: ' . $pesanNik;
         $hp = $str('alih_hp');
         if ($nik && $nama && ($tolak = self::tolakNikNamaBeda($nama, $nik, 'Pembeli Sebelumnya'))) $errors[] = $tolak;
         if ($nik && $nikSekarang && $nik === $nikSekarang) $errors[] = 'NIK Pembeli Sebelumnya sama dengan NIK pembeli di baris ini.';

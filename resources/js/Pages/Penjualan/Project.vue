@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import InlineSiteplanSvg from '@/Components/InlineSiteplanSvg.vue';
 import SiteplanLapis from '@/Components/SiteplanLapis.vue';
 import SearchSelect from '@/Components/SearchSelect.vue';
+import WilayahPicker from '@/Components/WilayahPicker.vue';
 import PromoBiayaBaris from '@/Components/PromoBiayaBaris.vue';
 import RincianPemesanan from '@/Components/RincianPemesanan.vue';
 import BonusPicker from '@/Components/BonusPicker.vue';
@@ -183,6 +184,7 @@ const bookForm = useForm({
     konsumen_sumber_lead_id:    '',
     konsumen_referral_keterangan: '',
     konsumen_alamat: '',
+    konsumen_wilayah_kode: '',
     konsumen_mode:   'new', // 'existing' | 'new' — mayoritas konsumen kami baru, bukan lama
 
     program_all_in_preset_id: '',
@@ -909,7 +911,7 @@ const isBookable = (k) => k.status_jual === 'available';
                                     </div>
                                     <div>
                                         <label class="block text-slate-400 text-xs mb-1.5">NIK <span class="text-rose-400">*</span></label>
-                                        <input v-model="bookForm.konsumen_nik" type="text" placeholder="16 digit NIK"
+                                        <input v-model="bookForm.konsumen_nik" type="text" inputmode="numeric" maxlength="16" placeholder="16 digit NIK"
                                             class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500"
                                             :class="{ 'border-rose-500': bookForm.errors.konsumen_nik }" />
                                         <p v-if="bookForm.errors.konsumen_nik" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.konsumen_nik }}</p>
@@ -965,7 +967,8 @@ const isBookable = (k) => k.status_jual === 'available';
                                     </div>
                                     <div class="col-span-2">
                                         <label class="block text-slate-400 text-xs mb-1.5">Alamat <span class="text-slate-600">(opsional)</span></label>
-                                        <textarea v-model="bookForm.konsumen_alamat" rows="2" maxlength="500" placeholder="Alamat sesuai KTP / domisili"
+                                        <div class="mb-2"><WilayahPicker v-model="bookForm.konsumen_wilayah_kode" :error="bookForm.errors.konsumen_wilayah_kode" /></div>
+                                        <textarea v-model="bookForm.konsumen_alamat" rows="2" maxlength="500" placeholder="Jalan, RT/RW, nomor rumah"
                                             class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-violet-500"
                                             :class="{ 'border-rose-500': bookForm.errors.konsumen_alamat }" />
                                         <p v-if="bookForm.errors.konsumen_alamat" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.konsumen_alamat }}</p>

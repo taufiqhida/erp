@@ -92,6 +92,19 @@ class DashboardController extends Controller
             'count' => (int) ($pipelineCounts[$stage] ?? 0),
         ]);
 
+        // ── Asal domisili konsumen (kabupaten/kota) — konsumen dari transaksi aktif yang terlihat oleh pengguna ──
+        $konsumenAktif = \App\Models\Konsumen::query()->whereIn('id', $activeBase()->select('kavling_konsumen.konsumen_id'));
+        $domisiliTotal = (clone $konsumenAktif)->count();
+        $domisiliTerisi = (clone $konsumenAktif)->whereNotNull('kabupaten_kode')->count();
+        $domisili = [
+            'total'  => $domisiliTotal,
+            'terisi' => $domisiliTerisi,
+            'teratas' => (clone $konsumenAktif)->whereNotNull('kabupaten_kode')
+                ->selectRaw('kabupaten_kode, max(kabupaten_nama) as nama, max(provinsi_nama) as provinsi, count(*) as total')
+                ->groupBy('kabupaten_kode')->orderByDesc('total')->orderBy('nama')->limit(8)->get()
+                ->map(fn ($r) => ['nama' => $r->nama, 'provinsi' => $r->provinsi, 'total' => (int) $r->total])->values(),
+        ];
+
         // ── Cara bayar breakdown ──────────────────────────────────────────
         $caraBayarCounts = $activeBase()->selectRaw('cara_bayar, count(*) as total')->groupBy('cara_bayar')->pluck('total', 'cara_bayar');
         $caraBayarLabels = [
@@ -605,6 +618,7 @@ class DashboardController extends Controller
             'kavlingBangunBreakdown' => $kavlingBangunBreakdown,
             'pipelineFunnel'         => $pipelineFunnel,
             'caraBayarBreakdown'     => $caraBayarBreakdown,
+            'domisili'               => $domisili,
             'financials'             => $financials,
             'piutangJatuhTempo'      => $piutangJatuhTempo,
             'bastTertunda'           => $bastTertunda,

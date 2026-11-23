@@ -21,6 +21,8 @@ class Konsumen extends Model
         'no_hp',
         'email',
         'alamat',
+        'provinsi_kode', 'provinsi_nama', 'kabupaten_kode', 'kabupaten_nama',
+        'kecamatan_kode', 'kecamatan_nama', 'kelurahan_kode', 'kelurahan_nama',
         'pekerjaan',
         'status_pernikahan',
         'sumber_lead_id',

@@ -2,6 +2,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import WilayahPicker from '@/Components/WilayahPicker.vue';
 
 const props = defineProps({
     konsumen: Object,
@@ -17,6 +18,7 @@ const form = useForm({
     no_hp:     props.konsumen?.no_hp ?? '',
     email:     props.konsumen?.email ?? '',
     alamat:    props.konsumen?.alamat ?? '',
+    wilayah_kode: props.konsumen?.wilayah_kode ?? '',
     pekerjaan: props.konsumen?.pekerjaan ?? '',
     status_pernikahan: props.konsumen?.status_pernikahan ?? '',
     sumber_lead_id:    props.konsumen?.sumber_lead_id ?? '',
@@ -61,7 +63,7 @@ const submit = () => {
                         </div>
                         <div>
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">NIK (KTP)</label>
-                            <input v-model="form.nik" type="text" maxlength="20" placeholder="3271234567890001" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': form.errors.nik }" />
+                            <input v-model="form.nik" type="text" inputmode="numeric" maxlength="16" placeholder="16 digit, mis. 3271234567890001" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500" :class="{ 'border-rose-500': form.errors.nik }" />
                             <p v-if="form.errors.nik" class="text-rose-400 text-xs mt-1">{{ form.errors.nik }}</p>
                         </div>
                         <div>
@@ -108,8 +110,12 @@ const submit = () => {
                         </div>
                     </div>
                     <div>
-                        <label class="block text-slate-400 text-xs font-medium mb-1.5">Alamat</label>
-                        <textarea v-model="form.alamat" rows="2" placeholder="Jl. Merdeka No. 1, Jakarta" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none" />
+                        <label class="block text-slate-400 text-xs font-medium mb-1.5">Wilayah domisili</label>
+                        <WilayahPicker v-model="form.wilayah_kode" :error="form.errors.wilayah_kode" />
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 text-xs font-medium mb-1.5">Alamat (jalan, RT/RW, nomor)</label>
+                        <textarea v-model="form.alamat" rows="2" placeholder="Jl. Merdeka No. 1, RT 02/RW 03" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none" />
                     </div>
                     <div>
                         <label class="block text-slate-400 text-xs font-medium mb-1.5">Catatan</label>

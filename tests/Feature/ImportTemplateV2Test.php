@@ -87,7 +87,7 @@ class ImportTemplateV2Test extends TestCase
     private function baris(array $o = []): array
     {
         $this->nomor++;
-        $dasar = ['nama' => 'Budi ' . $this->nomor, 'nik' => '32010100000000' . str_pad((string) $this->nomor, 2, '0', STR_PAD_LEFT), 'blok' => 'A1', 'kluster' => 'Melati', 'unit' => (string) $this->nomor,
+        $dasar = ['nama' => 'Budi ' . $this->nomor, 'nik' => '32010101019000' . str_pad((string) $this->nomor, 2, '0', STR_PAD_LEFT), 'blok' => 'A1', 'kluster' => 'Melati', 'unit' => (string) $this->nomor,
             'tgl_booking' => '2026-03-01', 'tahap' => 'Pemberkasan', 'skema' => 'Cash Uji'];
         $m = array_merge($dasar, $o);
 

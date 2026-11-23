@@ -74,6 +74,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     $alihkan('kavling-konsumen/{kk}/dokumen', 'pemasaran/transaksi/{kk}/dokumen');
     $alihkan('pembayaran/{pembayaran}/kuitansi', 'keuangan/kuitansi/{pembayaran}');
 
+    // Data wilayah untuk pemilih alamat bertingkat (provinsi > kabupaten/kota > kecamatan > kelurahan/desa).
+    Route::get('wilayah', [\App\Http\Controllers\WilayahController::class, 'anak'])->name('wilayah.anak');
+
     // Profile (user sendiri)
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -221,6 +224,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('konsumens.import-template')->middleware('throttle:heavy');
     Route::post('pemasaran/konsumen/{project}/import', [KonsumenController::class, 'importKonsumen'])
         ->name('konsumens.import')->middleware('throttle:heavy');
+    // Mode Perbarui: menyusulkan data yang belum terisi pada konsumen/transaksi yang sudah ada (template ramping, tanpa kolom keuangan).
+    Route::get('pemasaran/konsumen/{project}/perbarui-template', [KonsumenController::class, 'downloadPerbaruiTemplate'])
+        ->name('konsumens.perbarui-template')->middleware('throttle:heavy');
+    Route::post('pemasaran/konsumen/{project}/perbarui', [KonsumenController::class, 'perbaruiKonsumen'])
+        ->name('konsumens.perbarui')->middleware('throttle:heavy');
     // Lengkapi rincian (harga dasar, booking fee, jadwal tagihan) transaksi BATAL hasil import dari Skema Pembayaran.
     Route::post('pemasaran/konsumen/{project}/lengkapi-rincian', [KonsumenController::class, 'lengkapiRincian'])
         ->name('konsumens.lengkapi-rincian')->middleware('throttle:heavy');

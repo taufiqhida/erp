@@ -43,7 +43,7 @@ class BookingKonsumenBaruTest extends TestCase
     private function booking(array $ubah = [])
     {
         return $this->actingAs($this->sales)->post(route('bookings.store', $this->unit), array_merge([
-            'tanggal_booking' => now()->format('Y-m-d'), 'konsumen_nama' => 'Budi Baru', 'konsumen_no_hp' => '0812', 'konsumen_nik' => '3201000000000010',
+            'tanggal_booking' => now()->format('Y-m-d'), 'konsumen_nama' => 'Budi Baru', 'konsumen_no_hp' => '0812', 'konsumen_nik' => '3201010101900010',
             'konsumen_pekerjaan' => 'wirausaha', 'konsumen_status_pernikahan' => 'menikah', 'konsumen_sumber_lead_id' => $this->lead->id,
             'sales_agent_id' => $this->agent->id, 'cara_bayar' => 'cash',
         ], $ubah));
@@ -53,7 +53,7 @@ class BookingKonsumenBaruTest extends TestCase
     {
         $this->booking(['konsumen_alamat' => 'Jl. Melati No. 5, Surabaya'])->assertSessionHas('success');
 
-        $this->assertSame('Jl. Melati No. 5, Surabaya', Konsumen::where('nik', '3201000000000010')->firstOrFail()->alamat);
+        $this->assertSame('Jl. Melati No. 5, Surabaya', Konsumen::where('nik', '3201010101900010')->firstOrFail()->alamat);
         $this->assertSame('booked', $this->unit->fresh()->status_jual->value);
     }
 
@@ -61,12 +61,12 @@ class BookingKonsumenBaruTest extends TestCase
     {
         $this->booking()->assertSessionHas('success');
 
-        $this->assertNull(Konsumen::where('nik', '3201000000000010')->firstOrFail()->alamat);
+        $this->assertNull(Konsumen::where('nik', '3201010101900010')->firstOrFail()->alamat);
     }
 
     public function test_nik_yang_sudah_terdaftar_ditolak_dengan_pesan_menyebut_pemiliknya_bukan_error_500(): void
     {
-        Konsumen::create(['nama' => 'Pemilik NIK', 'nik' => '3201000000000010', 'no_hp' => '0899']);
+        Konsumen::create(['nama' => 'Pemilik NIK', 'nik' => '3201010101900010', 'no_hp' => '0899']);
 
         $r = $this->booking();
 
@@ -79,7 +79,7 @@ class BookingKonsumenBaruTest extends TestCase
 
     public function test_nik_milik_konsumen_yang_sudah_dihapus_juga_ditolak_dengan_pesan_jelas(): void
     {
-        $lama = Konsumen::create(['nama' => 'Sudah Dihapus', 'nik' => '3201000000000010', 'no_hp' => '0899']);
+        $lama = Konsumen::create(['nama' => 'Sudah Dihapus', 'nik' => '3201010101900010', 'no_hp' => '0899']);
         $lama->delete();
 
         $this->booking()->assertSessionHasErrors('konsumen_nik');
@@ -88,7 +88,7 @@ class BookingKonsumenBaruTest extends TestCase
 
     public function test_memilih_konsumen_lama_tidak_terkena_pemeriksaan_nik(): void
     {
-        $ada = Konsumen::create(['nama' => 'Konsumen Lama', 'nik' => '3201000000000010', 'no_hp' => '0899', 'pekerjaan' => 'wirausaha', 'status_pernikahan' => 'menikah']);
+        $ada = Konsumen::create(['nama' => 'Konsumen Lama', 'nik' => '3201010101900010', 'no_hp' => '0899', 'pekerjaan' => 'wirausaha', 'status_pernikahan' => 'menikah']);
 
         $this->actingAs($this->sales)->post(route('bookings.store', $this->unit), [
             'tanggal_booking' => now()->format('Y-m-d'), 'konsumen_id' => $ada->id, 'sales_agent_id' => $this->agent->id, 'cara_bayar' => 'cash',
@@ -96,5 +96,30 @@ class BookingKonsumenBaruTest extends TestCase
 
         $this->assertSame($ada->id, KavlingKonsumen::firstOrFail()->konsumen_id);
         $this->assertSame(1, Konsumen::count());
+    }
+
+    public function test_nik_tidak_valid_ditolak_dan_pemisah_dibersihkan(): void
+    {
+        foreach (['12345', '1111111111111111', '3201010101900000', '3201010113900001'] as $nik) {
+            $this->booking(['konsumen_nik' => $nik])->assertSessionHasErrors('konsumen_nik');
+        }
+        $this->assertSame(0, Konsumen::count());
+
+        $this->booking(['konsumen_nik' => '3201 0101.0190-0010'])->assertSessionHasNoErrors();
+        $this->assertSame('3201010101900010', Konsumen::firstOrFail()->nik);
+    }
+
+    public function test_wilayah_konsumen_baru_tersimpan_dari_satu_kode(): void
+    {
+        foreach ([['32', 'Jawa Barat', null], ['32.73', 'Kota Bandung', '32']] as [$kode, $nama, $induk]) {
+            \App\Models\Wilayah::create(['kode' => $kode, 'level' => substr_count($kode, '.') + 1, 'induk' => $induk, 'nama' => $nama]);
+        }
+
+        $this->booking(['konsumen_wilayah_kode' => '99.99'])->assertSessionHasErrors('konsumen_wilayah_kode');
+        $this->booking(['konsumen_wilayah_kode' => '32.73'])->assertSessionHasNoErrors();
+
+        $k = Konsumen::firstOrFail();
+        $this->assertSame('Jawa Barat', $k->provinsi_nama);
+        $this->assertSame('Kota Bandung', $k->kabupaten_nama);
     }
 }

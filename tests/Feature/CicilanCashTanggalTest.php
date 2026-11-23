@@ -65,7 +65,7 @@ class CicilanCashTanggalTest extends TestCase
         $sales->assignRole('admin_sales');
         $sales->projects()->attach($this->project->id);
         $this->actingAs($sales)->post(route('bookings.store', $unit), array_merge([
-            'tanggal_booking' => '2026-03-01', 'konsumen_nama' => 'Budi ' . $this->nomor, 'konsumen_no_hp' => '0812', 'konsumen_nik' => '32010000000000' . str_pad((string) $this->nomor, 2, '0', STR_PAD_LEFT),
+            'tanggal_booking' => '2026-03-01', 'konsumen_nama' => 'Budi ' . $this->nomor, 'konsumen_no_hp' => '0812', 'konsumen_nik' => '32010101019000' . str_pad((string) $this->nomor, 2, '0', STR_PAD_LEFT),
             'konsumen_pekerjaan' => 'wirausaha', 'konsumen_status_pernikahan' => 'menikah', 'konsumen_sumber_lead_id' => $this->lead->id,
             'sales_agent_id' => $this->agen->id, 'cara_bayar' => $cara, 'cicilan_kali' => $cara === 'cash_bertahap' ? 3 : null,
             'skema_dp_preset_id' => $this->skema($cara === 'cash_bertahap' ? 'cash_bertahap' : ($cara === 'cash' ? 'cash' : 'kpr_subsidi'), $dpTenor)->id,

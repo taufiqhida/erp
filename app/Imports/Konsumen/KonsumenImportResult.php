@@ -13,6 +13,11 @@ class KonsumenImportResult
     /** Konsumen batal (sheet "Batal") yang berhasil dicatat — dihitung terpisah dari $imported. */
     public int $importedBatal = 0;
     public int $skipped = 0;
+    /** Mode Perbarui: baris yang cocok dengan transaksi tetapi tidak ada yang perlu diisi. */
+    public int $tanpaPerubahan = 0;
+
+    /** @var string[] Mode Perbarui: rincian perubahan per baris ("Baris 5 (A-3 · Nama): Notaris ← X"). */
+    public array $perubahan = [];
 
     /** @var string[] */
     public array $errors = [];

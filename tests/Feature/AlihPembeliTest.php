@@ -40,7 +40,7 @@ class AlihPembeliTest extends TestCase
         $tipe = TipeUnitPreset::create(['project_id' => $this->project->id, 'nama' => '36/72', 'is_active' => true]);
         $this->unit = Kavling::create(['project_id' => $this->project->id, 'tipe_unit_preset_id' => $tipe->id, 'blok' => 'A1', 'nomor_kavling' => '1',
             'status_jual' => 'booked', 'harga' => 300000000, 'status_bangun_stage_id' => StatusBangunStage::defaultStage()->id]);
-        $this->a = Konsumen::create(['nama' => 'Anton', 'nik' => '3201000000000001', 'no_hp' => '0811111', 'status_pernikahan' => 'menikah', 'pekerjaan' => 'karyawan_swasta']);
+        $this->a = Konsumen::create(['nama' => 'Anton', 'nik' => '3201010101900001', 'no_hp' => '0811111', 'status_pernikahan' => 'menikah', 'pekerjaan' => 'karyawan_swasta']);
         $bank = BankRekananPreset::create(['nama' => 'BTN', 'is_active' => true]);
         $this->trx = KavlingKonsumen::create([
             'kavling_id' => $this->unit->id, 'konsumen_id' => $this->a->id, 'status' => 'active', 'status_penjualan' => 'sp3k', 'cara_bayar' => 'kpr_subsidi',
@@ -69,7 +69,7 @@ class AlihPembeliTest extends TestCase
     private function data(array $ubah = []): array
     {
         return array_replace_recursive([
-            'baru' => ['nama' => 'Budi', 'nik' => '3201000000000002', 'no_hp' => '0822222', 'status_pernikahan' => 'belum_menikah', 'pekerjaan' => 'wirausaha'],
+            'baru' => ['nama' => 'Budi', 'nik' => '3201010101900002', 'no_hp' => '0822222', 'status_pernikahan' => 'belum_menikah', 'pekerjaan' => 'wirausaha'],
             'hubungan' => 'saudara', 'alasan' => 'BI Checking pembeli awal tidak lolos',
         ], $ubah);
     }
@@ -101,7 +101,7 @@ class AlihPembeliTest extends TestCase
 
     public function test_pengajuan_memakai_konsumen_yang_sudah_terdaftar(): void
     {
-        $b = Konsumen::create(['nama' => 'Citra', 'nik' => '3201000000000009', 'no_hp' => '0833333']);
+        $b = Konsumen::create(['nama' => 'Citra', 'nik' => '3201010101900009', 'no_hp' => '0833333']);
 
         $this->actingAs($this->user('admin_sales'))->post(route('alih-pembeli.store', $this->trx), ['konsumen_baru_id' => $b->id, 'hubungan' => 'pasangan', 'alasan' => 'Dialihkan ke pasangan'])->assertSessionHas('success');
 
@@ -112,7 +112,7 @@ class AlihPembeliTest extends TestCase
     public function test_validasi_pembeli_baru_tidak_boleh_sama_dengan_pembeli_lama(): void
     {
         $this->ajukan(['baru' => ['no_hp' => '0811111']])->assertSessionHasErrors('baru.no_hp');
-        $this->ajukan(['baru' => ['nik' => '3201000000000001']])->assertSessionHasErrors('baru.nik');
+        $this->ajukan(['baru' => ['nik' => '3201010101900001']])->assertSessionHasErrors('baru.nik');
         $this->actingAs($this->user('admin_sales'))->post(route('alih-pembeli.store', $this->trx), ['konsumen_baru_id' => $this->a->id, 'hubungan' => 'saudara', 'alasan' => 'alasan cukup panjang'])->assertSessionHasErrors('konsumen_baru_id');
         $this->ajukan(['alasan' => 'pendek'])->assertSessionHasErrors('alasan');
         $this->ajukan(['hubungan' => 'teman'])->assertSessionHasErrors('hubungan');
@@ -127,7 +127,7 @@ class AlihPembeliTest extends TestCase
 
         $this->trx->update(['status_penjualan' => 'rencana_akad']);
         $this->ajukan()->assertSessionHas('success');
-        $this->ajukan(['baru' => ['nik' => '3201000000000099', 'no_hp' => '0899']])->assertStatus(422);    // sudah ada yang menunggu
+        $this->ajukan(['baru' => ['nik' => '3201010101900099', 'no_hp' => '0899']])->assertStatus(422);    // sudah ada yang menunggu
         $this->assertSame(1, CancellationRequest::where('type', 'buyer_transfer')->count());
     }
 
@@ -244,7 +244,7 @@ class AlihPembeliTest extends TestCase
 
     public function test_halaman_dokumen_menampilkan_tombol_hanya_bila_boleh_dan_pencarian_konsumen_bekerja(): void
     {
-        Konsumen::create(['nama' => 'Citra Dewi', 'nik' => '3201000000000009', 'no_hp' => '0833333']);
+        Konsumen::create(['nama' => 'Citra Dewi', 'nik' => '3201010101900009', 'no_hp' => '0833333']);
         $sales = $this->user('admin_sales');
 
         $this->actingAs($sales)->get(route('dokumen.index', $this->trx))->assertInertia(fn ($page) => $page->where('transaksi.can_alih_pembeli', true));
@@ -347,7 +347,7 @@ class AlihPembeliTest extends TestCase
 
     public function test_nik_yang_sudah_terdaftar_menyebut_pemiliknya_dan_mengarahkan_ke_tab_terdaftar(): void
     {
-        Konsumen::create(['nama' => 'Pemilik NIK', 'nik' => '3201000000000002', 'no_hp' => '0877']);
+        Konsumen::create(['nama' => 'Pemilik NIK', 'nik' => '3201010101900002', 'no_hp' => '0877']);
 
         $this->ajukan()->assertSessionHasErrors('baru.nik');
         $this->assertStringContainsString('Pemilik NIK', session('errors')->first('baru.nik'));

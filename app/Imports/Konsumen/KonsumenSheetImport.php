@@ -20,6 +20,7 @@ use App\Models\SalesAgent;
 use App\Models\SkemaDpPreset;
 use App\Models\SumberLead;
 use App\Support\KonsumenImportSpec;
+use App\Support\Nik;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -453,7 +454,8 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
         }
 
         $catatan = $str('catatan');
-        $nik = $str('nik');
+        $nik = Nik::bersihkan($str('nik'));
+        if ($pesanNik = Nik::periksa($nik)) $errors[] = $pesanNik;
 
         // Peralihan pembeli (opsional): baris ini hasil alih pembeli dari orang lain.
         [$alih, $alihErr] = ImportBantuan::bacaPeralihan($v, $tglBooking, null, $nik, $str('hp'), fn ($x) => $this->parseTanggal($x));
@@ -465,6 +467,7 @@ class KonsumenSheetImport implements ToCollection, SkipsEmptyRows
             $this->result->skip($this->sheetLabel, $rowNum, implode(' | ', array_unique($errors)));
             return;
         }
+        if ($pesanNik = Nik::peringatan($nik)) $this->result->warn($this->sheetLabel, $rowNum, $pesanNik);
 
         try {
             KavlingKonsumen::withoutFinanceRefresh(fn () => DB::transaction(function () use (

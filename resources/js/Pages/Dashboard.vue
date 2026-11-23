@@ -8,6 +8,7 @@ const props = defineProps({
     kavlingBangunBreakdown: Array,
     pipelineFunnel: Array,
     caraBayarBreakdown: Array,
+    domisili: { type: Object, default: () => ({ total: 0, terisi: 0, teratas: [] }) },
     financials: Object,
     piutangJatuhTempo: Object,
     bastTertunda: Array,
@@ -80,6 +81,7 @@ const statCards = [
 ];
 
 const pipelineMax = computed(() => Math.max(1, ...(props.pipelineFunnel ?? []).map(s => s.count)));
+const domisiliMaks = computed(() => Math.max(1, ...(props.domisili?.teratas ?? []).map((d) => d.total)));
 const caraBayarTotal = computed(() => (props.caraBayarBreakdown ?? []).reduce((sum, c) => sum + c.count, 0));
 const caraBayarColors = {
     cash: 'from-emerald-500 to-green-500',
@@ -444,6 +446,25 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                             <span class="text-slate-500">Konversi Booking→Akad: <span class="text-slate-200 font-semibold">{{ pipelineFunnelPeriodic?.conversion_booking_akad ?? 0 }}%</span></span>
                             <span class="text-slate-500">Booking→BAST: <span class="text-slate-200 font-semibold">{{ pipelineFunnelPeriodic?.conversion_booking_bast ?? 0 }}%</span></span>
                         </div>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                    <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+                        <h2 class="text-slate-200 font-semibold text-sm">📍 Asal Domisili Konsumen</h2>
+                        <span class="text-slate-500 text-[0.6875rem]">{{ domisili.terisi }} dari {{ domisili.total }} konsumen terisi</span>
+                    </div>
+                    <div class="p-5 space-y-3">
+                        <div v-for="d in domisili.teratas" :key="d.nama" class="flex items-center gap-3">
+                            <span class="text-slate-400 text-xs w-40 flex-shrink-0 truncate" :title="`${d.nama}, ${d.provinsi}`">{{ d.nama }}</span>
+                            <div class="flex-1 h-5 bg-slate-800 rounded-md overflow-hidden">
+                                <div class="h-full bg-gradient-to-r from-teal-600 to-emerald-500 rounded-md flex items-center justify-end px-2 transition-all duration-500" :style="`width: ${Math.max(6, (d.total / domisiliMaks) * 100)}%`">
+                                    <span class="text-white text-[0.625rem] font-semibold">{{ d.total }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-if="!domisili.teratas.length" class="text-center text-slate-500 text-xs py-4">Belum ada konsumen dengan wilayah terisi. Lengkapi lewat form Konsumen atau Import Konsumen → Perbarui.</div>
+                        <div v-else-if="domisili.total > domisili.terisi" class="pt-2 border-t border-slate-800 text-[0.6875rem] text-slate-500">{{ domisili.total - domisili.terisi }} konsumen belum diisi wilayahnya.</div>
                     </div>
                 </div>
 

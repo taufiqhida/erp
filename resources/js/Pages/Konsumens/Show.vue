@@ -358,7 +358,7 @@ onMounted(() => {
                             <h1 class="text-white text-xl font-bold">{{ konsumen.nama }}</h1>
                             <div class="flex items-center gap-3 mt-1 text-sm text-slate-400">
                                 <span v-if="konsumen.no_hp">📱 {{ konsumen.no_hp }}</span>
-                                <span v-if="konsumen.nik">🪪 {{ konsumen.nik }}</span>
+                                <span v-if="konsumen.nik">🪪 {{ konsumen.nik }}<span v-if="konsumen.nik_masalah" :title="konsumen.nik_masalah" class="ml-1.5 px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[0.625rem] font-medium align-middle">NIK belum valid</span></span>
                             </div>
                         </div>
                     </div>
@@ -379,9 +379,10 @@ onMounted(() => {
                         <div class="text-slate-500 text-xs">Jenis Pekerjaan</div>
                         <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.pekerjaan_label }}</div>
                     </div>
-                    <div v-if="konsumen.alamat">
+                    <div v-if="konsumen.alamat || konsumen.wilayah_ringkas">
                         <div class="text-slate-500 text-xs">Alamat</div>
-                        <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.alamat }}</div>
+                        <div v-if="konsumen.alamat" class="text-slate-200 text-sm mt-0.5">{{ konsumen.alamat }}</div>
+                        <div v-if="konsumen.wilayah_ringkas" class="text-slate-400 text-xs mt-0.5">{{ konsumen.wilayah_ringkas }}</div>
                     </div>
                     <div>
                         <div class="text-slate-500 text-xs">Total Transaksi</div>
@@ -544,6 +545,7 @@ onMounted(() => {
                             <div>
                                 <div class="text-slate-500 text-[0.6875rem]">NIK</div>
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.nik ?? '-' }}</div>
+                                <div v-if="konsumen.nik_masalah" class="text-amber-300 text-xs mt-0.5">{{ konsumen.nik_masalah }}</div>
                             </div>
                             <div>
                                 <div class="text-slate-500 text-[0.6875rem]">NPWP</div>
@@ -568,6 +570,7 @@ onMounted(() => {
                             <div>
                                 <div class="text-slate-500 text-[0.6875rem]">Alamat</div>
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.alamat ?? '-' }}</div>
+                                <div v-if="konsumen.wilayah_ringkas" class="text-slate-400 text-xs mt-0.5">{{ konsumen.wilayah_ringkas }}</div>
                             </div>
                             <div v-if="konsumen.catatan" class="col-span-2 sm:col-span-3">
                                 <div class="text-slate-500 text-[0.6875rem]">Catatan Sales</div>

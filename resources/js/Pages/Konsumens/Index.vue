@@ -17,12 +17,17 @@ const showLengkapi = ref(false);
 // upload. Butuh proyek aktif karena unit di-assign scoped per proyek.
 const showImport = ref(false);
 const importForm = useForm({ file: null, mode: 'cek' });
+// Dua mode: 'tambah' = konsumen baru (template lengkap); 'perbarui' = menyusulkan data kosong pada konsumen yang sudah ada (template ramping, tanpa kolom keuangan).
+const modeImport = ref('tambah');
+const bisaPerbarui = computed(() => page.props.auth.user?.permissions?.includes('edit konsumens'));
+const inputKey = ref(0);   // mengganti key supaya <input type=file> kosong lagi saat mode diganti
+const gantiMode = (m) => { modeImport.value = m; importForm.reset(); importForm.clearErrors(); sudahDicek.value = false; laporan.value = null; inputKey.value++; };
 // Alur aman: pilih file -> "Cek dulu" (simulasi, tidak menyimpan apa pun) -> baca laporan -> "Import sungguhan" untuk file yang SAMA.
 const sudahDicek = ref(false);
 const laporan = ref(null);   // laporan terakhir dari server: { mode: 'cek'|'import'|'ditolak', imported, importedBatal, skipped, errors[], warnings[] }
 const onImportFile = (e) => { importForm.file = e.target.files[0]; sudahDicek.value = false; laporan.value = null; };
 const kirimImport = (mode) => {
-    importForm.transform((d) => ({ ...d, mode })).post(route('konsumens.import', currentProject.value.id), {
+    importForm.transform((d) => ({ ...d, mode })).post(route(modeImport.value === 'perbarui' ? 'konsumens.perbarui' : 'konsumens.import', currentProject.value.id), {
         forceFormData: true,
         preserveScroll: true,
         onSuccess: (p) => {
@@ -32,7 +37,7 @@ const kirimImport = (mode) => {
         },
     });
 };
-const tutupImport = () => { showImport.value = false; sudahDicek.value = false; laporan.value = null; importForm.reset(); };
+const tutupImport = () => { showImport.value = false; sudahDicek.value = false; laporan.value = null; importForm.reset(); modeImport.value = 'tambah'; };
 const bisaImportSungguhan = computed(() => sudahDicek.value && !!importForm.file && ((laporan.value?.imported ?? 0) + (laporan.value?.importedBatal ?? 0)) > 0);
 const judulLaporan = computed(() => ({
     cek: 'SIMULASI — belum ada yang disimpan',
@@ -42,7 +47,11 @@ const judulLaporan = computed(() => ({
 const salinLaporan = async () => {
     const l = laporan.value;
     if (!l) return;
-    const teks = [judulLaporan.value, `Konsumen: ${l.imported}, batal: ${l.importedBatal}, dilewati: ${l.skipped}, peringatan: ${l.warnings.length}`,
+    const ringkas = l.perbarui
+        ? `Diperbarui: ${l.imported}, tanpa perubahan: ${l.tanpaPerubahan}, dilewati: ${l.skipped}, peringatan: ${l.warnings.length}`
+        : `Konsumen: ${l.imported}, batal: ${l.importedBatal}, dilewati: ${l.skipped}, peringatan: ${l.warnings.length}`;
+    const teks = [judulLaporan.value, ringkas,
+        ...((l.perubahan ?? []).length ? ['', 'PERUBAHAN:', ...l.perubahan] : []),
         ...(l.errors.length ? ['', 'DILEWATI / DITOLAK:', ...l.errors] : []), ...(l.warnings.length ? ['', 'PERINGATAN:', ...l.warnings] : [])].join('\n');
     try { await navigator.clipboard.writeText(teks); } catch { /* clipboard bisa diblokir; laporan tetap terlihat di layar */ }
 };
@@ -516,7 +525,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                 <div class="relative bg-slate-900 border border-slate-700 rounded-2xl w-full shadow-2xl max-h-[92vh] overflow-y-auto" :class="laporan ? 'max-w-2xl' : 'max-w-md'">
                     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
                         <div>
-                            <h3 class="text-white font-semibold">Import Konsumen</h3>
+                            <h3 class="text-white font-semibold">{{ modeImport === 'perbarui' ? 'Perbarui Data Konsumen' : 'Import Konsumen' }}</h3>
                             <p class="text-slate-400 text-xs mt-0.5">{{ currentProject?.nama }} — upload file Excel (.xlsx) sesuai format template</p>
                         </div>
                         <button @click="tutupImport" class="text-slate-500 hover:text-slate-300" aria-label="Tutup">
@@ -524,11 +533,21 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                         </button>
                     </div>
                     <div class="px-6 py-5 space-y-4">
-                        <a :href="route('konsumens.import-template', currentProject.id)"
-                            class="flex items-center justify-center gap-2 w-full py-2.5 bg-violet-600/15 hover:bg-violet-600/25 text-violet-300 text-sm font-medium rounded-lg transition-colors border border-violet-500/30">
-                            📄 Download Template Excel
+                        <div v-if="bisaPerbarui" class="grid grid-cols-2 gap-1 p-1 bg-slate-800 rounded-lg text-xs font-medium">
+                            <button type="button" @click="gantiMode('tambah')" class="py-2 rounded-md transition-colors" :class="modeImport === 'tambah' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'">➕ Tambah konsumen baru</button>
+                            <button type="button" @click="gantiMode('perbarui')" class="py-2 rounded-md transition-colors" :class="modeImport === 'perbarui' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-slate-200'">✏️ Perbarui yang sudah ada</button>
+                        </div>
+                        <a :href="route(modeImport === 'perbarui' ? 'konsumens.perbarui-template' : 'konsumens.import-template', currentProject.id)"
+                            class="flex items-center justify-center gap-2 w-full py-2.5 text-sm font-medium rounded-lg transition-colors border"
+                            :class="modeImport === 'perbarui' ? 'bg-teal-600/15 hover:bg-teal-600/25 text-teal-300 border-teal-500/30' : 'bg-violet-600/15 hover:bg-violet-600/25 text-violet-300 border-violet-500/30'">
+                            📄 {{ modeImport === 'perbarui' ? 'Download Template Perbarui' : 'Download Template Excel' }}
                         </a>
-                        <div class="bg-slate-800 rounded-xl p-4 text-xs space-y-1.5 text-slate-400">
+                        <div v-if="modeImport === 'perbarui'" class="bg-slate-800 rounded-xl p-4 text-xs space-y-1.5 text-slate-400">
+                            <div class="text-slate-300 font-medium">Menyusulkan data yang belum terisi</div>
+                            <p>Setiap baris dicocokkan ke transaksi lewat Kluster + Blok + Nomor Kavling, lalu diverifikasi dengan nama konsumen. <b>Hanya mengisi yang masih kosong</b> — data yang sudah ada tidak ditimpa (berbeda = peringatan). Tidak ada kolom keuangan, jadi harga dan pembayaran tidak bisa berubah.</p>
+                            <p class="pt-1 text-slate-500">Kolom: NIK, No. HP, Email, NPWP, Alamat, Wilayah (Provinsi sampai Kelurahan), Pekerjaan, Status Pernikahan, Sumber Lead, Sales/Agent, Notaris, Bank Rekanan. NIK kosong atau tidak valid boleh diganti NIK valid. Transaksi Selesai/terkunci dilewati.</p>
+                        </div>
+                        <div v-else class="bg-slate-800 rounded-xl p-4 text-xs space-y-1.5 text-slate-400">
                             <div class="text-slate-300 font-medium">Untuk konsumen proyek yang sudah berjalan</div>
                             <p>Template berisi 4 sheet (KPR Subsidi/KPR Komersil/Cash/Cash Bertahap) — pilih sheet sesuai cara bayar tiap konsumen — ditambah sheet <b>Batal</b> untuk konsumen yang sudah batal (riwayat &amp; uang hangus; khusus yang berhak mereview pembatalan). Baca sheet "Petunjuk" &amp; "Kamus Kolom" di dalam file untuk aturan lengkap dan strategi migrasi bertahap.</p>
                             <p class="pt-1 text-slate-500">Unit (Kluster+Blok+Nomor) harus sudah ada di Stok Kavling &amp; berstatus Tersedia. Baris dengan data tidak valid dilewati dengan pesan error yang jelas — baris lain tetap masuk.</p>
@@ -536,7 +555,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                         <p class="text-slate-500 text-xs">Alur aman: pilih file → <b class="text-slate-300">Cek dulu</b> (simulasi, tidak ada yang disimpan) → baca laporan → <b class="text-slate-300">Import sungguhan</b>.</p>
                         <div>
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">Pilih File Excel</label>
-                            <input type="file" accept=".xlsx,.xls" @change="onImportFile"
+                            <input :key="inputKey" type="file" accept=".xlsx,.xls" @change="onImportFile"
                                 class="block w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:bg-slate-700 file:text-slate-300 hover:file:bg-slate-600 cursor-pointer" />
                             <p v-if="importForm.errors.file" class="text-rose-400 text-xs mt-1">{{ importForm.errors.file }}</p>
                         </div>
@@ -548,10 +567,14 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                 <button type="button" @click="salinLaporan" class="text-violet-400 hover:text-violet-300">Salin laporan</button>
                             </div>
                             <div v-if="laporan.mode !== 'ditolak'" class="grid grid-cols-4 gap-2 text-center">
-                                <div class="bg-slate-800/70 rounded-lg py-2"><div class="text-slate-100 text-base font-semibold">{{ laporan.imported }}</div><div class="text-slate-500">{{ laporan.mode === 'cek' ? 'akan masuk' : 'masuk' }}</div></div>
-                                <div class="bg-slate-800/70 rounded-lg py-2"><div class="text-slate-100 text-base font-semibold">{{ laporan.importedBatal }}</div><div class="text-slate-500">batal</div></div>
+                                <div class="bg-slate-800/70 rounded-lg py-2"><div class="text-slate-100 text-base font-semibold">{{ laporan.imported }}</div><div class="text-slate-500">{{ laporan.perbarui ? (laporan.mode === 'cek' ? 'akan diperbarui' : 'diperbarui') : (laporan.mode === 'cek' ? 'akan masuk' : 'masuk') }}</div></div>
+                                <div class="bg-slate-800/70 rounded-lg py-2"><div class="text-slate-100 text-base font-semibold">{{ laporan.perbarui ? laporan.tanpaPerubahan : laporan.importedBatal }}</div><div class="text-slate-500">{{ laporan.perbarui ? 'tanpa perubahan' : 'batal' }}</div></div>
                                 <div class="bg-slate-800/70 rounded-lg py-2"><div class="text-base font-semibold" :class="laporan.skipped ? 'text-rose-300' : 'text-slate-100'">{{ laporan.skipped }}</div><div class="text-slate-500">dilewati</div></div>
                                 <div class="bg-slate-800/70 rounded-lg py-2"><div class="text-base font-semibold" :class="laporan.warnings.length ? 'text-amber-300' : 'text-slate-100'">{{ laporan.warnings.length }}</div><div class="text-slate-500">peringatan</div></div>
+                            </div>
+                            <div v-if="laporan.perubahan?.length">
+                                <div class="text-emerald-300 font-medium mb-1">Rincian perubahan ({{ laporan.perubahan.length }})</div>
+                                <ul class="max-h-44 overflow-y-auto space-y-1 text-slate-300 bg-slate-950/50 rounded-lg p-2"><li v-for="(c, i) in laporan.perubahan" :key="`c${i}`">{{ c }}</li></ul>
                             </div>
                             <div v-if="laporan.errors.length">
                                 <div class="text-rose-300 font-medium mb-1">{{ laporan.mode === 'ditolak' ? 'Masalah pada file' : 'Dilewati' }} ({{ laporan.errors.length }})</div>

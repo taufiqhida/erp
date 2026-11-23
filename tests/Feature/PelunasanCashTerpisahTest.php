@@ -69,7 +69,7 @@ class PelunasanCashTerpisahTest extends TestCase
         $unit = Kavling::create(['project_id' => $this->project->id, 'tipe_unit_preset_id' => $this->tipe->id, 'blok' => 'A1', 'nomor_kavling' => (string) $this->nomor,
             'status_jual' => 'available', 'harga' => 200000000, 'status_bangun_stage_id' => StatusBangunStage::defaultStage()->id]);
         $this->actingAs($this->user('admin_sales'))->post(route('bookings.store', $unit), array_merge([
-            'tanggal_booking' => now()->format('Y-m-d'), 'konsumen_nama' => 'Budi ' . $this->nomor, 'konsumen_no_hp' => '0812', 'konsumen_nik' => '32010000000000' . str_pad((string) $this->nomor, 2, '0', STR_PAD_LEFT),
+            'tanggal_booking' => now()->format('Y-m-d'), 'konsumen_nama' => 'Budi ' . $this->nomor, 'konsumen_no_hp' => '0812', 'konsumen_nik' => '32010101019000' . str_pad((string) $this->nomor, 2, '0', STR_PAD_LEFT),
             'konsumen_pekerjaan' => 'wirausaha', 'konsumen_status_pernikahan' => 'menikah', 'konsumen_sumber_lead_id' => $this->lead->id,
             'sales_agent_id' => $this->agen->id, 'cara_bayar' => $cara, 'cicilan_kali' => $cara === 'cash_bertahap' ? 3 : null,
             'skema_dp_preset_id' => ($skema ?? $this->skema())->id,

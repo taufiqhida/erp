@@ -13,6 +13,7 @@ use App\Models\Project;
 use App\Models\SalesAgent;
 use App\Models\SkemaDpPreset;
 use App\Support\KonsumenImportSpec;
+use App\Support\Nik;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -195,7 +196,8 @@ class KonsumenBatalSheetImport implements ToCollection, SkipsEmptyRows
             return;
         }
 
-        $nik = $str('nik');
+        $nik = Nik::bersihkan($str('nik'));
+        $pesanNik = Nik::periksa($nik);
         $alasan = $str('alasan') ?? 'Import data lama';
         $rincian = trim(implode(' | ', array_filter([$str('rincian'), ...$catatanTambahan]))) ?: null;
         $hangus = $total - $dikembalikan;
@@ -206,10 +208,11 @@ class KonsumenBatalSheetImport implements ToCollection, SkipsEmptyRows
         $tolak = $nama ? ImportBantuan::tolakNikNamaBeda($nama, $nik) : null;
         // Konsumen yang sama masih aktif di unit yang sama pada periode batal ini: kemungkinan salah sheet.
         $bertabrakan = $nama ? ImportBantuan::tolakBatalBertabrakan($nama, $nik, $kavling, $tglBatal) : null;
-        if ($alihErr || $tolak || $bertabrakan) {
-            $this->result->skip($this->sheetLabel, $rowNum, implode(' | ', array_unique(array_filter([...$alihErr, $tolak, $bertabrakan]))));
+        if ($pesanNik || $alihErr || $tolak || $bertabrakan) {
+            $this->result->skip($this->sheetLabel, $rowNum, implode(' | ', array_unique(array_filter([$pesanNik, ...$alihErr, $tolak, $bertabrakan]))));
             return;
         }
+        if ($peringatanNik = Nik::peringatan($nik)) $this->result->warn($this->sheetLabel, $rowNum, $peringatanNik);
 
         try {
             KavlingKonsumen::withoutFinanceRefresh(fn () => DB::transaction(function () use (

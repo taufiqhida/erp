@@ -55,7 +55,9 @@ class AlihPembeliController extends Controller
             // menentukan berkas kondisional yang berlaku). NPWP/email/alamat opsional. Sumber lead & sales mengikuti pembeli lama.
             'baru'                    => 'nullable|array',
             'baru.nama'               => 'required_without:konsumen_baru_id|nullable|string|max:100',
-            'baru.nik'                => 'required_without:konsumen_baru_id|nullable|string|max:20',
+            'baru.nik'                => ['required_without:konsumen_baru_id', 'nullable', 'string', 'max:20', function ($attribute, $value, $fail) {
+                if (filled($value) && ($pesan = \App\Support\Nik::periksa($value))) $fail($pesan);
+            }],
             'baru.no_hp'              => 'required_without:konsumen_baru_id|nullable|string|max:20',
             'baru.npwp'               => Konsumen::npwpRules(),
             'baru.email'              => 'nullable|email|max:100',
