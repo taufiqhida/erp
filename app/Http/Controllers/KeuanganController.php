@@ -1242,7 +1242,7 @@ class KeuanganController extends Controller
                 'nama'  => $pembayaran->transaksi->konsumen->nama,
                 'no_hp' => $pembayaran->transaksi->konsumen->no_hp,
                 'nik'   => $pembayaran->transaksi->konsumen->nik,
-                'alamat' => $pembayaran->transaksi->konsumen->alamat,
+                'alamat' => $pembayaran->transaksi->konsumen->alamat_lengkap,
             ],
             'kavling' => [
                 'nomor_lengkap' => $pembayaran->transaksi->kavling->nomor_lengkap,

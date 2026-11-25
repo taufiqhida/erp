@@ -973,7 +973,7 @@ class KavlingKonsumen extends Model
             'nik_konsumen'     => $this->konsumen->nik ?? '',
             'npwp_konsumen'    => $this->konsumen->npwp ?? '',
             'no_hp_konsumen'   => $this->konsumen->no_hp ?? '',
-            'alamat_konsumen'  => $this->konsumen->alamat ?? '',
+            'alamat_konsumen'  => $this->konsumen->alamat_lengkap ?? '',
             'nama_proyek'      => $this->kavling->project->nama,
             'nomor_kavling'    => $this->kavling->nomor_kavling,
             'blok_kavling'     => $this->kavling->nomor_unit,

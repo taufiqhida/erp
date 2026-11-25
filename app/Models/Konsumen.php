@@ -61,6 +61,24 @@ class Konsumen extends Model
         ];
     }
 
+    /**
+     * Alamat lengkap untuk surat & tampilan: "{teks bebas}, Kelurahan, Kecamatan, Kabupaten/Kota, Provinsi". Bagian wilayah yang sudah
+     * tertulis di teks bebas tidak diulang (konsumen lama yang alamat penuhnya sudah disalin ke teks bebas tidak jadi dobel). Null bila kosong.
+     */
+    public function getAlamatLengkapAttribute(): ?string
+    {
+        $teks = trim((string) $this->alamat);
+        $bagian = $teks !== '' ? [$teks] : [];
+        foreach ([$this->kelurahan_nama, $this->kecamatan_nama, $this->kabupaten_nama, $this->provinsi_nama] as $nama) {
+            if (blank($nama)) continue;
+            $inti = trim(preg_replace('/^(kabupaten|kota)\s+/iu', '', $nama));
+            if ($teks !== '' && $inti !== '' && mb_stripos($teks, $inti) !== false) continue;
+            $bagian[] = $nama;
+        }
+
+        return $bagian ? implode(', ', $bagian) : null;
+    }
+
     public static function statusPernikahanLabel(): array
     {
         return [

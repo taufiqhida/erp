@@ -143,4 +143,34 @@ class WilayahTest extends TestCase
                 ->where('domisili.teratas.1.nama', 'Kabupaten Bogor');
         });
     }
+
+    public function test_alamat_lengkap_menggabungkan_teks_bebas_dan_wilayah_tanpa_mengulang(): void
+    {
+        $w = \App\Support\Wilayah::atribut('32.73.01.1001');
+
+        $k = new Konsumen(['alamat' => 'Jl. Merdeka No. 1, RT 02/RW 03'] + $w);
+        $this->assertSame('Jl. Merdeka No. 1, RT 02/RW 03, Sukarasa, Sukasari, Kota Bandung, Jawa Barat', $k->alamat_lengkap);
+
+        // Alamat penuh lama sudah memuat sebagian wilayah: tidak diulang ("Bandung" cukup untuk "Kota Bandung").
+        $lama = new Konsumen(['alamat' => 'Jl. Merdeka 1, Sukarasa, Sukasari, Bandung'] + $w);
+        $this->assertSame('Jl. Merdeka 1, Sukarasa, Sukasari, Bandung, Jawa Barat', $lama->alamat_lengkap);
+
+        $this->assertSame('Sukarasa, Sukasari, Kota Bandung, Jawa Barat', (new Konsumen($w))->alamat_lengkap);
+        $this->assertSame('Jl. Mawar 5', (new Konsumen(['alamat' => ' Jl. Mawar 5 ']))->alamat_lengkap);
+        $this->assertNull((new Konsumen())->alamat_lengkap);
+    }
+
+    public function test_variabel_surat_alamat_konsumen_memakai_alamat_lengkap(): void
+    {
+        $project = Project::create(['nama' => 'Griya', 'kode' => 'G1', 'kota' => 'X', 'is_active' => true]);
+        $tipe = TipeUnitPreset::create(['project_id' => $project->id, 'nama' => '36/72', 'is_active' => true]);
+        $stage = StatusBangunStage::first() ?? StatusBangunStage::create(['nama' => 'Belum Mulai', 'bobot' => 100, 'urutan' => 1, 'warna' => 'slate', 'is_default' => true]);
+        $unit = Kavling::create(['project_id' => $project->id, 'tipe_unit_preset_id' => $tipe->id, 'status_bangun_stage_id' => $stage->id, 'blok' => 'A', 'nomor_kavling' => '1', 'harga' => 1, 'status_jual' => 'booked']);
+        $konsumen = Konsumen::create(['nama' => 'Budi', 'alamat' => 'Jl. Merdeka 1'] + \App\Support\Wilayah::atribut('32.73'));
+        $kk = KavlingKonsumen::create(['kavling_id' => $unit->id, 'konsumen_id' => $konsumen->id, 'status' => 'active', 'status_penjualan' => 'booking', 'cara_bayar' => 'cash',
+            'tanggal_booking' => '2026-03-01', 'harga_dasar' => 1, 'harga_deal' => 1]);
+
+        $this->assertSame('Jl. Merdeka 1, Kota Bandung, Jawa Barat', $kk->konsumen->alamat_lengkap);
+        $this->assertSame('Jl. Merdeka 1, Kota Bandung, Jawa Barat', $kk->suratPlaceholders()['alamat_konsumen']);
+    }
 }

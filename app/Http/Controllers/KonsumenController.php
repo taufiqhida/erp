@@ -572,6 +572,7 @@ class KonsumenController extends Controller
                 'nik'                     => $konsumen->nik,
                 'nik_masalah'             => filled($konsumen->nik) ? \App\Support\Nik::periksa($konsumen->nik) : null,
                 'wilayah_ringkas'         => \App\Support\Wilayah::ringkas($konsumen),
+                'alamat_lengkap'          => $konsumen->alamat_lengkap,
                 'npwp'                    => $konsumen->npwp,
                 'email'                   => $konsumen->email,
                 'alamat'                  => $konsumen->alamat,

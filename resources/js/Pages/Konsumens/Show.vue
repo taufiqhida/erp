@@ -379,10 +379,9 @@ onMounted(() => {
                         <div class="text-slate-500 text-xs">Jenis Pekerjaan</div>
                         <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.pekerjaan_label }}</div>
                     </div>
-                    <div v-if="konsumen.alamat || konsumen.wilayah_ringkas">
+                    <div v-if="konsumen.alamat_lengkap">
                         <div class="text-slate-500 text-xs">Alamat</div>
-                        <div v-if="konsumen.alamat" class="text-slate-200 text-sm mt-0.5">{{ konsumen.alamat }}</div>
-                        <div v-if="konsumen.wilayah_ringkas" class="text-slate-400 text-xs mt-0.5">{{ konsumen.wilayah_ringkas }}</div>
+                        <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.alamat_lengkap }}</div>
                     </div>
                     <div>
                         <div class="text-slate-500 text-xs">Total Transaksi</div>
@@ -569,8 +568,7 @@ onMounted(() => {
                             </div>
                             <div>
                                 <div class="text-slate-500 text-[0.6875rem]">Alamat</div>
-                                <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.alamat ?? '-' }}</div>
-                                <div v-if="konsumen.wilayah_ringkas" class="text-slate-400 text-xs mt-0.5">{{ konsumen.wilayah_ringkas }}</div>
+                                <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.alamat_lengkap ?? '-' }}</div>
                             </div>
                             <div v-if="konsumen.catatan" class="col-span-2 sm:col-span-3">
                                 <div class="text-slate-500 text-[0.6875rem]">Catatan Sales</div>
