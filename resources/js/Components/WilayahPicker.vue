@@ -1,7 +1,8 @@
 <script setup>
 // Pemilih wilayah bertingkat: Provinsi > Kabupaten/Kota > Kecamatan > Kelurahan/Desa. v-model = SATU kode tingkat terdalam yang dipilih
 // (mis. "32.73.01.1001"); server menurunkan rantai dan nama lengkapnya dari tabel wilayah. Kosong = belum dipilih.
-import { onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import SearchSelect from '@/Components/SearchSelect.vue';
 
 const props = defineProps({
     modelValue: { type: String, default: '' },
@@ -18,6 +19,9 @@ const TINGKAT = [
 
 const pilihan = reactive(['', '', '', '']);       // kode terpilih per tingkat
 const daftar = reactive([[], [], [], []]);        // opsi per tingkat
+// Item untuk kotak cari: ketik bagian mana pun dari nama (mis. "semarang" menemukan "Kota Semarang" dan "Kabupaten Semarang").
+const opsi = computed(() => daftar.map((l) => l.map((o) => ({ id: o.kode, nama: o.nama }))));
+const pilih = (i, v) => { pilihan[i] = v || ''; ubah(i); };
 const memuat = ref(false);
 const gagal = ref(false);
 const cache = new Map();
@@ -76,11 +80,8 @@ onMounted(() => muatDari(props.modelValue || ''));
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div v-for="(t, i) in TINGKAT" :key="t.kunci">
                 <label class="block text-slate-400 text-xs font-medium mb-1.5">{{ t.label }}</label>
-                <select v-model="pilihan[i]" @change="ubah(i)" :disabled="(i > 0 && !pilihan[i - 1]) || (memuat && !daftar[i].length)"
-                    class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-50">
-                    <option value="">{{ t.kosong }}</option>
-                    <option v-for="o in daftar[i]" :key="o.kode" :value="o.kode">{{ o.nama }}</option>
-                </select>
+                <SearchSelect :model-value="pilihan[i] || null" @update:model-value="(v) => pilih(i, v)" :items="opsi[i]" :search-keys="['nama']"
+                    :placeholder="t.kosong" :limit="500" :disabled="(i > 0 && !pilihan[i - 1]) || (memuat && !daftar[i].length)" />
             </div>
         </div>
         <p v-if="gagal" class="text-amber-400 text-xs mt-1.5">Daftar wilayah gagal dimuat. Muat ulang halaman, atau lewati dan isi alamat tertulis saja.</p>

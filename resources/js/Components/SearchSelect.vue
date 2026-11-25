@@ -11,6 +11,9 @@ const props = defineProps({
     placeholder: { type: String, default: '-- pilih --' },
     // Fungsi opsional untuk teks tambahan di sebelah kanan tiap opsi
     optionHint: { type: Function, default: null },
+    // Maksimal opsi yang ditampilkan sekaligus, dan penonaktifan (mis. pilihan bertingkat yang menunggu tingkat di atasnya)
+    limit: { type: Number, default: 50 },
+    disabled: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -29,10 +32,11 @@ const searchableText = (item) =>
 const filtered = computed(() => {
     const q = query.value.trim().toLowerCase();
     const list = !q ? props.items : props.items.filter(item => searchableText(item).includes(q));
-    return list.slice(0, 50);
+    return list.slice(0, props.limit);
 });
 
 const openDropdown = () => {
+    if (props.disabled) return;
     open.value = true;
     query.value = '';
     nextTick(() => inputEl.value?.focus());
@@ -57,8 +61,8 @@ const onBlur = () => {
 <template>
     <div class="relative">
         <!-- Tampilan terpilih (klik untuk buka pencarian) -->
-        <button v-if="!open" type="button" @click="openDropdown"
-            class="w-full flex items-center justify-between px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-left focus:outline-none focus:ring-1 focus:ring-violet-500">
+        <button v-if="!open" type="button" @click="openDropdown" :disabled="disabled"
+            class="w-full flex items-center justify-between px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-left focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-50 disabled:cursor-not-allowed">
             <span :class="selected ? 'text-slate-200' : 'text-slate-500'">
                 {{ selected ? selected[labelKey] : placeholder }}
             </span>
@@ -69,7 +73,7 @@ const onBlur = () => {
         </button>
 
         <!-- Search input (saat terbuka) -->
-        <input v-else ref="inputEl" v-model="query" @blur="onBlur" type="text"
+        <input v-else ref="inputEl" v-model="query" @blur="onBlur" @keydown.enter.prevent="filtered.length && pick(filtered[0])" @keydown.esc="open = false" type="text"
             placeholder="Ketik untuk mencari..."
             class="w-full px-3 py-2 bg-slate-800 border border-violet-500 rounded-lg text-slate-200 text-sm focus:outline-none" />
 
