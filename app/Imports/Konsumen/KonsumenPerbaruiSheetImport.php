@@ -21,24 +21,25 @@ use Maatwebsite\Excel\Concerns\SkipsEmptyRows;
 use Maatwebsite\Excel\Concerns\ToCollection;
 
 /**
- * Mode Perbarui: menyusulkan data yang BELUM terisi pada konsumen/transaksi yang sudah ada. Aturan:
- *  - Unit dicocokkan ke transaksi yang ada (aktif/selesai); Nama file harus mirip dengan konsumen di unit itu (verifikasi).
- *  - Hanya MENGISI yang masih kosong. Data yang sudah ada dan berbeda tidak ditimpa — jadi peringatan.
- *  - NIK yang kosong/tidak valid boleh diganti NIK valid; NIK valid tidak pernah diganti.
- *  - Transaksi Selesai/terkunci dilewati. Tidak ada kolom keuangan, jadi angka tidak mungkin berubah.
+ * Mode Perbarui: memperbarui data konsumen/transaksi yang SUDAH ada. Aturan:
+ *  - Unit dicocokkan ke transaksi yang ada; Nama file harus mirip dengan konsumen di unit itu (verifikasi).
+ *  - Sel kosong, kolom yang tidak ada, atau sel yang sama dengan data sekarang = TIDAK ada perubahan. Data tidak pernah dikosongkan.
+ *  - Data yang masih kosong diisi. Data yang sudah terisi hanya diganti bila opsi "Timpa" aktif; kalau tidak jadi peringatan.
+ *  - NIK valid tidak pernah diganti (kosong/tidak valid boleh); nama tidak bisa diubah; transaksi Selesai/terkunci dilewati.
+ *  - Tidak ada kolom keuangan, jadi angka tidak mungkin berubah.
  * Dijalankan di dalam satu transaksi database ("Cek dulu" membatalkannya), sama seperti Import Konsumen.
  */
 class KonsumenPerbaruiSheetImport implements ToCollection, SkipsEmptyRows
 {
     use ParsesImportCells;
 
-    private array $columns;
+    /** @var array<int,string> indeks kolom => key (dari baris judul) */
+    private array $peta = [];
     private bool $bolehPipeline;
     private bool $bolehBank;
 
-    public function __construct(private Project $project, private KonsumenImportResult $result)
+    public function __construct(private Project $project, private KonsumenImportResult $result, private bool $timpa = false)
     {
-        $this->columns = KonsumenPerbaruiSpec::columns();
         $user = Auth::user();
         $this->bolehPipeline = (bool) $user?->can('kelola pipeline sales');
         $this->bolehBank = (bool) $user?->can('isi bank rekanan kpr');
@@ -47,8 +48,11 @@ class KonsumenPerbaruiSheetImport implements ToCollection, SkipsEmptyRows
     public function collection(Collection $rows): void
     {
         foreach ($rows as $index => $row) {
-            if ($index === 0) continue;
             $cells = $row instanceof Collection ? $row->values()->all() : array_values((array) $row);
+            if (!$this->peta) {                       // baris pertama = judul
+                [$this->peta] = KonsumenPerbaruiSpec::bacaJudul($cells);
+                continue;
+            }
             if (collect($cells)->filter(fn ($c) => trim((string) $c) !== '')->isEmpty()) continue;
             $this->prosesBaris($index + 1, $cells);
         }
@@ -59,9 +63,14 @@ class KonsumenPerbaruiSheetImport implements ToCollection, SkipsEmptyRows
         return $nilai === null || trim((string) $nilai) === '';
     }
 
-    private function sama(mixed $a, mixed $b, bool $angkaSaja = false): bool
+    /** Bandingkan teks file dengan data sekarang secara longgar (huruf besar/kecil, spasi; angka saja untuk HP/NPWP). */
+    private function samaNilai(string $key, string $a, string $b): bool
     {
-        $f = fn ($x) => $angkaSaja ? preg_replace('/\D/', '', (string) $x) : mb_strtolower(trim((string) $x));
+        $f = match ($key) {
+            'hp', 'npwp' => fn ($x) => preg_replace('/\D/', '', $x),
+            'nik' => fn ($x) => (string) Nik::bersihkan($x),
+            default => fn ($x) => mb_strtolower(trim(preg_replace('/\s+/u', ' ', $x))),
+        };
 
         return $f($a) === $f($b);
     }
@@ -69,20 +78,25 @@ class KonsumenPerbaruiSheetImport implements ToCollection, SkipsEmptyRows
     private function prosesBaris(int $rowNum, array $cells): void
     {
         $sheet = KonsumenPerbaruiSpec::SHEET;
-        $mentah = [];
         $v = [];
-        foreach ($this->columns as $i => [$key]) {
+        $mentah = [];
+        foreach ($this->peta as $i => $key) {
+            if (in_array($key, KonsumenPerbaruiSpec::REFERENSI, true)) continue;
             $raw = $cells[$i] ?? null;
             $mentah[$key] = $raw;
-            $v[$key] = is_string($raw) ? trim($raw) : $raw;
+            $v[$key] = $this->kosong($raw) ? null : trim((string) $raw);
         }
-        $str = fn (string $k) => $v[$k] !== null && $v[$k] !== '' ? (string) $v[$k] : null;
+        // Excel membuang angka 0 di depan nomor HP yang diketik sebagai angka.
+        if (isset($v['hp']) && !is_string($mentah['hp'])) {
+            $v['hp'] = number_format((float) $mentah['hp'], 0, '', '');
+            if (str_starts_with($v['hp'], '8')) $v['hp'] = '0' . $v['hp'];
+        }
 
         $errors = [];
-        $nama = $str('nama');
-        $kluster = $str('kluster') ?? '';
-        $blok = $str('blok');
-        $unit = $str('unit');
+        $nama = $v['nama'] ?? null;
+        $kluster = $v['kluster'] ?? '';
+        $blok = $v['blok'] ?? null;
+        $unit = $v['unit'] ?? null;
         if (!$nama) $errors[] = 'Nama Konsumen kosong.';
         if (!$blok) $errors[] = 'Blok kosong.';
         if (!$unit) $errors[] = 'Nomor Kavling kosong.';
@@ -96,14 +110,12 @@ class KonsumenPerbaruiSheetImport implements ToCollection, SkipsEmptyRows
             if (!$kavling) {
                 $errors[] = "Unit '{$label}' tidak ditemukan di Stok Kavling proyek ini.";
             } else {
-                $trx = KavlingKonsumen::with(['konsumen', 'kavling'])->where('kavling_id', $kavling->id)
-                    ->whereIn('status', ['active', 'completed'])->orderByDesc('id')->first();
+                $trx = KavlingKonsumen::with(['konsumen.sumberLead', 'kavling', 'salesAgent', 'notarisPreset', 'bankRekananPreset'])
+                    ->where('kavling_id', $kavling->id)->whereIn('status', ['active', 'completed'])->orderByDesc('id')->first();
                 if (!$trx) $errors[] = "Unit '{$label}' belum punya transaksi aktif. Mode Perbarui hanya untuk konsumen yang sudah ada — pakai mode Tambah baru untuk konsumen baru.";
             }
         }
-        if ($trx && !$errors) {
-            if ($trx->status === 'completed' || $trx->is_locked) $errors[] = "Transaksi di unit '{$label}' sudah Selesai/terkunci, tidak diperbarui.";
-        }
+        if ($trx && !$errors && $trx->is_locked) $errors[] = "Transaksi di unit '{$label}' sudah Selesai/terkunci, tidak diperbarui.";
 
         $konsumen = $trx?->konsumen;
         if ($konsumen && $nama && !$errors) {
@@ -112,151 +124,173 @@ class KonsumenPerbaruiSheetImport implements ToCollection, SkipsEmptyRows
                 $errors[] = "Nama di file \"{$nama}\" berbeda dengan konsumen di unit '{$label}' (\"{$konsumen->nama}\"). Barisnya dilewati supaya data tidak masuk ke orang yang salah.";
             }
         }
-
-        // ── Baca & validasi nilai file ──
-        $nikFile = null;
-        if (!$this->kosong($mentah['nik'])) {
-            if (!is_string($mentah['nik'])) {
-                $errors[] = 'NIK terbaca sebagai angka oleh Excel (digitnya bisa terpotong). Ubah format kolom NIK jadi Teks lalu ketik ulang.';
-            } else {
-                $nikFile = Nik::bersihkan($mentah['nik']);
-                if ($pesan = Nik::periksa($nikFile)) $errors[] = $pesan;
-            }
-        }
-
-        $hp = $this->kosong($mentah['hp']) ? null : (is_string($mentah['hp']) ? trim($mentah['hp']) : number_format((float) $mentah['hp'], 0, '', ''));
-        if ($hp !== null && !is_string($mentah['hp']) && str_starts_with($hp, '8')) $hp = '0' . $hp;   // Excel membuang angka 0 di depan
-        $email = $str('email');
-        if ($email !== null && !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = "Email '{$email}' tidak valid.";
-        $npwp = $str('npwp');
-        if ($npwp !== null && !in_array(strlen(preg_replace('/\D/', '', $npwp)), [15, 16], true)) $errors[] = "NPWP '{$npwp}' harus 15 atau 16 digit.";
-        $alamat = $str('alamat');
-
-        $lookup = function (string $key, string $modelClass, string $nama, string $kolom = 'nama') use ($str, &$errors) {
-            $label = $str($key);
-            if (!$label) return null;
-            $m = $modelClass::whereRaw("LOWER({$kolom}) = ?", [mb_strtolower($label)])->first();
-            if (!$m) $errors[] = "{$nama} '{$label}' tidak dikenal.";
-
-            return $m;
-        };
-
-        $kerjaKey = null;
-        if ($l = $str('kerja')) {
-            $kerjaKey = KonsumenImportSpec::pekerjaanMap()[$l] ?? null;
-            if (!$kerjaKey) $errors[] = "Pekerjaan '{$l}' tidak dikenal.";
-        }
-        $nikahKey = null;
-        if ($l = $str('nikah')) {
-            $nikahKey = KonsumenImportSpec::statusPernikahanMap()[$l] ?? null;
-            if (!$nikahKey) $errors[] = "Status Pernikahan '{$l}' tidak dikenal.";
-        }
-        $lead = $lookup('lead', SumberLead::class, 'Sumber Lead');
-        $sales = $lookup('sales', SalesAgent::class, 'Sales/Agent');
-        $notaris = $lookup('notaris', NotarisPreset::class, 'Notaris');
-        $bank = $lookup('bank', BankRekananPreset::class, 'Bank Rekanan KPR');
-        $referral = $str('referral');
-
-        [$kodeWilayah, $errWilayah] = Wilayah::cocokkan($str('prov'), $str('kab'), $str('kec'), $str('kel'));
-        array_push($errors, ...$errWilayah);
-
         if ($errors || !$trx || !$konsumen) {
             $this->result->skip($sheet, $rowNum, implode(' ', $errors ?: ['Baris tidak bisa diproses.']));
 
             return;
         }
 
-        // ── Susun perubahan: hanya mengisi yang kosong ──
-        $rincian = [];
+        // ── Hanya sel terisi yang BERBEDA dari data sekarang yang dianggap permintaan perubahan ──
+        $kini = KonsumenPerbaruiSpec::nilaiSaatIni($trx);
+        $baru = [];
+        foreach ($v as $key => $nilai) {
+            if ($nilai === null || in_array($key, ['kluster', 'blok', 'unit', 'nama'], true)) continue;
+            if (!$this->samaNilai($key, $nilai, $kini[$key] ?? '')) $baru[$key] = $nilai;
+        }
+        if (!$baru) {
+            $this->result->tanpaPerubahan++;
+
+            return;
+        }
+
         $ubahKonsumen = [];
         $ubahTrx = [];
-        $warn = fn (string $pesan) => $this->result->warn($sheet, $rowNum, "{$label} ({$konsumen->nama}): {$pesan}");
+        $rincian = [];
+        $peringatan = [];
 
-        // NIK: kosong/tidak valid boleh diganti; yang valid tidak pernah diganti.
-        if ($nikFile !== null) {
-            if (Nik::valid($konsumen->nik)) {
-                if ($konsumen->nik !== $nikFile) $warn("NIK di file ({$nikFile}) berbeda dengan NIK tersimpan ({$konsumen->nik}) — tidak diganti.");
+        // Isi bila kosong; ganti hanya bila Timpa; selain itu peringatan.
+        $boleh = function (bool $lamaKosong, string $judul, string $lama, string $nilaiBaru) use (&$rincian, &$peringatan): bool {
+            if ($lamaKosong || $this->timpa) {
+                $rincian[] = "{$judul}: " . ($lama === '' ? '(kosong)' : $lama) . " → {$nilaiBaru}";
+
+                return true;
+            }
+            $peringatan[] = "{$judul} sudah terisi ('{$lama}'), berbeda dengan file ('{$nilaiBaru}') — tidak ditimpa.";
+
+            return false;
+        };
+
+        // ── NIK ──
+        if (isset($baru['nik'])) {
+            if (!is_string($mentah['nik'])) {
+                $errors[] = 'NIK terbaca sebagai angka oleh Excel (digitnya bisa terpotong). Ubah format kolom NIK jadi Teks lalu ketik ulang.';
             } else {
-                $dipakai = Konsumen::withTrashed()->where('nik', $nikFile)->where('id', '!=', $konsumen->id)->first();
-                if ($dipakai) {
-                    $this->result->skip($sheet, $rowNum, "{$label}: NIK {$nikFile} sudah dipakai konsumen lain (\"{$dipakai->nama}\", ID {$dipakai->id}). Barisnya dilewati.");
-
-                    return;
+                $nik = Nik::bersihkan($baru['nik']);
+                if ($pesan = Nik::periksa($nik)) {
+                    $errors[] = $pesan;
+                } elseif (Nik::valid($konsumen->nik)) {
+                    $peringatan[] = "NIK di file ({$nik}) berbeda dengan NIK tersimpan ({$konsumen->nik}) — tidak diganti. Koreksi lewat form konsumen.";
+                } elseif ($dipakai = Konsumen::withTrashed()->where('nik', $nik)->where('id', '!=', $konsumen->id)->first()) {
+                    $errors[] = "NIK {$nik} sudah dipakai konsumen lain (\"{$dipakai->nama}\", ID {$dipakai->id}).";
+                } else {
+                    $ubahKonsumen['nik'] = $nik;
+                    $rincian[] = 'NIK: ' . ($this->kosong($konsumen->nik) ? '(kosong)' : "'{$konsumen->nik}' (tidak valid)") . " → {$nik}";
+                    if ($p = Nik::peringatan($nik)) $peringatan[] = $p;
                 }
-                $ubahKonsumen['nik'] = $nikFile;
-                $rincian[] = 'NIK ' . ($this->kosong($konsumen->nik) ? '(kosong)' : "'{$konsumen->nik}' (tidak valid)") . " ← {$nikFile}";
-                if ($p = Nik::peringatan($nikFile)) $warn($p);
             }
         }
 
-        $isiKosong = function (string $kolom, string $labelKolom, mixed $baru, mixed $tampil = null, bool $angkaSaja = false) use ($konsumen, &$ubahKonsumen, &$rincian, $warn) {
-            if ($this->kosong($baru)) return;
-            $lama = $konsumen->{$kolom};
-            if ($this->kosong($lama)) {
-                $ubahKonsumen[$kolom] = $baru;
-                $rincian[] = "{$labelKolom} ← " . ($tampil ?? $baru);
-            } elseif (!$this->sama($lama, $baru, $angkaSaja)) {
-                $warn("{$labelKolom} sudah terisi ('{$lama}'), berbeda dengan file ('" . ($tampil ?? $baru) . "') — tidak ditimpa.");
-            }
+        // ── Teks sederhana & pilihan ──
+        $kolomKonsumen = ['hp' => ['no_hp', 'No. HP'], 'email' => ['email', 'Email'], 'npwp' => ['npwp', 'NPWP'], 'alamat' => ['alamat', 'Alamat KTP']];
+        if (isset($baru['email']) && !filter_var($baru['email'], FILTER_VALIDATE_EMAIL)) $errors[] = "Email '{$baru['email']}' tidak valid.";
+        if (isset($baru['npwp']) && !in_array(strlen(preg_replace('/\D/', '', $baru['npwp'])), [15, 16], true)) $errors[] = "NPWP '{$baru['npwp']}' harus 15 atau 16 digit.";
+        foreach ($kolomKonsumen as $key => [$kolom, $judul]) {
+            if (isset($baru[$key]) && $boleh($this->kosong($konsumen->{$kolom}), $judul, (string) $konsumen->{$kolom}, $baru[$key])) $ubahKonsumen[$kolom] = $baru[$key];
+        }
+
+        foreach (['kerja' => ['pekerjaan', 'Pekerjaan', KonsumenImportSpec::pekerjaanMap()], 'nikah' => ['status_pernikahan', 'Status Pernikahan', KonsumenImportSpec::statusPernikahanMap()]] as $key => [$kolom, $judul, $peta]) {
+            if (!isset($baru[$key])) continue;
+            $nilai = $peta[$baru[$key]] ?? null;
+            if (!$nilai) { $errors[] = "{$judul} '{$baru[$key]}' tidak dikenal."; continue; }
+            if ($boleh($this->kosong($konsumen->{$kolom}), $judul, $kini[$key], $baru[$key])) $ubahKonsumen[$kolom] = $nilai;
+        }
+
+        // ── Wilayah KTP & Domisili ──
+        $wilayah = function (string $awalanKolom, string $awalanFile, string $judul) use ($v, $baru, $konsumen, &$ubahKonsumen, &$errors, $boleh) {
+            $kunci = array_map(fn ($k) => $awalanFile . $k, ['prov', 'kab', 'kec', 'kel']);
+            if (!array_intersect($kunci, array_keys($baru))) return;
+
+            [$kode, $salah] = Wilayah::cocokkan(...array_map(fn ($k) => $v[$k] ?? null, $kunci));
+            if ($salah) { array_push($errors, ...$salah); return; }
+            if (!$kode) return;
+
+            $lama = Wilayah::kodeTerdalam($konsumen, $awalanKolom);
+            // Sama atau lebih dangkal dari yang tersimpan: tidak ada yang berubah (sel kosong tidak menghapus).
+            if ($lama !== null && ($lama === $kode || str_starts_with($lama, $kode . '.'))) return;
+
+            $atribut = Wilayah::atribut($kode, $awalanKolom);
+            $teksBaru = implode(', ', array_filter([$atribut[$awalanKolom . 'kelurahan_nama'], $atribut[$awalanKolom . 'kecamatan_nama'], $atribut[$awalanKolom . 'kabupaten_nama'], $atribut[$awalanKolom . 'provinsi_nama']]));
+            // Melengkapi tingkat yang lebih dalam di bawah wilayah tersimpan diperlakukan seperti mengisi yang kosong.
+            $melengkapi = $lama === null || str_starts_with($kode, $lama . '.');
+            if ($boleh($melengkapi, $judul, (string) Wilayah::ringkas($konsumen, $awalanKolom), $teksBaru)) $ubahKonsumen += $atribut;
         };
-        $isiKosong('no_hp', 'No. HP', $hp, null, true);
-        $isiKosong('email', 'Email', $email);
-        $isiKosong('npwp', 'NPWP', $npwp, null, true);
-        $isiKosong('alamat', 'Alamat', $alamat);
+        $wilayah('', '', 'Wilayah KTP');
 
-        // Wilayah: mengisi yang kosong, atau MELENGKAPI tingkat lebih dalam di bawah wilayah yang sudah tersimpan. Yang bertentangan tidak ditimpa.
-        if ($kodeWilayah) {
-            $lamaKode = Wilayah::kodeTerdalam($konsumen);
-            if ($lamaKode === null || (str_starts_with($kodeWilayah, $lamaKode . '.') && $kodeWilayah !== $lamaKode)) {
-                $atribut = Wilayah::atribut($kodeWilayah);
-                $ubahKonsumen += $atribut;
-                $rincian[] = 'Wilayah ← ' . implode(', ', array_filter([$atribut['kelurahan_nama'], $atribut['kecamatan_nama'], $atribut['kabupaten_nama'], $atribut['provinsi_nama']]));
-            } elseif ($kodeWilayah !== $lamaKode && !str_starts_with($lamaKode, $kodeWilayah . '.')) {
-                $warn('Wilayah sudah terisi (' . Wilayah::ringkas($konsumen) . '), berbeda dengan file — tidak ditimpa.');
+        $adaDomisili = array_intersect(['dom_sama', 'dom_alamat', 'dom_prov', 'dom_kab', 'dom_kec', 'dom_kel'], array_keys($baru));
+        if ($adaDomisili) {
+            $isianSama = mb_strtolower($v['dom_sama'] ?? '');
+            $isianLain = array_intersect(['dom_alamat', 'dom_prov', 'dom_kab', 'dom_kec', 'dom_kel'], array_keys($baru));
+            $statusLama = $konsumen->domisili_sama_ktp;
+
+            if ($isianSama !== '' && !in_array($isianSama, ['ya', 'tidak'], true)) {
+                $errors[] = "Domisili Sama KTP harus \"Ya\" atau \"Tidak\" (terisi '{$v['dom_sama']}').";
+            } elseif ($isianSama === 'ya' && $isianLain) {
+                $errors[] = 'Domisili Sama KTP = Ya, tetapi kolom domisili lain diisi. Ubah menjadi "Tidak" atau kosongkan kolom domisili lain.';
+            } elseif ($isianSama === 'ya') {
+                if ($boleh($statusLama === null, 'Domisili', $statusLama === null ? '' : 'berbeda dari KTP', 'sama dengan KTP')) $ubahKonsumen = array_merge($ubahKonsumen, Wilayah::domisili('sama'));
+            } else {
+                // Domisili berbeda dari KTP.
+                $lanjut = true;
+                if ($statusLama !== false) {
+                    $lanjut = $boleh($statusLama === null, 'Domisili', $statusLama === null ? '' : 'sama dengan KTP', 'berbeda dari KTP');
+                    if ($lanjut) $ubahKonsumen['domisili_sama_ktp'] = false;
+                }
+                if ($lanjut) {
+                    if (isset($baru['dom_alamat']) && $boleh($this->kosong($konsumen->domisili_alamat), 'Alamat Domisili', (string) $konsumen->domisili_alamat, $baru['dom_alamat'])) {
+                        $ubahKonsumen['domisili_alamat'] = $baru['dom_alamat'];
+                    }
+                    $wilayah('domisili_', 'dom_', 'Wilayah Domisili');
+                }
             }
         }
-        $isiKosong('pekerjaan', 'Pekerjaan', $kerjaKey, $str('kerja'));
-        $isiKosong('status_pernikahan', 'Status Pernikahan', $nikahKey, $str('nikah'));
 
-        if ($lead) {
-            if ($this->kosong($konsumen->sumber_lead_id)) {
-                if ($lead->is_referral && !$referral) {
-                    $this->result->skip($sheet, $rowNum, "{$label}: Keterangan Referral wajib diisi karena Sumber Lead '{$lead->nama}' bertanda referral.");
+        // ── Sumber lead ──
+        $cariNama = function (string $key, string $kelas, string $judul) use ($baru, &$errors) {
+            if (!isset($baru[$key])) return null;
+            $m = $kelas::whereRaw('LOWER(nama) = ?', [mb_strtolower($baru[$key])])->first();
+            if (!$m) $errors[] = "{$judul} '{$baru[$key]}' tidak dikenal.";
 
-                    return;
-                }
+            return $m;
+        };
+        $lead = $cariNama('lead', SumberLead::class, 'Sumber Lead');
+        $referral = $v['referral'] ?? null;
+        if ($lead && $boleh($this->kosong($konsumen->sumber_lead_id), 'Sumber Lead', $kini['lead'], $lead->nama)) {
+            if ($lead->is_referral && !$referral) {
+                $errors[] = "Keterangan Referral wajib diisi karena Sumber Lead '{$lead->nama}' bertanda referral.";
+            } else {
                 $ubahKonsumen['sumber_lead_id'] = $lead->id;
-                $rincian[] = "Sumber Lead ← {$lead->nama}";
-                if ($lead->is_referral) {
-                    $ubahKonsumen['referral_keterangan'] = $referral;
-                    $rincian[] = "Keterangan Referral ← {$referral}";
-                }
-            } elseif ((int) $konsumen->sumber_lead_id !== (int) $lead->id) {
-                $warn("Sumber Lead sudah terisi, berbeda dengan file ('{$lead->nama}') — tidak ditimpa.");
+                $ubahKonsumen['referral_keterangan'] = $lead->is_referral ? $referral : null;
+                if ($lead->is_referral) $rincian[] = "Keterangan Referral → {$referral}";
             }
-        }
-        if ($referral && !$lead && $konsumen->sumber_lead_id && $this->kosong($konsumen->referral_keterangan) && $konsumen->sumberLead?->is_referral) {
-            $ubahKonsumen['referral_keterangan'] = $referral;
-            $rincian[] = "Keterangan Referral ← {$referral}";
+        } elseif (!isset($baru['lead']) && isset($baru['referral']) && $konsumen->sumberLead?->is_referral) {
+            if ($boleh($this->kosong($konsumen->referral_keterangan), 'Keterangan Referral', (string) $konsumen->referral_keterangan, $baru['referral'])) {
+                $ubahKonsumen['referral_keterangan'] = $baru['referral'];
+            }
         }
 
-        $isiTrx = function (string $kolom, string $labelKolom, ?object $baru, bool $izin, string $namaIzin) use ($trx, &$ubahTrx, &$rincian, $warn) {
-            if (!$baru) return;
-            if (!$izin) { $warn("{$labelKolom} diabaikan: Anda tidak punya izin \"{$namaIzin}\"."); return; }
-            $lama = $trx->{$kolom};
-            if ($this->kosong($lama)) {
-                $ubahTrx[$kolom] = $baru->id;
-                $rincian[] = "{$labelKolom} ← {$baru->nama}";
-            } elseif ((int) $lama !== (int) $baru->id) {
-                $warn("{$labelKolom} sudah terisi, berbeda dengan file ('{$baru->nama}') — tidak ditimpa.");
-            }
+        // ── Data transaksi (perlu izin masing-masing) ──
+        $isiTrx = function (string $key, string $kolom, string $judul, string $kelas, bool $izin, string $namaIzin) use ($baru, $kini, $trx, $cariNama, &$ubahTrx, &$peringatan, $boleh) {
+            if (!isset($baru[$key])) return;
+            if (!$izin) { $peringatan[] = "{$judul} diabaikan: Anda tidak punya izin \"{$namaIzin}\"."; return; }
+            $m = $cariNama($key, $kelas, $judul);
+            if (!$m || (int) $trx->{$kolom} === (int) $m->id) return;
+            if ($boleh($this->kosong($trx->{$kolom}), $judul, $kini[$key], $m->nama)) $ubahTrx[$kolom] = $m->id;
         };
-        $isiTrx('sales_agent_id', 'Sales/Agent', $sales, $this->bolehPipeline, 'kelola pipeline sales');
-        $isiTrx('notaris_preset_id', 'Notaris', $notaris, $this->bolehPipeline, 'kelola pipeline sales');
-        if ($bank) {
-            if (!in_array($trx->cara_bayar, ['kpr_subsidi', 'kpr_komersil'], true)) $warn('Bank Rekanan KPR diabaikan: transaksi ini bukan KPR.');
-            else $isiTrx('bank_rekanan_preset_id', 'Bank Rekanan KPR', $bank, $this->bolehBank, 'isi bank rekanan kpr');
+        $isiTrx('sales', 'sales_agent_id', 'Sales/Agent', SalesAgent::class, $this->bolehPipeline, 'kelola pipeline sales');
+        $isiTrx('notaris', 'notaris_preset_id', 'Notaris', NotarisPreset::class, $this->bolehPipeline, 'kelola pipeline sales');
+        if (isset($baru['bank']) && !in_array($trx->cara_bayar, ['kpr_subsidi', 'kpr_komersil'], true)) {
+            $peringatan[] = 'Bank Rekanan KPR diabaikan: transaksi ini bukan KPR.';
+        } else {
+            $isiTrx('bank', 'bank_rekanan_preset_id', 'Bank Rekanan KPR', BankRekananPreset::class, $this->bolehBank, 'isi bank rekanan kpr');
         }
+
+        // Satu kesalahan melewatkan seluruh baris (tidak ada perubahan sebagian).
+        if ($errors) {
+            $this->result->skip($sheet, $rowNum, "{$label} ({$konsumen->nama}): " . implode(' ', array_unique($errors)));
+
+            return;
+        }
+        foreach ($peringatan as $p) $this->result->warn($sheet, $rowNum, "{$label} ({$konsumen->nama}): {$p}");
 
         if (!$ubahKonsumen && !$ubahTrx) {
             $this->result->tanpaPerubahan++;

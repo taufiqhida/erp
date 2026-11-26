@@ -122,4 +122,26 @@ class BookingKonsumenBaruTest extends TestCase
         $this->assertSame('Jawa Barat', $k->provinsi_nama);
         $this->assertSame('Kota Bandung', $k->kabupaten_nama);
     }
+
+    public function test_domisili_dari_form_booking(): void
+    {
+        $this->booking(['konsumen_alamat' => 'Jl. KTP 1', 'konsumen_domisili_sama' => true])->assertSessionHasNoErrors();
+        $k = Konsumen::firstOrFail();
+        $this->assertTrue($k->domisili_sama_ktp);
+        $this->assertSame('Jl. KTP 1', $k->alamat_domisili_lengkap);
+    }
+
+    public function test_domisili_berbeda_atau_belum_diisi_dari_form_booking(): void
+    {
+        $this->booking(['konsumen_domisili_sama' => false, 'konsumen_domisili_alamat' => 'Jl. Kos 2'])->assertSessionHasNoErrors();
+        $k = Konsumen::firstOrFail();
+        $this->assertFalse($k->domisili_sama_ktp);
+        $this->assertSame('Jl. Kos 2', $k->domisili_alamat);
+
+        // Centang dilepas tapi tidak diisi apa pun = belum diisi.
+        $metode = new \ReflectionMethod(\App\Http\Controllers\BookingController::class, 'statusDomisiliBooking');
+        $c = app(\App\Http\Controllers\BookingController::class);
+        $this->assertSame('belum', $metode->invoke($c, ['konsumen_domisili_sama' => false]));
+        $this->assertSame('belum', $metode->invoke($c, []));
+    }
 }

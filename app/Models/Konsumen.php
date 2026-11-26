@@ -23,6 +23,8 @@ class Konsumen extends Model
         'alamat',
         'provinsi_kode', 'provinsi_nama', 'kabupaten_kode', 'kabupaten_nama',
         'kecamatan_kode', 'kecamatan_nama', 'kelurahan_kode', 'kelurahan_nama',
+        'domisili_sama_ktp', 'domisili_alamat', 'domisili_provinsi_kode', 'domisili_provinsi_nama', 'domisili_kabupaten_kode', 'domisili_kabupaten_nama',
+        'domisili_kecamatan_kode', 'domisili_kecamatan_nama', 'domisili_kelurahan_kode', 'domisili_kelurahan_nama',
         'pekerjaan',
         'status_pernikahan',
         'sumber_lead_id',
@@ -61,22 +63,20 @@ class Konsumen extends Model
         ];
     }
 
-    /**
-     * Alamat lengkap untuk surat & tampilan: "{teks bebas}, Kelurahan, Kecamatan, Kabupaten/Kota, Provinsi". Bagian wilayah yang sudah
-     * tertulis di teks bebas tidak diulang (konsumen lama yang alamat penuhnya sudah disalin ke teks bebas tidak jadi dobel). Null bila kosong.
-     */
+    protected $casts = ['domisili_sama_ktp' => 'boolean'];
+
+    /** Alamat KTP lengkap untuk surat & tampilan (lihat App\Support\Alamat). Null bila kosong. */
     public function getAlamatLengkapAttribute(): ?string
     {
-        $teks = trim((string) $this->alamat);
-        $bagian = $teks !== '' ? [$teks] : [];
-        foreach ([$this->kelurahan_nama, $this->kecamatan_nama, $this->kabupaten_nama, $this->provinsi_nama] as $nama) {
-            if (blank($nama)) continue;
-            $inti = trim(preg_replace('/^(kabupaten|kota)\s+/iu', '', $nama));
-            if ($teks !== '' && $inti !== '' && mb_stripos($teks, $inti) !== false) continue;
-            $bagian[] = $nama;
-        }
+        return \App\Support\Alamat::rangkai($this->alamat, \App\Support\Wilayah::namaTersimpan($this));
+    }
 
-        return $bagian ? implode(', ', $bagian) : null;
+    /** Alamat domisili lengkap: sama dengan KTP bila ditandai sama; null bila belum diisi. */
+    public function getAlamatDomisiliLengkapAttribute(): ?string
+    {
+        if ($this->domisili_sama_ktp === true) return $this->alamat_lengkap;
+
+        return \App\Support\Alamat::rangkai($this->domisili_alamat, \App\Support\Wilayah::namaTersimpan($this, 'domisili_'));
     }
 
     public static function statusPernikahanLabel(): array

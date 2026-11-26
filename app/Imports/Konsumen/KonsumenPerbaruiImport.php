@@ -13,14 +13,14 @@ class KonsumenPerbaruiImport implements Import, WithMultipleSheets, SkipsUnknown
 {
     public KonsumenImportResult $result;
 
-    public function __construct(private Project $project)
+    public function __construct(private Project $project, private bool $timpa = false)
     {
         $this->result = new KonsumenImportResult();
     }
 
     public function sheets(): array
     {
-        return [KonsumenPerbaruiSpec::SHEET => new KonsumenPerbaruiSheetImport($this->project, $this->result)];
+        return [KonsumenPerbaruiSpec::SHEET => new KonsumenPerbaruiSheetImport($this->project, $this->result, $this->timpa)];
     }
 
     public function onUnknownSheet($sheetName): void

@@ -379,9 +379,11 @@ onMounted(() => {
                         <div class="text-slate-500 text-xs">Jenis Pekerjaan</div>
                         <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.pekerjaan_label }}</div>
                     </div>
-                    <div v-if="konsumen.alamat_lengkap">
-                        <div class="text-slate-500 text-xs">Alamat</div>
-                        <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.alamat_lengkap }}</div>
+                    <div v-if="konsumen.alamat_lengkap || konsumen.alamat_domisili_lengkap">
+                        <div class="text-slate-500 text-xs">Alamat KTP</div>
+                        <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.alamat_lengkap ?? '-' }}</div>
+                        <div class="text-slate-500 text-xs mt-2">Alamat Domisili</div>
+                        <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.domisili_status === 'sama' ? 'Sama dengan KTP' : (konsumen.alamat_domisili_lengkap ?? 'Belum diisi') }}</div>
                     </div>
                     <div>
                         <div class="text-slate-500 text-xs">Total Transaksi</div>
@@ -567,8 +569,10 @@ onMounted(() => {
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.sumber_lead_nama ?? '-' }}<span v-if="konsumen.referral_keterangan" class="text-slate-400"> — {{ konsumen.referral_keterangan }}</span></div>
                             </div>
                             <div>
-                                <div class="text-slate-500 text-[0.6875rem]">Alamat</div>
+                                <div class="text-slate-500 text-[0.6875rem]">Alamat KTP</div>
                                 <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.alamat_lengkap ?? '-' }}</div>
+                                <div class="text-slate-500 text-[0.6875rem] mt-2">Alamat Domisili</div>
+                                <div class="text-slate-200 text-sm mt-0.5">{{ konsumen.domisili_status === 'sama' ? 'Sama dengan KTP' : (konsumen.alamat_domisili_lengkap ?? 'Belum diisi') }}</div>
                             </div>
                             <div v-if="konsumen.catatan" class="col-span-2 sm:col-span-3">
                                 <div class="text-slate-500 text-[0.6875rem]">Catatan Sales</div>

@@ -16,6 +16,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Spatie\Activitylog\Models\Activity;
@@ -93,16 +94,20 @@ class DashboardController extends Controller
         ]);
 
         // ── Asal domisili konsumen (kabupaten/kota) — konsumen dari transaksi aktif yang terlihat oleh pengguna ──
+        // Domisili efektif: wilayah KTP bila ditandai sama, wilayah domisili bila berbeda; selain itu "belum diisi".
         $konsumenAktif = \App\Models\Konsumen::query()->whereIn('id', $activeBase()->select('kavling_konsumen.konsumen_id'));
-        $domisiliTotal = (clone $konsumenAktif)->count();
-        $domisiliTerisi = (clone $konsumenAktif)->whereNotNull('kabupaten_kode')->count();
+        $efektif = (clone $konsumenAktif)->selectRaw(
+            'case when domisili_sama_ktp = 1 then kabupaten_kode else domisili_kabupaten_kode end as kode,'
+            . ' case when domisili_sama_ktp = 1 then kabupaten_nama else domisili_kabupaten_nama end as nama,'
+            . ' case when domisili_sama_ktp = 1 then provinsi_nama else domisili_provinsi_nama end as provinsi'
+        );
+        $perKabupaten = DB::query()->fromSub($efektif, 'd')->whereNotNull('kode')
+            ->selectRaw('kode, max(nama) as nama, max(provinsi) as provinsi, count(*) as total')
+            ->groupBy('kode')->orderByDesc('total')->orderBy('nama')->get();
         $domisili = [
-            'total'  => $domisiliTotal,
-            'terisi' => $domisiliTerisi,
-            'teratas' => (clone $konsumenAktif)->whereNotNull('kabupaten_kode')
-                ->selectRaw('kabupaten_kode, max(kabupaten_nama) as nama, max(provinsi_nama) as provinsi, count(*) as total')
-                ->groupBy('kabupaten_kode')->orderByDesc('total')->orderBy('nama')->limit(8)->get()
-                ->map(fn ($r) => ['nama' => $r->nama, 'provinsi' => $r->provinsi, 'total' => (int) $r->total])->values(),
+            'total'  => (clone $konsumenAktif)->count(),
+            'terisi' => (int) $perKabupaten->sum('total'),
+            'teratas' => $perKabupaten->take(8)->map(fn ($r) => ['nama' => $r->nama, 'provinsi' => $r->provinsi, 'total' => (int) $r->total])->values(),
         ];
 
         // ── Cara bayar breakdown ──────────────────────────────────────────

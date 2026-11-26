@@ -167,6 +167,15 @@ class BookingController extends Controller
         ]);
     }
 
+    /** Centang "Domisili sama dengan KTP" di form booking. Tidak dicentang tanpa isian domisili apa pun = belum diisi. */
+    private function statusDomisiliBooking(array $v): string
+    {
+        if (!array_key_exists('konsumen_domisili_sama', $v)) return 'belum';
+        if (filter_var($v['konsumen_domisili_sama'], FILTER_VALIDATE_BOOLEAN)) return 'sama';
+
+        return blank($v['konsumen_domisili_alamat'] ?? null) && blank($v['konsumen_domisili_wilayah_kode'] ?? null) ? 'belum' : 'beda';
+    }
+
     /**
      * Proses booking kavling
      */
@@ -202,6 +211,9 @@ class BookingController extends Controller
             }],
             'konsumen_alamat'     => 'nullable|string|max:500',
             'konsumen_wilayah_kode' => \App\Support\Wilayah::aturan(),
+            'konsumen_domisili_sama'    => 'nullable|boolean',
+            'konsumen_domisili_alamat'  => 'nullable|string|max:500',
+            'konsumen_domisili_wilayah_kode' => \App\Support\Wilayah::aturan(),
             'konsumen_npwp'       => Konsumen::npwpRules(),
             'konsumen_email'      => 'nullable|email|max:100',
             'konsumen_pekerjaan'         => 'nullable|required_without:konsumen_id|in:' . implode(',', array_keys(Konsumen::jenisPekerjaanLabel())),
@@ -306,6 +318,7 @@ class BookingController extends Controller
                     'email' => $validated['konsumen_email'] ?? null,
                     'alamat' => $validated['konsumen_alamat'] ?? null,
                     ...\App\Support\Wilayah::atribut($validated['konsumen_wilayah_kode'] ?? null),
+                    ...\App\Support\Wilayah::domisili($this->statusDomisiliBooking($validated), $validated['konsumen_domisili_alamat'] ?? null, $validated['konsumen_domisili_wilayah_kode'] ?? null),
                     'pekerjaan'         => $validated['konsumen_pekerjaan'] ?? null,
                     'status_pernikahan' => $validated['konsumen_status_pernikahan'] ?? null,
                     'sumber_lead_id'    => $validated['konsumen_sumber_lead_id'] ?? null,

@@ -573,6 +573,8 @@ class KonsumenController extends Controller
                 'nik_masalah'             => filled($konsumen->nik) ? \App\Support\Nik::periksa($konsumen->nik) : null,
                 'wilayah_ringkas'         => \App\Support\Wilayah::ringkas($konsumen),
                 'alamat_lengkap'          => $konsumen->alamat_lengkap,
+                'domisili_status'         => \App\Support\Wilayah::statusDomisili($konsumen),
+                'alamat_domisili_lengkap' => $konsumen->alamat_domisili_lengkap,
                 'npwp'                    => $konsumen->npwp,
                 'email'                   => $konsumen->email,
                 'alamat'                  => $konsumen->alamat,
@@ -708,6 +710,9 @@ class KonsumenController extends Controller
                 'email'             => $konsumen->email,
                 'alamat'            => $konsumen->alamat,
                 'wilayah_kode'      => \App\Support\Wilayah::kodeTerdalam($konsumen),
+                'domisili_status'   => \App\Support\Wilayah::statusDomisili($konsumen),
+                'domisili_alamat'   => $konsumen->domisili_alamat,
+                'domisili_wilayah_kode' => \App\Support\Wilayah::kodeTerdalam($konsumen, 'domisili_'),
                 'pekerjaan'         => $konsumen->pekerjaan,
                 'status_pernikahan' => $konsumen->status_pernikahan,
                 'sumber_lead_id'    => $konsumen->sumber_lead_id,
@@ -737,6 +742,9 @@ class KonsumenController extends Controller
             'email'             => 'nullable|email|max:100',
             'alamat'            => 'nullable|string',
             'wilayah_kode'      => \App\Support\Wilayah::aturan(),
+            'domisili_status'   => 'nullable|in:belum,sama,beda',
+            'domisili_alamat'   => 'nullable|string',
+            'domisili_wilayah_kode' => \App\Support\Wilayah::aturan(),
             'pekerjaan'         => 'nullable|in:' . implode(',', array_keys(Konsumen::jenisPekerjaanLabel())),
             'status_pernikahan' => 'nullable|in:' . implode(',', array_keys(Konsumen::statusPernikahanLabel())),
             'sumber_lead_id'    => 'nullable|exists:sumber_leads,id',
@@ -754,7 +762,12 @@ class KonsumenController extends Controller
 
         // Wilayah: satu kode dari klien -> rantai kode & nama dari tabel wilayah. Kosong = menghapus wilayah.
         if ($request->has('wilayah_kode')) $validated += \App\Support\Wilayah::atribut($validated['wilayah_kode'] ?? null);
-        unset($validated['wilayah_kode']);
+        if ($request->has('domisili_status')) {
+            $validated = array_merge($validated, \App\Support\Wilayah::domisili($validated['domisili_status'] ?? null, $validated['domisili_alamat'] ?? null, $validated['domisili_wilayah_kode'] ?? null));
+        } else {
+            unset($validated['domisili_alamat']);
+        }
+        unset($validated['wilayah_kode'], $validated['domisili_status'], $validated['domisili_wilayah_kode']);
 
         $konsumen->update($validated);
 
@@ -1072,14 +1085,81 @@ class KonsumenController extends Controller
         return back()->with($result->skipped || $result->warnings ? 'warning' : 'success', $msg . '.')->with('importLaporan', $laporan)->with($catatan ? ['importErrors' => $catatan] : []);
     }
 
-    /** Template ramping mode Perbarui: hanya kunci unit + verifikasi + kolom data yang aman diisi (tanpa kolom keuangan). */
-    public function downloadPerbaruiTemplate(Project $project)
+    /**
+     * Unduhan mode Perbarui: berisi pengenal unit + kolom kelompok yang dipilih, sudah terisi data SAAT INI. Opsi: hanya baris yang masih
+     * kosong pada kelompok itu, dan "saran perapian" alamat (alamat asli ditaruh di kolom referensi). Tanpa kolom keuangan.
+     */
+    public function downloadPerbaruiTemplate(Request $request, Project $project)
     {
         $this->authorizeProjectAccess($project);
         abort_unless(Auth::user()->can('edit konsumens'), 403);
 
+        $pilihan = $request->validate([
+            'kelompok'   => 'required|array|min:1',
+            'kelompok.*' => ['string', Rule::in(array_keys(KonsumenPerbaruiSpec::KELOMPOK))],
+            'baris'      => 'nullable|in:semua,kosong',
+            'saran'      => 'nullable|boolean',
+        ]);
+        $kelompok = array_values(array_unique($pilihan['kelompok']));
+        $hanyaKosong = ($pilihan['baris'] ?? 'semua') === 'kosong';
+        $saran = !empty($pilihan['saran']) && in_array('ktp', $kelompok, true);
+
+        $transaksi = KavlingKonsumen::with(['konsumen.sumberLead', 'kavling', 'salesAgent', 'notarisPreset', 'bankRekananPreset'])
+            ->where('status', 'active')
+            ->whereHas('konsumen')
+            ->whereHas('kavling', fn ($q) => $q->where('project_id', $project->id))
+            ->get()
+            ->when($hanyaKosong, fn ($c) => $c->filter(fn ($t) => KonsumenPerbaruiSpec::adaYangKosong($t, $kelompok)))
+            ->sort(fn ($a, $b) => strnatcasecmp(
+                "{$a->kavling->kluster}|{$a->kavling->blok}|{$a->kavling->nomor_kavling}",
+                "{$b->kavling->kluster}|{$b->kavling->blok}|{$b->kavling->nomor_kavling}"
+            ))
+            ->values();
+
+        $kunci = KonsumenPerbaruiSpec::kunciKolom($kelompok, $saran);
+        $definisi = KonsumenPerbaruiSpec::definisi();
+        $penyaran = $saran ? new \App\Support\SaranAlamat() : null;
+
         $ss = new Spreadsheet();
         $ss->removeSheetByIndex(0);
+
+        $sheet = $ss->createSheet();
+        $sheet->setTitle(KonsumenPerbaruiSpec::SHEET);
+        foreach ($kunci as $i => $key) {
+            [$label, $req] = $definisi[$key];
+            $sheet->setCellValue([$i + 1, 1], $label . ($req === 'w' ? ' *' : ''));
+            $sheet->getColumnDimensionByColumn($i + 1)->setWidth(in_array($key, ['alamat', 'dom_alamat', 'ref_alamat'], true) ? 48 : 22);
+        }
+
+        foreach ($transaksi as $n => $trx) {
+            $nilai = KonsumenPerbaruiSpec::nilaiSaatIni($trx);
+            if ($penyaran && trim($nilai['alamat']) !== '') {
+                $nilai['ref_alamat'] = $nilai['alamat'];
+                if (blank($trx->konsumen->provinsi_kode)) {
+                    $s = $penyaran->sarankan($nilai['alamat']);
+                    $nilai['ref_keyakinan'] = $s['keyakinan'];
+                    if ($s['kode']) {
+                        $nilai['alamat'] = $s['jalan'] ?? $nilai['alamat'];
+                        foreach (['prov', 'kab', 'kec', 'kel'] as $k) $nilai[$k] = (string) $s[$k];
+                    }
+                } else {
+                    $nilai['ref_keyakinan'] = 'wilayah sudah terisi — tidak disarankan';
+                }
+            }
+            foreach ($kunci as $i => $key) {
+                // Selalu sebagai TEKS: digit NIK/HP tidak terpotong dan isian yang diawali "=" tidak dianggap rumus.
+                $sheet->setCellValueExplicit([$i + 1, $n + 2], $nilai[$key] ?? '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            }
+        }
+
+        $last = Coordinate::stringFromColumnIndex(count($kunci));
+        $sheet->getStyle("A1:{$last}1")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $sheet->getStyle("A1:{$last}1")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('0F766E');
+        $sheet->getStyle("A1:{$last}1")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_CENTER);
+        $sheet->getRowDimension(1)->setRowHeight(36);
+        $sheet->freezePane('E2');
+
+        $barisAkhir = max(300, $transaksi->count() + 50);
 
         $daftar = $ss->createSheet();
         $daftar->setTitle('Daftar');
@@ -1087,7 +1167,7 @@ class KonsumenController extends Controller
         $col = 1;
         foreach (KonsumenPerbaruiSpec::lists() as $name => $items) {
             $daftar->setCellValue([$col, 1], $name);
-            foreach ($items as $i => $val) $daftar->setCellValue([$col, $i + 2], $val);
+            foreach ($items as $i => $val) $daftar->setCellValueExplicit([$col, $i + 2], $val, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
             $L = Coordinate::stringFromColumnIndex($col);
             $listRef[$name] = count($items) ? "=Daftar!\${$L}\$2:\${$L}$" . (count($items) + 1) : null;
             $daftar->getColumnDimensionByColumn($col)->setWidth(24);
@@ -1095,57 +1175,41 @@ class KonsumenController extends Controller
         }
         $daftar->getStyle('A1:' . Coordinate::stringFromColumnIndex($col - 1) . '1')->getFont()->setBold(true);
 
-        $cols = KonsumenPerbaruiSpec::columns();
-        $sheet = $ss->createSheet();
-        $sheet->setTitle(KonsumenPerbaruiSpec::SHEET);
-        foreach ($cols as $i => [$key, $label, $req]) {
-            $sheet->setCellValue([$i + 1, 1], $label . ($req === 'w' ? ' *' : ''));
-            $sheet->getColumnDimensionByColumn($i + 1)->setWidth(22);
-        }
-        $last = Coordinate::stringFromColumnIndex(count($cols));
-        $sheet->getStyle("A1:{$last}1")->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
-        $sheet->getStyle("A1:{$last}1")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('0F766E');
-        $sheet->getStyle("A1:{$last}1")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_CENTER);
-        $sheet->getRowDimension(1)->setRowHeight(36);
-        $sheet->freezePane('E2');
-
-        foreach ($cols as $i => [$key]) {
+        foreach ($kunci as $i => $key) {
             $L = Coordinate::stringFromColumnIndex($i + 1);
-            // NIK, HP, NPWP berformat Teks supaya Excel tidak memotong digit atau membuang angka 0 di depan.
             if (in_array($key, ['nik', 'hp', 'npwp'], true)) {
-                $sheet->getStyle("{$L}2:{$L}500")->getNumberFormat()->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_TEXT);
+                $sheet->getStyle("{$L}2:{$L}{$barisAkhir}")->getNumberFormat()->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_TEXT);
             }
             $listName = KonsumenPerbaruiSpec::dropdownListFor($key);
             if (!$listName || empty($listRef[$listName])) continue;
-            for ($r = 2; $r <= 500; $r++) {
-                $v = $sheet->getCell("{$L}{$r}")->getDataValidation();
-                $v->setType(DataValidation::TYPE_LIST)->setErrorStyle(DataValidation::STYLE_STOP);
-                $v->setAllowBlank(true)->setShowDropDown(true)->setShowErrorMessage(true);
-                $v->setErrorTitle('Pilihan tidak dikenal')->setError('Pilih salah satu dari daftar.');
-                $v->setFormula1($listRef[$listName]);
-            }
+            $v = $sheet->getCell("{$L}2")->getDataValidation();
+            $v->setType(DataValidation::TYPE_LIST)->setErrorStyle(DataValidation::STYLE_STOP);
+            $v->setAllowBlank(true)->setShowDropDown(true)->setShowErrorMessage(true);
+            $v->setErrorTitle('Pilihan tidak dikenal')->setError('Pilih salah satu dari daftar.');
+            $v->setFormula1($listRef[$listName]);
+            $v->setSqref("{$L}2:{$L}{$barisAkhir}");
         }
 
         $p = $ss->createSheet();
         $p->setTitle('Petunjuk');
         $baris = [
-            ['Template Perbarui Data Konsumen — ' . $project->nama, ''],
-            ['', ''],
-            ['Untuk apa', 'Menyusulkan data yang BELUM terisi pada konsumen/transaksi yang SUDAH ada (mis. notaris, sales, NIK, alamat). Bukan untuk konsumen baru: pakai template Import Konsumen biasa.'],
-            ['Cara kerja', 'Setiap baris dicocokkan ke transaksi lewat Kluster + Blok + Nomor Kavling. Nama Konsumen dipakai untuk memverifikasi: kalau tidak mirip dengan konsumen di unit itu, baris dilewati.'],
-            ['Aturan isi', 'HANYA mengisi yang masih kosong. Data yang sudah ada tidak pernah ditimpa; kalau berbeda dari file, muncul sebagai peringatan. Kecuali NIK: NIK kosong atau tidak valid boleh diganti NIK valid.'],
-            ['Kolom keuangan', 'Tidak ada. Harga, DP, cicilan, dan pembayaran tidak bisa diubah lewat template ini.'],
-            ['Dilewati', 'Transaksi yang sudah Selesai/terkunci, dan unit tanpa transaksi aktif.'],
-            ['Kolom kosong', 'Biarkan kosong untuk kolom yang tidak ingin diisi. Tidak perlu mengisi semua kolom.'],
-            ['Format Teks', 'Kolom NIK, No. HP, dan NPWP sudah diformat Teks. Jangan ubah, supaya digitnya tidak terpotong.'],
-            ['Alur aman', 'Pilih mode Perbarui → pilih file → Cek dulu (tidak ada yang disimpan) → baca rincian perubahan → Import sungguhan.'],
+            ['Perbarui Data Konsumen — ' . $project->nama, ''],
+            ['Isi file', $transaksi->count() . ' transaksi aktif' . ($hanyaKosong ? ' yang datanya masih kosong' : '') . '. Sel sudah berisi data saat file diunduh.'],
+            ['Cara kerja', 'Setiap baris dicocokkan lewat Kluster + Blok + Nomor Kavling, lalu Nama Konsumen diverifikasi.'],
+            ['Tidak berubah', 'Sel kosong, sel yang tidak Anda ubah, dan kolom yang dihapus tidak mengubah apa pun. Data tidak pernah dikosongkan lewat import.'],
+            ['Mengisi', 'Data yang masih kosong di sistem langsung diisi.'],
+            ['Mengganti', 'Data yang SUDAH terisi hanya diganti bila saat mengunggah Anda mencentang "Timpa data terisi" (khusus SPV/Leader/Superadmin). Kalau tidak, muncul peringatan.'],
+            ['Tidak bisa diubah', 'Nama konsumen dan NIK yang sudah valid (koreksi lewat form). Tidak ada kolom keuangan.'],
+            ['Perhatian', 'Kalau data diubah di aplikasi SETELAH file diunduh, mengunggah file lama dengan opsi Timpa bisa mengembalikan nilai lama. Unduh ulang bila ragu, dan baca "Cek dulu".'],
+            ['Alur aman', 'Pilih file → Cek dulu (tidak ada yang disimpan) → baca rincian "lama → baru" → Import sungguhan.'],
         ];
+        if ($saran) $baris[] = ['Saran alamat', 'Kolom Alamat KTP dan wilayah berisi SARAN hasil tebakan dari alamat asli (lihat kolom referensi di ujung). PERIKSA setiap baris. Untuk mengganti alamat lama, centang "Timpa data terisi".'];
         foreach ($baris as $i => [$a, $b]) { $p->setCellValue('A' . ($i + 1), $a); $p->setCellValue('B' . ($i + 1), $b); }
         $p->getStyle('A1')->getFont()->setBold(true)->setSize(13);
-        $p->getStyle('A3:A10')->getFont()->setBold(true);
-        $p->getColumnDimension('A')->setWidth(18);
+        $p->getStyle('A2:A' . count($baris))->getFont()->setBold(true);
+        $p->getColumnDimension('A')->setWidth(20);
         $p->getColumnDimension('B')->setWidth(110);
-        $p->getStyle('A3:B10')->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_TOP);
+        $p->getStyle('A2:B' . count($baris))->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_TOP);
 
         $order = [KonsumenPerbaruiSpec::SHEET, 'Petunjuk', 'Daftar'];
         foreach ($order as $idx => $name) {
@@ -1156,43 +1220,48 @@ class KonsumenController extends Controller
         $ss->setActiveSheetIndex(0);
 
         $writer = new Xlsx($ss);
-        $filename = 'template-perbarui-konsumen-' . \Illuminate\Support\Str::slug($project->nama) . '.xlsx';
+        $filename = 'perbarui-konsumen-' . \Illuminate\Support\Str::slug($project->nama) . '-' . now()->format('Ymd-His') . '.xlsx';
 
         return response()->streamDownload(function () use ($writer) {
             $writer->save('php://output');
         }, $filename, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 
-    /** Import mode Perbarui — alur "Cek dulu" lalu "Import sungguhan" yang sama dengan Import Konsumen. */
+    /** Import mode Perbarui — alur "Cek dulu" lalu "Import sungguhan"; opsi "Timpa" hanya untuk pemegang override. */
     public function perbaruiKonsumen(Request $request, Project $project): RedirectResponse
     {
         $this->authorizeProjectAccess($project);
         abort_unless(Auth::user()->can('edit konsumens'), 403);
 
         $request->validate([
-            'file' => 'required|file|mimes:xlsx,xls',
-            'mode' => 'required|in:cek,import',
+            'file'  => 'required|file|mimes:xlsx,xls',
+            'mode'  => 'required|in:cek,import',
+            'timpa' => 'nullable|boolean',
         ]);
+
+        $timpa = $request->boolean('timpa');
+        abort_if($timpa && !Auth::user()->can('override transaction lock'), 403, 'Opsi "Timpa data terisi" hanya untuk SPV, Leader, atau Superadmin.');
 
         $file = $request->file('file');
         $cek = $request->input('mode') === 'cek';
 
         $masalahHeader = KonsumenPerbaruiSpec::validasiHeader($file->getRealPath());
         if ($masalahHeader) {
-            return back()->with('error', 'File ditolak: kolomnya tidak sesuai template Perbarui saat ini. Unduh ulang template Perbarui.')
+            return back()->with('error', 'File ditolak: judul kolomnya bermasalah. Unduh file dari mode Perbarui, jangan mengubah judul kolom.')
                 ->with('importLaporan', ['mode' => 'ditolak', 'perbarui' => true, 'imported' => 0, 'importedBatal' => 0, 'skipped' => 0, 'tanpaPerubahan' => 0, 'perubahan' => [], 'errors' => $masalahHeader, 'warnings' => []]);
         }
 
+        // Import sungguhan harus untuk file DAN opsi Timpa yang sama dengan yang baru dicek.
         $kunciSesi = 'perbarui_konsumen_dicek.' . $project->id;
-        $sidik = sha1_file($file->getRealPath());
+        $sidik = sha1_file($file->getRealPath()) . ($timpa ? ':timpa' : '');
         if (!$cek) {
             $dicek = $request->session()->get($kunciSesi);
             if (!$dicek || ($dicek['sidik'] ?? null) !== $sidik || now()->timestamp - ($dicek['waktu'] ?? 0) > 7200) {
-                return back()->with('error', 'Jalankan "Cek dulu" untuk file ini lebih dulu. Import sungguhan hanya untuk file yang sama dengan yang baru dicek.');
+                return back()->with('error', 'Jalankan "Cek dulu" untuk file dan pilihan "Timpa" yang sama lebih dulu.');
             }
         }
 
-        $import = new KonsumenPerbaruiImport($project);
+        $import = new KonsumenPerbaruiImport($project, $timpa);
         if ($cek) {
             DB::beginTransaction();
             try {

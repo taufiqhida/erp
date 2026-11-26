@@ -14,10 +14,10 @@ class Wilayah
     public const TINGKAT = ['provinsi', 'kabupaten', 'kecamatan', 'kelurahan'];
 
     /** Atribut konsumen (8 kolom) kosong: dipakai untuk menghapus wilayah. */
-    public static function kosong(): array
+    public static function kosong(string $awalan = ''): array
     {
         $a = [];
-        foreach (self::TINGKAT as $t) $a["{$t}_kode"] = $a["{$t}_nama"] = null;
+        foreach (self::TINGKAT as $t) $a["{$awalan}{$t}_kode"] = $a["{$awalan}{$t}_nama"] = null;
 
         return $a;
     }
@@ -33,9 +33,9 @@ class Wilayah
     }
 
     /** Atribut konsumen dari satu kode wilayah. Kode kosong menghasilkan atribut kosong; kode tak dikenal dilempar sebagai InvalidArgumentException. */
-    public static function atribut(?string $kode): array
+    public static function atribut(?string $kode, string $awalan = ''): array
     {
-        $a = self::kosong();
+        $a = self::kosong($awalan);
         if ($kode === null || trim($kode) === '') return $a;
 
         $baris = WilayahModel::whereIn('kode', self::rantai(trim($kode)))->get()->keyBy('kode');
@@ -44,23 +44,48 @@ class Wilayah
         foreach (self::rantai(trim($kode)) as $i => $k) {
             $r = $baris->get($k);
             if (!$r) continue;
-            $a[self::TINGKAT[$i] . '_kode'] = $r->kode;
-            $a[self::TINGKAT[$i] . '_nama'] = $r->nama;
+            $a[$awalan . self::TINGKAT[$i] . '_kode'] = $r->kode;
+            $a[$awalan . self::TINGKAT[$i] . '_nama'] = $r->nama;
         }
 
         return $a;
     }
 
-    /** Kode tingkat terdalam yang tersimpan pada konsumen (untuk mengisi ulang pemilih wilayah di form). */
-    public static function kodeTerdalam(Konsumen $k): ?string
+    /**
+     * Atribut alamat domisili dari pilihan form: 'sama' (sama dengan KTP), 'beda' (alamat/wilayah sendiri), selain itu = belum diisi.
+     * Pada 'sama' dan 'belum', kolom domisili_* dikosongkan supaya tidak tersisa data basi.
+     */
+    public static function domisili(?string $status, ?string $alamat = null, ?string $kode = null): array
     {
-        return $k->kelurahan_kode ?? $k->kecamatan_kode ?? $k->kabupaten_kode ?? $k->provinsi_kode;
+        if ($status === 'beda') {
+            return ['domisili_sama_ktp' => false, 'domisili_alamat' => $alamat] + self::atribut($kode, 'domisili_');
+        }
+
+        return ['domisili_sama_ktp' => $status === 'sama' ? true : null, 'domisili_alamat' => null] + self::kosong('domisili_');
+    }
+
+    /** Status domisili untuk form: sama | beda | belum. */
+    public static function statusDomisili(Konsumen $k): string
+    {
+        return match ($k->domisili_sama_ktp) { true => 'sama', false => 'beda', default => 'belum' };
+    }
+
+    /** Kode tingkat terdalam yang tersimpan pada konsumen (untuk mengisi ulang pemilih wilayah di form). */
+    public static function kodeTerdalam(Konsumen $k, string $awalan = ''): ?string
+    {
+        return $k->{$awalan . 'kelurahan_kode'} ?? $k->{$awalan . 'kecamatan_kode'} ?? $k->{$awalan . 'kabupaten_kode'} ?? $k->{$awalan . 'provinsi_kode'};
+    }
+
+    /** Nama wilayah tersimpan berurutan [kelurahan, kecamatan, kabupaten, provinsi] (null untuk tingkat yang kosong). */
+    public static function namaTersimpan(Konsumen $k, string $awalan = ''): array
+    {
+        return array_map(fn ($t) => $k->{$awalan . $t . '_nama'}, ['kelurahan', 'kecamatan', 'kabupaten', 'provinsi']);
     }
 
     /** "Kelurahan, Kecamatan, Kabupaten, Provinsi" dari nama yang tersimpan; null bila belum ada wilayah. */
-    public static function ringkas(Konsumen $k): ?string
+    public static function ringkas(Konsumen $k, string $awalan = ''): ?string
     {
-        $bagian = array_filter([$k->kelurahan_nama, $k->kecamatan_nama, $k->kabupaten_nama, $k->provinsi_nama]);
+        $bagian = array_filter(self::namaTersimpan($k, $awalan));
 
         return $bagian ? implode(', ', $bagian) : null;
     }

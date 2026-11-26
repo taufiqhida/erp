@@ -185,6 +185,9 @@ const bookForm = useForm({
     konsumen_referral_keterangan: '',
     konsumen_alamat: '',
     konsumen_wilayah_kode: '',
+    konsumen_domisili_sama: true,
+    konsumen_domisili_alamat: '',
+    konsumen_domisili_wilayah_kode: '',
     konsumen_mode:   'new', // 'existing' | 'new' — mayoritas konsumen kami baru, bukan lama
 
     program_all_in_preset_id: '',
@@ -966,12 +969,24 @@ const isBookable = (k) => k.status_jual === 'available';
                                         <p v-if="bookForm.errors.konsumen_referral_keterangan" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.konsumen_referral_keterangan }}</p>
                                     </div>
                                     <div class="col-span-2">
-                                        <label class="block text-slate-400 text-xs mb-1.5">Alamat <span class="text-slate-600">(opsional)</span></label>
+                                        <label class="block text-slate-400 text-xs mb-1.5">Alamat KTP <span class="text-slate-600">(opsional)</span></label>
                                         <div class="mb-2"><WilayahPicker v-model="bookForm.konsumen_wilayah_kode" :error="bookForm.errors.konsumen_wilayah_kode" /></div>
                                         <textarea v-model="bookForm.konsumen_alamat" rows="2" maxlength="500" placeholder="Jalan, RT/RW, nomor rumah"
                                             class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-violet-500"
                                             :class="{ 'border-rose-500': bookForm.errors.konsumen_alamat }" />
                                         <p v-if="bookForm.errors.konsumen_alamat" class="text-rose-400 text-xs mt-1">{{ bookForm.errors.konsumen_alamat }}</p>
+                                    </div>
+                                    <div class="col-span-2 space-y-2">
+                                        <label class="flex items-center gap-2 text-sm text-slate-300">
+                                            <input type="checkbox" v-model="bookForm.konsumen_domisili_sama" class="rounded bg-slate-800 border-slate-600 text-violet-600" />
+                                            Domisili sama dengan KTP
+                                        </label>
+                                        <template v-if="!bookForm.konsumen_domisili_sama">
+                                            <label class="block text-slate-400 text-xs">Alamat Domisili <span class="text-slate-600">(opsional)</span></label>
+                                            <WilayahPicker v-model="bookForm.konsumen_domisili_wilayah_kode" :error="bookForm.errors.konsumen_domisili_wilayah_kode" />
+                                            <textarea v-model="bookForm.konsumen_domisili_alamat" rows="2" maxlength="500" placeholder="Jalan, RT/RW, nomor rumah"
+                                                class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-violet-500" />
+                                        </template>
                                     </div>
                                 </div>
                             </div>

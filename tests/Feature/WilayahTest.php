@@ -132,10 +132,11 @@ class WilayahTest extends TestCase
             KavlingKonsumen::create(['kavling_id' => $unit->id, 'konsumen_id' => $konsumen->id, 'status' => 'active', 'status_penjualan' => 'booking', 'cara_bayar' => 'cash',
                 'tanggal_booking' => '2026-03-01', 'harga_dasar' => 1, 'harga_deal' => 1]);
         };
-        $buat('1', \App\Support\Wilayah::atribut('32.73.01'));
-        $buat('2', \App\Support\Wilayah::atribut('32.73'));
-        $buat('3', \App\Support\Wilayah::atribut('32.01'));
-        $buat('4', []);
+        // 1 & 2: domisili sama dengan KTP. 3: KTP Bandung tapi domisili di Bogor. 4: KTP terisi tapi domisili belum diisi (tidak dihitung).
+        $buat('1', ['domisili_sama_ktp' => true] + \App\Support\Wilayah::atribut('32.73.01'));
+        $buat('2', ['domisili_sama_ktp' => true] + \App\Support\Wilayah::atribut('32.73'));
+        $buat('3', \App\Support\Wilayah::atribut('32.73') + \App\Support\Wilayah::domisili('beda', null, '32.01'));
+        $buat('4', \App\Support\Wilayah::atribut('32.04'));
 
         $this->actingAs($this->admin)->get(route('dashboard'))->assertInertia(function ($page) {
             $page->where('domisili.total', 4)->where('domisili.terisi', 3)
@@ -172,5 +173,39 @@ class WilayahTest extends TestCase
 
         $this->assertSame('Jl. Merdeka 1, Kota Bandung, Jawa Barat', $kk->konsumen->alamat_lengkap);
         $this->assertSame('Jl. Merdeka 1, Kota Bandung, Jawa Barat', $kk->suratPlaceholders()['alamat_konsumen']);
+    }
+
+    public function test_nama_wilayah_di_dalam_nama_jalan_tidak_dianggap_sudah_tertulis(): void
+    {
+        $k = new Konsumen(['alamat' => 'Jl. Bandung Raya No. 5, Gang Sukasari Indah'] + \App\Support\Wilayah::atribut('32.73.01'));
+        $this->assertSame('Jl. Bandung Raya No. 5, Gang Sukasari Indah, Sukasari, Kota Bandung, Jawa Barat', $k->alamat_lengkap);
+
+        // Ditulis sebagai bagian sendiri (dengan atau tanpa awalan, dengan atau tanpa koma) tidak diulang.
+        $k->alamat = 'Jl. Mawar 2 Kec. Sukasari Kota Bandung';
+        $this->assertSame('Jl. Mawar 2 Kec. Sukasari Kota Bandung, Jawa Barat', $k->alamat_lengkap);
+    }
+
+    public function test_edit_konsumen_menyimpan_tiga_status_domisili(): void
+    {
+        $k = Konsumen::create(['nama' => 'Budi', 'no_hp' => '0812']);
+        $ubah = fn (array $d) => $this->actingAs($this->admin)->patch(route('konsumens.update', $k), ['nama' => 'Budi'] + $d)->assertSessionHasNoErrors();
+
+        $ubah(['domisili_status' => 'beda', 'domisili_alamat' => 'Jl. Kos 1', 'domisili_wilayah_kode' => '32.73.01']);
+        $this->assertFalse($k->fresh()->domisili_sama_ktp);
+        $this->assertSame('Jl. Kos 1, Sukasari, Kota Bandung, Jawa Barat', $k->fresh()->alamat_domisili_lengkap);
+
+        $ubah(['domisili_status' => 'sama', 'domisili_alamat' => 'sisa', 'domisili_wilayah_kode' => '32.73']);
+        $this->assertTrue($k->fresh()->domisili_sama_ktp);
+        $this->assertNull($k->fresh()->domisili_alamat, 'data domisili lama dibersihkan');
+        $this->assertNull($k->fresh()->domisili_kabupaten_kode);
+
+        $ubah(['domisili_status' => 'belum']);
+        $this->assertNull($k->fresh()->domisili_sama_ktp);
+        $this->assertNull($k->fresh()->alamat_domisili_lengkap);
+
+        // Form tanpa field domisili (mis. permintaan lama) tidak mengubah apa pun.
+        $ubah(['domisili_status' => 'sama']);
+        $ubah([]);
+        $this->assertTrue($k->fresh()->domisili_sama_ktp);
     }
 }

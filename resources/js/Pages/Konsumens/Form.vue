@@ -19,6 +19,9 @@ const form = useForm({
     email:     props.konsumen?.email ?? '',
     alamat:    props.konsumen?.alamat ?? '',
     wilayah_kode: props.konsumen?.wilayah_kode ?? '',
+    domisili_status: props.konsumen?.domisili_status ?? 'belum',
+    domisili_alamat: props.konsumen?.domisili_alamat ?? '',
+    domisili_wilayah_kode: props.konsumen?.domisili_wilayah_kode ?? '',
     pekerjaan: props.konsumen?.pekerjaan ?? '',
     status_pernikahan: props.konsumen?.status_pernikahan ?? '',
     sumber_lead_id:    props.konsumen?.sumber_lead_id ?? '',
@@ -110,12 +113,27 @@ const submit = () => {
                         </div>
                     </div>
                     <div>
-                        <label class="block text-slate-400 text-xs font-medium mb-1.5">Wilayah domisili</label>
+                        <div class="text-slate-300 text-sm font-semibold mb-2">Alamat KTP</div>
                         <WilayahPicker v-model="form.wilayah_kode" :error="form.errors.wilayah_kode" />
                     </div>
                     <div>
-                        <label class="block text-slate-400 text-xs font-medium mb-1.5">Alamat (jalan, RT/RW, nomor)</label>
+                        <label class="block text-slate-400 text-xs font-medium mb-1.5">Jalan, RT/RW, nomor rumah (KTP)</label>
                         <textarea v-model="form.alamat" rows="2" placeholder="Jl. Merdeka No. 1, RT 02/RW 03" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none" />
+                    </div>
+                    <div class="space-y-3">
+                        <div class="text-slate-300 text-sm font-semibold">Alamat Domisili</div>
+                        <div class="flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-300">
+                            <label class="flex items-center gap-2"><input type="radio" v-model="form.domisili_status" value="belum" class="bg-slate-800 border-slate-600 text-violet-600" /> Belum diisi</label>
+                            <label class="flex items-center gap-2"><input type="radio" v-model="form.domisili_status" value="sama" class="bg-slate-800 border-slate-600 text-violet-600" /> Sama dengan KTP</label>
+                            <label class="flex items-center gap-2"><input type="radio" v-model="form.domisili_status" value="beda" class="bg-slate-800 border-slate-600 text-violet-600" /> Berbeda dari KTP</label>
+                        </div>
+                        <template v-if="form.domisili_status === 'beda'">
+                            <WilayahPicker v-model="form.domisili_wilayah_kode" :error="form.errors.domisili_wilayah_kode" />
+                            <div>
+                                <label class="block text-slate-400 text-xs font-medium mb-1.5">Jalan, RT/RW, nomor rumah (domisili)</label>
+                                <textarea v-model="form.domisili_alamat" rows="2" class="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none" />
+                            </div>
+                        </template>
                     </div>
                     <div>
                         <label class="block text-slate-400 text-xs font-medium mb-1.5">Catatan</label>

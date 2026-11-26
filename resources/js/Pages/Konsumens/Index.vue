@@ -21,13 +21,30 @@ const importForm = useForm({ file: null, mode: 'cek' });
 const modeImport = ref('tambah');
 const bisaPerbarui = computed(() => page.props.auth.user?.permissions?.includes('edit konsumens'));
 const inputKey = ref(0);   // mengganti key supaya <input type=file> kosong lagi saat mode diganti
-const gantiMode = (m) => { modeImport.value = m; importForm.reset(); importForm.clearErrors(); sudahDicek.value = false; laporan.value = null; inputKey.value++; };
+const gantiMode = (m) => { modeImport.value = m; importForm.reset(); importForm.clearErrors(); sudahDicek.value = false; laporan.value = null; inputKey.value++; timpa.value = false; };
+// Mode Perbarui: pilih kelompok data yang diunduh, baris mana, dan (khusus alamat) saran perapian.
+const KELOMPOK = [
+    ['kontak', 'Kontak (No. HP, Email, NPWP)'], ['pekerjaan', 'Pekerjaan & Status Pernikahan'], ['ktp', 'Alamat KTP & wilayah'],
+    ['domisili', 'Alamat Domisili'], ['notaris', 'Notaris'], ['penjualan', 'Sumber Lead, Sales, Bank'],
+];
+const kelompok = ref([]);
+const barisUnduh = ref('semua');
+const saranAlamat = ref(false);
+const bisaTimpa = computed(() => page.props.auth.user?.permissions?.includes('override transaction lock'));
+const timpa = ref(false);
+watch(timpa, () => { sudahDicek.value = false; laporan.value = null; });
+const urlUnduh = computed(() => route('konsumens.perbarui-template', {
+    project: currentProject.value?.id,
+    kelompok: kelompok.value,
+    baris: barisUnduh.value,
+    saran: saranAlamat.value && kelompok.value.includes('ktp') ? 1 : 0,
+}));
 // Alur aman: pilih file -> "Cek dulu" (simulasi, tidak menyimpan apa pun) -> baca laporan -> "Import sungguhan" untuk file yang SAMA.
 const sudahDicek = ref(false);
 const laporan = ref(null);   // laporan terakhir dari server: { mode: 'cek'|'import'|'ditolak', imported, importedBatal, skipped, errors[], warnings[] }
 const onImportFile = (e) => { importForm.file = e.target.files[0]; sudahDicek.value = false; laporan.value = null; };
 const kirimImport = (mode) => {
-    importForm.transform((d) => ({ ...d, mode })).post(route(modeImport.value === 'perbarui' ? 'konsumens.perbarui' : 'konsumens.import', currentProject.value.id), {
+    importForm.transform((d) => ({ ...d, mode, ...(modeImport.value === 'perbarui' ? { timpa: timpa.value ? 1 : 0 } : {}) })).post(route(modeImport.value === 'perbarui' ? 'konsumens.perbarui' : 'konsumens.import', currentProject.value.id), {
         forceFormData: true,
         preserveScroll: true,
         onSuccess: (p) => {
@@ -37,7 +54,7 @@ const kirimImport = (mode) => {
         },
     });
 };
-const tutupImport = () => { showImport.value = false; sudahDicek.value = false; laporan.value = null; importForm.reset(); modeImport.value = 'tambah'; };
+const tutupImport = () => { showImport.value = false; sudahDicek.value = false; laporan.value = null; importForm.reset(); modeImport.value = 'tambah'; timpa.value = false; };
 const bisaImportSungguhan = computed(() => sudahDicek.value && !!importForm.file && ((laporan.value?.imported ?? 0) + (laporan.value?.importedBatal ?? 0)) > 0);
 const judulLaporan = computed(() => ({
     cek: 'SIMULASI — belum ada yang disimpan',
@@ -537,21 +554,43 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                             <button type="button" @click="gantiMode('tambah')" class="py-2 rounded-md transition-colors" :class="modeImport === 'tambah' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'">➕ Tambah konsumen baru</button>
                             <button type="button" @click="gantiMode('perbarui')" class="py-2 rounded-md transition-colors" :class="modeImport === 'perbarui' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-slate-200'">✏️ Perbarui yang sudah ada</button>
                         </div>
-                        <a :href="route(modeImport === 'perbarui' ? 'konsumens.perbarui-template' : 'konsumens.import-template', currentProject.id)"
-                            class="flex items-center justify-center gap-2 w-full py-2.5 text-sm font-medium rounded-lg transition-colors border"
-                            :class="modeImport === 'perbarui' ? 'bg-teal-600/15 hover:bg-teal-600/25 text-teal-300 border-teal-500/30' : 'bg-violet-600/15 hover:bg-violet-600/25 text-violet-300 border-violet-500/30'">
-                            📄 {{ modeImport === 'perbarui' ? 'Download Template Perbarui' : 'Download Template Excel' }}
+                        <a v-if="modeImport === 'tambah'" :href="route('konsumens.import-template', currentProject.id)"
+                            class="flex items-center justify-center gap-2 w-full py-2.5 text-sm font-medium rounded-lg transition-colors border bg-violet-600/15 hover:bg-violet-600/25 text-violet-300 border-violet-500/30">
+                            📄 Download Template Excel
                         </a>
-                        <div v-if="modeImport === 'perbarui'" class="bg-slate-800 rounded-xl p-4 text-xs space-y-1.5 text-slate-400">
-                            <div class="text-slate-300 font-medium">Menyusulkan data yang belum terisi</div>
-                            <p>Setiap baris dicocokkan ke transaksi lewat Kluster + Blok + Nomor Kavling, lalu diverifikasi dengan nama konsumen. <b>Hanya mengisi yang masih kosong</b> — data yang sudah ada tidak ditimpa (berbeda = peringatan). Tidak ada kolom keuangan, jadi harga dan pembayaran tidak bisa berubah.</p>
-                            <p class="pt-1 text-slate-500">Kolom: NIK, No. HP, Email, NPWP, Alamat, Wilayah (Provinsi sampai Kelurahan), Pekerjaan, Status Pernikahan, Sumber Lead, Sales/Agent, Notaris, Bank Rekanan. NIK kosong atau tidak valid boleh diganti NIK valid. Transaksi Selesai/terkunci dilewati.</p>
+                        <div v-if="modeImport === 'perbarui'" class="bg-slate-800 rounded-xl p-4 text-xs space-y-3 text-slate-400">
+                            <div>
+                                <div class="text-slate-300 font-medium mb-1.5">1. Pilih data yang mau diperbarui</div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                    <label v-for="[kunci, label] in KELOMPOK" :key="kunci" class="flex items-center gap-2 text-slate-300">
+                                        <input type="checkbox" :value="kunci" v-model="kelompok" class="rounded bg-slate-900 border-slate-600 text-teal-600" /> {{ label }}
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-x-4 gap-y-1">
+                                <label class="flex items-center gap-2"><input type="radio" value="semua" v-model="barisUnduh" class="bg-slate-900 border-slate-600 text-teal-600" /> Semua konsumen aktif</label>
+                                <label class="flex items-center gap-2"><input type="radio" value="kosong" v-model="barisUnduh" class="bg-slate-900 border-slate-600 text-teal-600" /> Hanya yang datanya masih kosong</label>
+                            </div>
+                            <label v-if="kelompok.includes('ktp')" class="flex items-start gap-2">
+                                <input type="checkbox" v-model="saranAlamat" class="mt-0.5 rounded bg-slate-900 border-slate-600 text-teal-600" />
+                                <span>Isi <b class="text-slate-300">saran perapian</b> alamat (wilayah ditebak dari alamat lama; alamat asli ada di kolom referensi). Periksa setiap baris.</span>
+                            </label>
+                            <a v-if="kelompok.length" :href="urlUnduh"
+                                class="flex items-center justify-center gap-2 w-full py-2.5 text-sm font-medium rounded-lg transition-colors border bg-teal-600/15 hover:bg-teal-600/25 text-teal-300 border-teal-500/30">
+                                📄 2. Unduh data untuk diperbarui
+                            </a>
+                            <div v-else class="text-center py-2.5 rounded-lg border border-slate-700 text-slate-500 text-sm">Pilih minimal satu kelompok data untuk mengunduh</div>
+                            <p class="text-slate-500">3. Ubah di Excel lalu unggah di bawah. Sel kosong atau tidak diubah = tidak berubah. Nama dan NIK yang sudah valid tidak bisa diganti. Tidak ada kolom keuangan.</p>
                         </div>
                         <div v-else class="bg-slate-800 rounded-xl p-4 text-xs space-y-1.5 text-slate-400">
                             <div class="text-slate-300 font-medium">Untuk konsumen proyek yang sudah berjalan</div>
                             <p>Template berisi 4 sheet (KPR Subsidi/KPR Komersil/Cash/Cash Bertahap) — pilih sheet sesuai cara bayar tiap konsumen — ditambah sheet <b>Batal</b> untuk konsumen yang sudah batal (riwayat &amp; uang hangus; khusus yang berhak mereview pembatalan). Baca sheet "Petunjuk" &amp; "Kamus Kolom" di dalam file untuk aturan lengkap dan strategi migrasi bertahap.</p>
                             <p class="pt-1 text-slate-500">Unit (Kluster+Blok+Nomor) harus sudah ada di Stok Kavling &amp; berstatus Tersedia. Baris dengan data tidak valid dilewati dengan pesan error yang jelas — baris lain tetap masuk.</p>
                         </div>
+                        <label v-if="modeImport === 'perbarui' && bisaTimpa" class="flex items-start gap-2 text-xs text-slate-300 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                            <input type="checkbox" v-model="timpa" class="mt-0.5 rounded bg-slate-900 border-slate-600 text-amber-500" />
+                            <span><b>Timpa data terisi</b> — nilai di file mengganti data yang sudah ada. Tanpa centang ini hanya data kosong yang diisi.</span>
+                        </label>
                         <p class="text-slate-500 text-xs">Alur aman: pilih file → <b class="text-slate-300">Cek dulu</b> (simulasi, tidak ada yang disimpan) → baca laporan → <b class="text-slate-300">Import sungguhan</b>.</p>
                         <div>
                             <label class="block text-slate-400 text-xs font-medium mb-1.5">Pilih File Excel</label>
