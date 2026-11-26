@@ -476,6 +476,9 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                         </svg>
                                     </button>
                                     <span v-else-if="!k.dialihkan_count" class="text-slate-500 text-xs">Belum ada unit</span>
+                                    <div v-for="d in k.dialihkan_ke" :key="d.unit" class="text-sky-300 text-[0.6875rem] mt-1">
+                                        ↪ {{ d.unit }} dialihkan ke <Link :href="route('konsumens.show', d.ke_id)" class="underline hover:text-sky-200">{{ d.ke }}</Link>
+                                    </div>
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     <div class="flex items-center justify-end gap-1">

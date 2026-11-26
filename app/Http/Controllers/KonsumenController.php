@@ -127,13 +127,7 @@ class KonsumenController extends Controller
                     if (!$isGlobal) $projectScope($q);
                 })
                 ->when($request->status_penjualan, fn($q) => $q->where('status_penjualan', $request->status_penjualan))
-                ->when($request->search, fn($q) =>
-                    $q->whereHas('konsumen', fn($q2) => $q2->where(fn($q3) => $q3
-                        ->where('nama', 'like', "%{$request->search}%")
-                        ->orWhere('no_hp', 'like', "%{$request->search}%")
-                        ->orWhere('nik', 'like', "%{$request->search}%")
-                    ))
-                )
+                ->when($request->search, fn($q) => $this->cariPembeli($q, $request->search))
                 ->when(
                     $sort === 'unit',
                     fn($q) => Kavling::applyUnitOrder($q, $dir),
@@ -174,10 +168,12 @@ class KonsumenController extends Controller
                 // Non-global role hanya boleh lihat konsumen yang: (a) belum punya
                 // transaksi sama sekali (belum terikat proyek manapun), atau (b)
                 // transaksinya ada di proyek yang di-assign ke user via project_user.
+                // Pembeli yang transaksinya dialihkan tidak punya transaksi sendiri lagi: proyeknya diambil dari riwayat peralihan.
                 ->when(!$isGlobal, fn($q) =>
                     $q->where(fn($q2) =>
-                        $q2->doesntHave('kavlingKonsumens')
+                        $q2->where(fn($polos) => $polos->doesntHave('kavlingKonsumens')->doesntHave('riwayatDialihKeluar'))
                            ->orWhereHas('kavlingKonsumens.kavling', $projectScope)
+                           ->orWhereHas('riwayatDialihKeluar.transaksi.kavling', $projectScope)
                     )
                 )
                 ->when($request->search, fn($q) =>
@@ -189,16 +185,21 @@ class KonsumenController extends Controller
                 )
                 // Default: sembunyikan konsumen yang tidak punya transaksi berjalan tetapi punya riwayat batal/dialihkan. Calon pembeli
                 // yang belum pernah bertransaksi tetap tampil.
+                // Saat MENCARI, pembeli yang dialihkan ikut muncul walau kotak "Tampilkan yang batal & dialihkan" tidak dicentang.
                 ->when(!$tampilkanNonaktif, fn ($q) => $q->where(fn ($w) => $w
                     ->where(fn ($polos) => $polos->whereDoesntHave('kavlingKonsumens')->whereDoesntHave('riwayatDialihKeluar'))
-                    ->orWhereHas('kavlingKonsumens', fn ($t) => $t->where('status_penjualan', '!=', 'batal'))))
-                ->when($hasUnitFilter, fn($q) => $q->whereHas('kavlingKonsumens.kavling', $unitFilter))
+                    ->orWhereHas('kavlingKonsumens', fn ($t) => $t->where('status_penjualan', '!=', 'batal'))
+                    ->when($request->filled('search'), fn ($c) => $c->orWhereHas('riwayatDialihKeluar'))))
+                ->when($hasUnitFilter, fn($q) => $q->where(fn($w) => $w
+                    ->whereHas('kavlingKonsumens.kavling', $unitFilter)
+                    ->orWhereHas('riwayatDialihKeluar.transaksi.kavling', $unitFilter)))
                 ->when($request->status_penjualan, fn($q) => $q->whereHas('kavlingKonsumens', fn($q2) => $q2->where('status_penjualan', $request->status_penjualan)))
                 ->with(['kavlingKonsumens' => fn($q) =>
                     $q->when($hasUnitFilter, fn($q2) => $q2->whereHas('kavling', $unitFilter))
                       ->when($request->status_penjualan, fn($q2) => $q2->where('status_penjualan', $request->status_penjualan))
                       ->with(['kavling.project', 'bankRekananPreset:id,nama'])
                 ])
+                ->with(['riwayatDialihKeluar.ke', 'riwayatDialihKeluar.transaksi.kavling.project.users:id'])
                 ->withCount(['kavlingKonsumens as transaksi_count', 'kavlingKonsumens as transaksi_aktif_count' => fn ($q) => $q->where('status_penjualan', '!=', 'batal'), 'riwayatDialihKeluar as dialihkan_count', 'riwayatDialihMasuk as dialihmasuk_count'])
                 ->orderBy('nama')
                 ->paginate($this->perPage($request, 20))
@@ -212,6 +213,13 @@ class KonsumenController extends Controller
                     'pekerjaan'       => $k->pekerjaan,
                     'transaksi_count' => $k->transaksi_count,
                     'dialihkan_count' => $k->dialihkan_count,
+                    // Unit yang dialihkan dari konsumen ini (hanya proyek aktif / yang boleh dilihat).
+                    'dialihkan_ke'    => $k->riwayatDialihKeluar
+                        ->filter(fn ($r) => $r->transaksi?->kavling
+                            && (!$activeProjectId || $r->transaksi->kavling->project_id == $activeProjectId)
+                            && ($isGlobal || $r->transaksi->kavling->project->users->contains('id', $user->id)))
+                        ->map(fn ($r) => ['unit' => $r->transaksi->kavling->nomor_lengkap, 'ke' => $r->ke?->nama, 'ke_id' => $r->ke_konsumen_id])
+                        ->values(),
                     'transaksi_aktif_count' => $k->transaksi_aktif_count,
                     // Ikon hapus hanya untuk konsumen tanpa jejak transaksi sama sekali, dan hanya bagi yang berizin.
                     'bisa_dihapus'    => !$k->transaksi_count && !$k->dialihkan_count && !$k->dialihmasuk_count && $user->can('delete konsumens'),
@@ -239,6 +247,17 @@ class KonsumenController extends Controller
             'filterOptions' => $filterOptions,
             'filters'       => $request->only(['search', 'kluster', 'blok', 'tipe_unit_preset_id', 'status_jual', 'status_bangun_stage_id', 'status_penjualan', 'sales_agent_id', 'tampilkan_nonaktif', 'view', 'sort', 'dir']),
         ]);
+    }
+
+    /** Pencarian daftar per transaksi: nama / No. HP / NIK pembeli sekarang ATAU pembeli sebelumnya (alih pembeli). */
+    private function cariPembeli($query, string $cari)
+    {
+        $cocok = fn ($q) => $q->where(fn ($w) => $w
+            ->where('nama', 'like', "%{$cari}%")
+            ->orWhere('no_hp', 'like', "%{$cari}%")
+            ->orWhere('nik', 'like', "%{$cari}%"));
+
+        return $query->where(fn ($w) => $w->whereHas('konsumen', $cocok)->orWhereHas('alihPembeliRiwayats.dari', $cocok));
     }
 
     /**
@@ -273,13 +292,7 @@ class KonsumenController extends Controller
             })
             ->when($request->sales_agent_id, fn ($q) => $q->where('kavling_konsumen.sales_agent_id', $request->sales_agent_id))
             ->when($request->status_penjualan, fn($q) => $q->where('status_penjualan', $request->status_penjualan))
-            ->when($request->search, fn($q) =>
-                $q->whereHas('konsumen', fn($q2) => $q2->where(fn($q3) => $q3
-                    ->where('nama', 'like', "%{$request->search}%")
-                    ->orWhere('no_hp', 'like', "%{$request->search}%")
-                    ->orWhere('nik', 'like', "%{$request->search}%")
-                ))
-            )
+            ->when($request->search, fn($q) => $this->cariPembeli($q, $request->search))
             ->tap(fn($q) => Kavling::applyUnitOrder($q, 'asc'))
             ->get();
 
