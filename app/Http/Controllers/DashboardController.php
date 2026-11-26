@@ -101,14 +101,20 @@ class DashboardController extends Controller
             . ' case when domisili_sama_ktp = 1 then kabupaten_nama else domisili_kabupaten_nama end as nama,'
             . ' case when domisili_sama_ktp = 1 then provinsi_nama else domisili_provinsi_nama end as provinsi'
         );
-        $perKabupaten = DB::query()->fromSub($efektif, 'd')->whereNotNull('kode')
-            ->selectRaw('kode, max(nama) as nama, max(provinsi) as provinsi, count(*) as total')
-            ->groupBy('kode')->orderByDesc('total')->orderBy('nama')->get();
-        $domisili = [
-            'total'  => (clone $konsumenAktif)->count(),
-            'terisi' => (int) $perKabupaten->sum('total'),
-            'teratas' => $perKabupaten->take(8)->map(fn ($r) => ['nama' => $r->nama, 'provinsi' => $r->provinsi, 'total' => (int) $r->total])->values(),
-        ];
+        $ringkasKabupaten = function ($sumber) {
+            $per = DB::query()->fromSub($sumber, 'd')->whereNotNull('kode')
+                ->selectRaw('kode, max(nama) as nama, max(provinsi) as provinsi, count(*) as total')
+                ->groupBy('kode')->orderByDesc('total')->orderBy('nama')->get();
+
+            return [
+                'terisi' => (int) $per->sum('total'),
+                'teratas' => $per->take(8)->map(fn ($r) => ['nama' => $r->nama, 'provinsi' => $r->provinsi, 'total' => (int) $r->total])->values(),
+            ];
+        };
+        // Kartu bisa dialihkan: 'domisili' (efektif, di atas) atau 'ktp' (wilayah alamat KTP).
+        $domisili = ['total' => (clone $konsumenAktif)->count()]
+            + $ringkasKabupaten($efektif)
+            + ['ktp' => $ringkasKabupaten((clone $konsumenAktif)->selectRaw('kabupaten_kode as kode, kabupaten_nama as nama, provinsi_nama as provinsi'))];
 
         // ── Cara bayar breakdown ──────────────────────────────────────────
         $caraBayarCounts = $activeBase()->selectRaw('cara_bayar, count(*) as total')->groupBy('cara_bayar')->pluck('total', 'cara_bayar');

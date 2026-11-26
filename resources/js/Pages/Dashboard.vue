@@ -8,7 +8,7 @@ const props = defineProps({
     kavlingBangunBreakdown: Array,
     pipelineFunnel: Array,
     caraBayarBreakdown: Array,
-    domisili: { type: Object, default: () => ({ total: 0, terisi: 0, teratas: [] }) },
+    domisili: { type: Object, default: () => ({ total: 0, terisi: 0, teratas: [], ktp: { terisi: 0, teratas: [] } }) },
     financials: Object,
     piutangJatuhTempo: Object,
     bastTertunda: Array,
@@ -81,7 +81,10 @@ const statCards = [
 ];
 
 const pipelineMax = computed(() => Math.max(1, ...(props.pipelineFunnel ?? []).map(s => s.count)));
-const domisiliMaks = computed(() => Math.max(1, ...(props.domisili?.teratas ?? []).map((d) => d.total)));
+// Kartu wilayah konsumen: dialihkan antara alamat Domisili (bawaan) dan alamat KTP.
+const wilayahDasar = ref('domisili');
+const wilayahAktif = computed(() => (wilayahDasar.value === 'ktp' ? props.domisili?.ktp : props.domisili) ?? { terisi: 0, teratas: [] });
+const domisiliMaks = computed(() => Math.max(1, ...(wilayahAktif.value.teratas ?? []).map((d) => d.total)));
 const caraBayarTotal = computed(() => (props.caraBayarBreakdown ?? []).reduce((sum, c) => sum + c.count, 0));
 const caraBayarColors = {
     cash: 'from-emerald-500 to-green-500',
@@ -451,11 +454,17 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
 
                 <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                     <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
-                        <h2 class="text-slate-200 font-semibold text-sm">📍 Asal Domisili Konsumen</h2>
-                        <span class="text-slate-500 text-[0.6875rem]">{{ domisili.terisi }} dari {{ domisili.total }} konsumen terisi</span>
+                        <div>
+                            <h2 class="text-slate-200 font-semibold text-sm">📍 {{ wilayahDasar === 'ktp' ? 'Wilayah KTP Konsumen' : 'Asal Domisili Konsumen' }}</h2>
+                            <span class="text-slate-500 text-[0.6875rem]">{{ wilayahAktif.terisi }} dari {{ domisili.total }} konsumen terisi</span>
+                        </div>
+                        <div class="flex flex-shrink-0 p-0.5 bg-slate-800 rounded-lg text-[0.6875rem] font-medium" role="group" aria-label="Dasar wilayah">
+                            <button type="button" @click="wilayahDasar = 'domisili'" :aria-pressed="wilayahDasar === 'domisili'" class="px-2.5 py-1 rounded-md transition-colors" :class="wilayahDasar === 'domisili' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-slate-200'">Domisili</button>
+                            <button type="button" @click="wilayahDasar = 'ktp'" :aria-pressed="wilayahDasar === 'ktp'" class="px-2.5 py-1 rounded-md transition-colors" :class="wilayahDasar === 'ktp' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-slate-200'">KTP</button>
+                        </div>
                     </div>
                     <div class="p-5 space-y-3">
-                        <div v-for="d in domisili.teratas" :key="d.nama" class="flex items-center gap-3">
+                        <div v-for="d in wilayahAktif.teratas" :key="d.nama" class="flex items-center gap-3">
                             <span class="text-slate-400 text-xs w-40 flex-shrink-0 truncate" :title="`${d.nama}, ${d.provinsi}`">{{ d.nama }}</span>
                             <div class="flex-1 h-5 bg-slate-800 rounded-md overflow-hidden">
                                 <div class="h-full bg-gradient-to-r from-teal-600 to-emerald-500 rounded-md flex items-center justify-end px-2 transition-all duration-500" :style="`width: ${Math.max(6, (d.total / domisiliMaks) * 100)}%`">
@@ -463,8 +472,8 @@ const formatDurasi = (hari) => hari === null || hari === undefined ? '-' : `${ha
                                 </div>
                             </div>
                         </div>
-                        <div v-if="!domisili.teratas.length" class="text-center text-slate-500 text-xs py-4">Belum ada konsumen dengan wilayah terisi. Lengkapi lewat form Konsumen atau Import Konsumen → Perbarui.</div>
-                        <div v-else-if="domisili.total > domisili.terisi" class="pt-2 border-t border-slate-800 text-[0.6875rem] text-slate-500">{{ domisili.total - domisili.terisi }} konsumen belum diisi wilayahnya.</div>
+                        <div v-if="!wilayahAktif.teratas.length" class="text-center text-slate-500 text-xs py-4">Belum ada konsumen dengan wilayah {{ wilayahDasar === 'ktp' ? 'KTP' : 'domisili' }} terisi. Lengkapi lewat form Konsumen atau Import Konsumen → Perbarui.</div>
+                        <div v-else-if="domisili.total > wilayahAktif.terisi" class="pt-2 border-t border-slate-800 text-[0.6875rem] text-slate-500">{{ domisili.total - wilayahAktif.terisi }} konsumen belum diisi wilayah {{ wilayahDasar === 'ktp' ? 'KTP' : 'domisili' }}-nya.</div>
                     </div>
                 </div>
 

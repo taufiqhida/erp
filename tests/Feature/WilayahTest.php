@@ -141,7 +141,10 @@ class WilayahTest extends TestCase
         $this->actingAs($this->admin)->get(route('dashboard'))->assertInertia(function ($page) {
             $page->where('domisili.total', 4)->where('domisili.terisi', 3)
                 ->where('domisili.teratas.0.nama', 'Kota Bandung')->where('domisili.teratas.0.total', 2)
-                ->where('domisili.teratas.1.nama', 'Kabupaten Bogor');
+                ->where('domisili.teratas.1.nama', 'Kabupaten Bogor')
+                // Alih ke KTP: keempat konsumen punya wilayah KTP (3 di Kota Bandung, 1 di Kabupaten Bandung), domisili tidak berpengaruh.
+                ->where('domisili.ktp.terisi', 4)->where('domisili.ktp.teratas.0.nama', 'Kota Bandung')->where('domisili.ktp.teratas.0.total', 3)
+                ->where('domisili.ktp.teratas.1.nama', 'Kabupaten Bandung');
         });
     }
 
