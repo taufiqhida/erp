@@ -25,7 +25,9 @@ use Maatwebsite\Excel\Concerns\ToCollection;
  *  - Unit dicocokkan ke transaksi yang ada; Nama file harus mirip dengan konsumen di unit itu (verifikasi).
  *  - Sel kosong, kolom yang tidak ada, atau sel yang sama dengan data sekarang = TIDAK ada perubahan. Data tidak pernah dikosongkan.
  *  - Data yang masih kosong diisi. Data yang sudah terisi hanya diganti bila opsi "Timpa" aktif; kalau tidak jadi peringatan.
- *  - NIK valid tidak pernah diganti (kosong/tidak valid boleh); nama tidak bisa diubah; transaksi Selesai/terkunci dilewati.
+ *  - NIK valid tidak pernah diganti (kosong/tidak valid boleh); nama tidak bisa diubah.
+ *  - Transaksi Selesai (terkunci): data konsumen tetap bisa diperbarui (kunci itu melindungi keuangan, dan mode ini tidak punya kolom
+ *    keuangan); Sumber Lead/Referral, Sales, Notaris, dan Bank hanya oleh pemegang "override transaction lock" dan dicatat di Audit Trail.
  *  - Tidak ada kolom keuangan, jadi angka tidak mungkin berubah.
  * Dijalankan di dalam satu transaksi database ("Cek dulu" membatalkannya), sama seperti Import Konsumen.
  */
@@ -37,12 +39,14 @@ class KonsumenPerbaruiSheetImport implements ToCollection, SkipsEmptyRows
     private array $peta = [];
     private bool $bolehPipeline;
     private bool $bolehBank;
+    private bool $bolehTerkunci;
 
     public function __construct(private Project $project, private KonsumenImportResult $result, private bool $timpa = false)
     {
         $user = Auth::user();
         $this->bolehPipeline = (bool) $user?->can('kelola pipeline sales');
         $this->bolehBank = (bool) $user?->can('isi bank rekanan kpr');
+        $this->bolehTerkunci = (bool) $user?->can('override transaction lock');
     }
 
     public function collection(Collection $rows): void
@@ -115,8 +119,6 @@ class KonsumenPerbaruiSheetImport implements ToCollection, SkipsEmptyRows
                 if (!$trx) $errors[] = "Unit '{$label}' belum punya transaksi aktif. Mode Perbarui hanya untuk konsumen yang sudah ada — pakai mode Tambah baru untuk konsumen baru.";
             }
         }
-        if ($trx && !$errors && $trx->is_locked) $errors[] = "Transaksi di unit '{$label}' sudah Selesai/terkunci, tidak diperbarui.";
-
         $konsumen = $trx?->konsumen;
         if ($konsumen && $nama && !$errors) {
             similar_text(mb_strtolower($nama), mb_strtolower(trim($konsumen->nama)), $persen);
@@ -147,6 +149,16 @@ class KonsumenPerbaruiSheetImport implements ToCollection, SkipsEmptyRows
         $ubahTrx = [];
         $rincian = [];
         $peringatan = [];
+
+        // Transaksi Selesai: kolom penjualan hanya untuk pemegang override; data konsumen lainnya diproses seperti biasa.
+        $terkunci = (bool) $trx->is_locked;
+        if ($terkunci && !$this->bolehTerkunci) {
+            $ditahan = array_intersect_key(['lead' => 'Sumber Lead', 'referral' => 'Keterangan Referral', 'sales' => 'Sales/Agent', 'notaris' => 'Notaris', 'bank' => 'Bank Rekanan KPR'], $baru);
+            if ($ditahan) {
+                $peringatan[] = implode(', ', $ditahan) . ' diabaikan: transaksi sudah Selesai, hanya pemegang izin override yang boleh mengubahnya.';
+                $baru = array_diff_key($baru, $ditahan);
+            }
+        }
 
         // Isi bila kosong; ganti hanya bila Timpa; selain itu peringatan.
         $boleh = function (bool $lamaKosong, string $judul, string $lama, string $nilaiBaru) use (&$rincian, &$peringatan): bool {
@@ -298,9 +310,15 @@ class KonsumenPerbaruiSheetImport implements ToCollection, SkipsEmptyRows
             return;
         }
 
-        DB::transaction(function () use ($konsumen, $trx, $ubahKonsumen, $ubahTrx) {
+        DB::transaction(function () use ($konsumen, $trx, $ubahKonsumen, $ubahTrx, $terkunci) {
             if ($ubahKonsumen) $konsumen->update($ubahKonsumen);
             if ($ubahTrx) KavlingKonsumen::withoutFinanceRefresh(fn () => $trx->update($ubahTrx));
+            // Jejak yang sama seperti override data terkunci dari layar lain.
+            if ($terkunci && ($ubahTrx || array_intersect(['sumber_lead_id', 'referral_keterangan'], array_keys($ubahKonsumen)))) {
+                activity()->causedBy(Auth::user())->performedOn($trx)
+                    ->withProperties(['context' => 'Import Perbarui', 'status_penjualan' => $trx->status_penjualan])
+                    ->log('Override edit data terkunci (transaksi selesai) oleh ' . Auth::user()?->name . ' [Import Perbarui]');
+            }
         });
 
         $this->result->imported++;

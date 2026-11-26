@@ -163,7 +163,8 @@ class PerbaruiKonsumenTest extends TestCase
         $kk = $this->transaksi(['nik' => self::NIK_A, 'no_hp' => '081200000001'], ['notaris_preset_id' => $this->notaris->id]);
         $ss = $this->unduh(['notaris']);
 
-        $this->assertSame(['Kluster', 'Blok *', 'Nomor Kavling *', 'Nama Konsumen *', 'NIK', 'Notaris'], $this->judul($ss));
+        $this->assertSame(['Kluster', 'Blok *', 'Nomor Kavling *', 'Nama Konsumen *', 'NIK', 'Notaris', 'Status Transaksi (referensi, tidak dibaca)'], $this->judul($ss));
+        $this->assertSame('Berjalan', $this->sel($ss, 'ref_status'));
         $this->assertSame('Budi Santoso', $this->sel($ss, 'nama'));
         $this->assertSame(self::NIK_A, $this->sel($ss, 'nik'));
         $this->assertSame('Notaris Satu', $this->sel($ss, 'notaris'));
@@ -265,22 +266,66 @@ class PerbaruiKonsumenTest extends TestCase
 
     // ── Pengaman identitas ──
 
-    public function test_nama_beda_jauh_unit_salah_dan_transaksi_selesai_dilewati(): void
+    public function test_nama_beda_jauh_dan_unit_salah_dilewati(): void
     {
         $kk = $this->transaksi();
-        $selesai = $this->transaksi(['nama' => 'Siti Aminah']);
-        \DB::table('kavling_konsumen')->where('id', $selesai->id)->update(['status' => 'completed']);
 
         $lap = $this->perbarui([
             $this->baris($kk, ['nama' => 'Xyz Qwerty', 'email' => 'a@b.co']),
             $this->baris($kk, ['unit' => '404', 'email' => 'a@b.co']),
-            $this->baris($selesai, ['email' => 'a@b.co']),
         ], true, false);
 
-        $this->assertSame(3, $lap['skipped']);
+        $this->assertSame(2, $lap['skipped']);
         $this->assertStringContainsString('berbeda dengan konsumen', $lap['errors'][0]);
         $this->assertStringContainsString('tidak ditemukan', $lap['errors'][1]);
-        $this->assertStringContainsString('Selesai/terkunci', $lap['errors'][2]);
+    }
+
+    private function selesaikan(KavlingKonsumen $kk): KavlingKonsumen
+    {
+        \DB::table('kavling_konsumen')->where('id', $kk->id)->update(['status' => 'completed']);
+
+        return $kk;
+    }
+
+    public function test_transaksi_selesai_ikut_terunduh_dengan_keterangan(): void
+    {
+        $this->selesaikan($this->transaksi(['nama' => 'Siti Aminah']));
+        $batal = $this->transaksi(['nama' => 'Batal Orang']);
+        \DB::table('kavling_konsumen')->where('id', $batal->id)->update(['status' => 'cancelled']);
+
+        $ss = $this->unduh(['ktp']);
+
+        $this->assertSame(['Siti Aminah', 'Selesai'], [$this->sel($ss, 'nama'), $this->sel($ss, 'ref_status')]);
+        $this->assertSame('', $this->sel($ss, 'nama', 3), 'yang batal tidak ikut');
+    }
+
+    public function test_transaksi_selesai_superadmin_boleh_mengisi_data_konsumen_dan_penjualan_dengan_jejak(): void
+    {
+        $kk = $this->selesaikan($this->transaksi());
+
+        $lap = $this->perbarui([$this->baris($kk, ['alamat' => 'Jl. Selesai 1', 'notaris' => 'Notaris Satu'])]);
+
+        $this->assertSame(1, $lap['imported']);
+        $this->assertSame('Jl. Selesai 1', $kk->konsumen->fresh()->alamat);
+        $this->assertSame($this->notaris->id, $kk->fresh()->notaris_preset_id);
+        $this->assertSame('completed', $kk->fresh()->status);
+        $this->assertTrue(\Spatie\Activitylog\Models\Activity::where('description', 'like', 'Override edit data terkunci%Import Perbarui%')->exists());
+    }
+
+    public function test_transaksi_selesai_tanpa_override_hanya_data_konsumen_yang_masuk(): void
+    {
+        $sales = User::factory()->create();
+        $sales->assignRole('admin_sales');
+        $sales->projects()->attach($this->project->id);
+        $lead = SumberLead::create(['nama' => 'Instagram', 'is_active' => true]);
+        $kk = $this->selesaikan($this->transaksi());
+
+        $lap = $this->perbarui([$this->baris($kk, ['email' => 'a@b.co', 'notaris' => 'Notaris Satu', 'lead' => 'Instagram'])], false, true, $sales);
+
+        $this->assertSame('a@b.co', $kk->konsumen->fresh()->email);
+        $this->assertNull($kk->fresh()->notaris_preset_id);
+        $this->assertNull($kk->konsumen->fresh()->sumber_lead_id);
+        $this->assertStringContainsString('sudah Selesai', $lap['warnings'][0]);
     }
 
     public function test_nik_valid_tidak_pernah_diganti_walau_timpa_dan_nik_rusak_boleh(): void

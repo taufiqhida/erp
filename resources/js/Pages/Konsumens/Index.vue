@@ -571,7 +571,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                 </div>
                             </div>
                             <div class="flex flex-wrap gap-x-4 gap-y-1">
-                                <label class="flex items-center gap-2"><input type="radio" value="semua" v-model="barisUnduh" class="bg-slate-900 border-slate-600 text-teal-600" /> Semua konsumen aktif</label>
+                                <label class="flex items-center gap-2"><input type="radio" value="semua" v-model="barisUnduh" class="bg-slate-900 border-slate-600 text-teal-600" /> Semua transaksi (tidak batal)</label>
                                 <label class="flex items-center gap-2"><input type="radio" value="kosong" v-model="barisUnduh" class="bg-slate-900 border-slate-600 text-teal-600" /> Hanya yang datanya masih kosong</label>
                             </div>
                             <label v-if="kelompok.includes('ktp')" class="flex items-start gap-2">
@@ -583,7 +583,7 @@ const toggleExpand = (id) => { expandedKonsumen.value = expandedKonsumen.value =
                                 📄 2. Unduh data untuk diperbarui
                             </a>
                             <div v-else class="text-center py-2.5 rounded-lg border border-slate-700 text-slate-500 text-sm">Pilih minimal satu kelompok data untuk mengunduh</div>
-                            <p class="text-slate-500">3. Ubah di Excel lalu unggah di bawah. Sel kosong atau tidak diubah = tidak berubah. Nama dan NIK yang sudah valid tidak bisa diganti. Tidak ada kolom keuangan.</p>
+                            <p class="text-slate-500">3. Ubah di Excel lalu unggah di bawah. Sel kosong atau tidak diubah = tidak berubah. Nama dan NIK yang sudah valid tidak bisa diganti. Tidak ada kolom keuangan. Transaksi Selesai ikut: data konsumennya bisa diperbarui; Sumber Lead, Sales, Notaris, Bank hanya oleh SPV/Leader/Superadmin.</p>
                         </div>
                         <div v-else class="bg-slate-800 rounded-xl p-4 text-xs space-y-1.5 text-slate-400">
                             <div class="text-slate-300 font-medium">Untuk konsumen proyek yang sudah berjalan</div>

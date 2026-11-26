@@ -1117,8 +1117,9 @@ class KonsumenController extends Controller
         $hanyaKosong = ($pilihan['baris'] ?? 'semua') === 'kosong';
         $saran = !empty($pilihan['saran']) && in_array('ktp', $kelompok, true);
 
+        // Semua transaksi yang tidak batal, termasuk Selesai: data konsumennya tetap perlu dirapikan.
         $transaksi = KavlingKonsumen::with(['konsumen.sumberLead', 'kavling', 'salesAgent', 'notarisPreset', 'bankRekananPreset'])
-            ->where('status', 'active')
+            ->whereIn('status', ['active', 'completed'])
             ->whereHas('konsumen')
             ->whereHas('kavling', fn ($q) => $q->where('project_id', $project->id))
             ->get()
@@ -1146,6 +1147,7 @@ class KonsumenController extends Controller
 
         foreach ($transaksi as $n => $trx) {
             $nilai = KonsumenPerbaruiSpec::nilaiSaatIni($trx);
+            $nilai['ref_status'] = $trx->status === 'completed' ? 'Selesai' : 'Berjalan';
             if ($penyaran && trim($nilai['alamat']) !== '') {
                 $nilai['ref_alamat'] = $nilai['alamat'];
                 if (blank($trx->konsumen->provinsi_kode)) {
@@ -1207,7 +1209,8 @@ class KonsumenController extends Controller
         $p->setTitle('Petunjuk');
         $baris = [
             ['Perbarui Data Konsumen — ' . $project->nama, ''],
-            ['Isi file', $transaksi->count() . ' transaksi aktif' . ($hanyaKosong ? ' yang datanya masih kosong' : '') . '. Sel sudah berisi data saat file diunduh.'],
+            ['Isi file', $transaksi->count() . ' transaksi (tidak batal, termasuk Selesai)' . ($hanyaKosong ? ' yang datanya masih kosong' : '') . '. Sel sudah berisi data saat file diunduh.'],
+            ['Transaksi Selesai', 'Data konsumen (NIK, kontak, pekerjaan, alamat, domisili) tetap bisa diperbarui. Sumber Lead, Sales, Notaris, dan Bank hanya oleh SPV/Leader/Superadmin dan dicatat di Audit Trail.'],
             ['Cara kerja', 'Setiap baris dicocokkan lewat Kluster + Blok + Nomor Kavling, lalu Nama Konsumen diverifikasi.'],
             ['Tidak berubah', 'Sel kosong, sel yang tidak Anda ubah, dan kolom yang dihapus tidak mengubah apa pun. Data tidak pernah dikosongkan lewat import.'],
             ['Mengisi', 'Data yang masih kosong di sistem langsung diisi.'],

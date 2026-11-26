@@ -27,8 +27,8 @@ class KonsumenPerbaruiSpec
         'penjualan' => ['Penjualan (Sumber Lead, Sales, Bank)', ['lead', 'referral', 'sales', 'bank']],
     ];
 
-    /** Hanya pembanding saat memeriksa saran perapian alamat — tidak pernah dibaca importer. */
-    public const REFERENSI = ['ref_alamat', 'ref_keyakinan'];
+    /** Hanya keterangan/pembanding di file unduhan — tidak pernah dibaca importer. */
+    public const REFERENSI = ['ref_alamat', 'ref_keyakinan', 'ref_status'];
 
     /** key => [judul kolom, wajib (w|o), keterangan] */
     public static function definisi(): array
@@ -62,17 +62,19 @@ class KonsumenPerbaruiSpec
             'bank' => ['Bank Rekanan KPR', 'o', 'Dropdown. Hanya transaksi KPR. Perlu izin "isi bank rekanan kpr".'],
             'ref_alamat' => ['Alamat Asli (referensi, tidak dibaca)', 'o', 'Alamat sebelum dirapikan, untuk pembanding.'],
             'ref_keyakinan' => ['Keyakinan Saran (referensi, tidak dibaca)', 'o', 'Seberapa yakin sistem menebak wilayahnya. Periksa semuanya.'],
+            'ref_status' => ['Status Transaksi (referensi, tidak dibaca)', 'o', 'Berjalan atau Selesai. Pada transaksi Selesai, data konsumen tetap bisa diperbarui; Sumber Lead, Sales, Notaris, dan Bank hanya oleh pemegang izin override.'],
         ];
     }
 
     /** Urutan kolom untuk kelompok terpilih. @return string[] key */
-    public static function kunciKolom(array $kelompok, bool $referensi = false): array
+    public static function kunciKolom(array $kelompok, bool $saran = false): array
     {
         $kunci = self::IDENTITAS;
         foreach (self::KELOMPOK as $nama => [, $kolom]) {
             if (in_array($nama, $kelompok, true)) array_push($kunci, ...$kolom);
         }
-        if ($referensi) array_push($kunci, ...self::REFERENSI);
+        if ($saran) array_push($kunci, 'ref_alamat', 'ref_keyakinan');
+        $kunci[] = 'ref_status';
 
         return $kunci;
     }
